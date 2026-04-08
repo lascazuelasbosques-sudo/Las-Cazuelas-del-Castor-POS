@@ -54,10 +54,7 @@ service cloud.firestore {
     }
 
     match /users/{userId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated() && (isAdmin() || request.auth.uid == userId);
-      allow update: if isAuthenticated() && (isAdmin() || request.auth.uid == userId);
-      allow delete: if isAdmin();
+      allow read, write: if isAuthenticated();
     }
 
     match /categories/{catId} {

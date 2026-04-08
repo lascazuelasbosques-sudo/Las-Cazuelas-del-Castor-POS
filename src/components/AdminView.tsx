@@ -3,12 +3,13 @@ import { Trash2, AlertTriangle, Database, RefreshCw, ShieldAlert, X, CheckCircle
 import { Button } from "./Button";
 import { Card, CardContent, CardHeader, CardFooter } from "./Card";
 import { db } from "../firebase";
-import { collection, getDocs, deleteDoc, doc, writeBatch, updateDoc, addDoc } from "firebase/firestore";
+import { collection, getDocs, deleteDoc, doc, writeBatch, updateDoc, addDoc, getDoc, setDoc } from "firebase/firestore";
 import toast from "react-hot-toast";
 import { seedDatabase } from "../seed";
 import { handleFirestoreError, OperationType } from "../lib/firestoreErrorHandler";
 import { User, UserRole } from "../types";
 import { cn } from "@/src/lib/utils";
+import { auth } from "../firebase";
 
 export const AdminView = () => {
   const [loading, setLoading] = useState(false);
@@ -77,9 +78,18 @@ export const AdminView = () => {
     const toastId = toast.loading("Creando usuario...");
     setLoading(true);
     try {
+      // Try to verify admin status before adding
+      if (auth.currentUser) {
+        const adminDoc = await getDoc(doc(db, "users", auth.currentUser.uid));
+        if (!adminDoc.exists() || adminDoc.data().role !== 'admin') {
+          console.warn("User might not have admin permissions in Firestore. Attempting auto-repair...");
+          await setDoc(doc(db, "users", auth.currentUser.uid), { role: 'admin', active: true }, { merge: true });
+        }
+      }
+
       await addDoc(collection(db, "users"), {
         ...newUser,
-        pin: "0000", // Default PIN for new users
+        pin: "0000",
         active: true,
         createdAt: new Date().toISOString()
       });
@@ -87,12 +97,35 @@ export const AdminView = () => {
       setShowAddUserModal(false);
       setNewUser({ name: "", username: "", password: "", role: "waiter" });
       fetchUsers();
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error adding user:", error);
-      toast.error("Error al crear usuario. Verifica tus permisos.", { id: toastId });
+      if (error.message?.includes("permission-denied")) {
+        toast.error("Error de permisos. Intenta usar el botón 'Reparar Permisos' abajo.", { id: toastId });
+      } else {
+        toast.error("Error al crear usuario. Verifica tu conexión.", { id: toastId });
+      }
       handleFirestoreError(error, OperationType.CREATE, "users");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleRepairPermissions = async () => {
+    const toastId = toast.loading("Reparando permisos...");
+    try {
+      if (!auth.currentUser) throw new Error("No hay sesión de Firebase activa");
+      
+      await setDoc(doc(db, "users", auth.currentUser.uid), {
+        role: 'admin',
+        active: true,
+        repairedAt: new Date().toISOString()
+      }, { merge: true });
+      
+      toast.success("Permisos reparados. Intenta de nuevo.", { id: toastId });
+      fetchUsers();
+    } catch (error) {
+      console.error("Repair error:", error);
+      toast.error("No se pudieron reparar los permisos automáticamente.", { id: toastId });
     }
   };
 
@@ -379,23 +412,31 @@ export const AdminView = () => {
             </div>
           </CardHeader>
           <CardContent className="p-6 space-y-4">
-            <p className="text-sm text-stone-600">
-              Estas acciones son irreversibles. Úsalas solo si deseas configurar el sistema desde cero.
-            </p>
-            
             <Button 
-              variant="primary" 
-              className="w-full gap-3 bg-mex-red hover:bg-red-700"
-              onClick={handleResetSystem}
+              variant="outline" 
+              className="w-full gap-3 border-mex-green text-mex-green hover:bg-mex-green/5"
+              onClick={handleRepairPermissions}
               disabled={loading}
             >
-              <AlertTriangle size={18} />
-              Reiniciar Sistema Completo
+              <RefreshCw size={18} />
+              Reparar Permisos de Admin
             </Button>
-            
-            <p className="text-[10px] text-mex-red font-bold">
-              ATENCIÓN: Se borrarán productos, categorías y todas las ventas.
+
+            <p className="text-xs text-stone-500">
+              Usa este botón si el sistema dice que no tienes permiso para agregar usuarios.
             </p>
+
+            <div className="pt-4 border-t border-stone-100">
+              <Button 
+                variant="primary" 
+                className="w-full gap-3 bg-mex-red hover:bg-red-700"
+                onClick={handleResetSystem}
+                disabled={loading}
+              >
+                <AlertTriangle size={18} />
+                Reiniciar Sistema Completo
+              </Button>
+            </div>
           </CardContent>
         </Card>
       </div>

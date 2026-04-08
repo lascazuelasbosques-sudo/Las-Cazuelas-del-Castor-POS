@@ -7,8 +7,9 @@ import { InventoryView } from './components/InventoryView';
 import { AdminView } from './components/AdminView';
 import { Login } from './components/Login';
 import { auth } from './firebase';
-import { onAuthStateChanged, User as FirebaseUser, signInAnonymously } from 'firebase/auth';
+import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
 import { doc, getDoc, setDoc, onSnapshot, collection, getDocs, query, limit } from 'firebase/firestore';
+import { getDocFromServer } from 'firebase/firestore';
 import { Toaster } from 'react-hot-toast';
 
 import { seedDatabase } from './seed';
@@ -25,6 +26,21 @@ export default function App() {
   const [orderToEdit, setOrderToEdit] = useState<Order | null>(null);
 
   useEffect(() => {
+    // Test Firestore connection
+    const testConnection = async () => {
+      try {
+        await getDocFromServer(doc(db, 'test', 'connection'));
+        console.log("Firestore connection successful");
+      } catch (error) {
+        if(error instanceof Error && error.message.includes('the client is offline')) {
+          console.error("Please check your Firebase configuration. The client is offline.");
+        } else {
+          console.log("Firestore connection test completed (expected missing doc error).");
+        }
+      }
+    };
+    testConnection();
+
     // 1. Load POS user from local storage
     const savedUser = localStorage.getItem('posUser');
     if (savedUser) {
@@ -45,17 +61,11 @@ export default function App() {
       setFirebaseUser(user);
       
       if (!user) {
-        try {
-          await signInAnonymously(auth);
-        } catch (error) {
-          console.error("Error signing in anonymously:", error);
-          setLoading(false);
-        }
+        setLoading(false);
         return;
       }
 
       // If we have a firebase user, ensure they have a document in 'users'
-      // This is mainly for the anonymous user to have a basic profile
       try {
         const userRef = doc(db, 'users', user.uid);
         const userDoc = await getDoc(userRef);
@@ -68,8 +78,8 @@ export default function App() {
           const defaultRole = (user.email === 'lascazuelasbosques@gmail.com' || isFirstUser) ? 'admin' : 'waiter';
           
           await setDoc(userRef, {
-            name: user.displayName || user.email?.split('@')[0] || (isFirstUser ? 'Admin Inicial' : 'Usuario Anónimo'),
-            email: user.email || 'anon@system.com',
+            name: user.displayName || user.email?.split('@')[0] || (isFirstUser ? 'Admin Inicial' : 'Usuario'),
+            email: user.email || '',
             role: defaultRole,
             active: true,
             pin: '0000'
@@ -91,7 +101,6 @@ export default function App() {
           }
         }, (error) => {
           console.error("Error in user doc snapshot:", error);
-          // Don't show toast here as it might be expected during login transitions
         });
 
         // Try to seed
