@@ -1,11 +1,11 @@
-import { useState } from "react";
-import { doc, getDoc, setDoc } from "firebase/firestore";
-import { signInWithPopup, GoogleAuthProvider } from "firebase/auth";
+import React, { useState } from "react";
+import { doc, getDoc, setDoc, collection, query, where, getDocs } from "firebase/firestore";
+import { signInWithPopup, GoogleAuthProvider, signInAnonymously } from "firebase/auth";
 import { Button } from "./Button";
 import { Card, CardContent } from "./Card";
 import { User } from "../types";
 import { auth, db } from "../firebase";
-import { LogIn } from "lucide-react";
+import { LogIn, User as UserIcon, Lock } from "lucide-react";
 import toast from "react-hot-toast";
 
 interface LoginProps {
@@ -14,8 +14,64 @@ interface LoginProps {
 
 export const Login = ({ onLogin }: LoginProps) => {
   const [loading, setLoading] = useState(false);
+  const [loginMode, setLoginMode] = useState<'google' | 'credentials'>('credentials');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
 
   const logoUrl = "https://scontent.fmex3-3.fna.fbcdn.net/v/t39.30808-6/305224800_502697315191276_5159032473398491144_n.jpg?_nc_cat=101&ccb=1-7&_nc_sid=1d70fc&_nc_ohc=XrHd6WIU72QQ7kNvwH4YUuv&_nc_oc=AdqN0uR_hiClwhlsHD-5cWnrOZLIkwl_1rc9xLpSMyzbq0BKhUhMp2k1zhiOM0IB2rU&_nc_zt=23&_nc_ht=scontent.fmex3-3.fna&_nc_gid=cVCP6594ky4G9QxsLv3J3w&_nc_ss=7a389&oh=00_Af2UhG1KSo71QAgmxpKVLu_7coTXMMFPWzKQ6epACyTvvA&oe=69DB4A18";
+
+  const handleCredentialsLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!username.trim() || !password.trim()) {
+      toast.error("Ingresa usuario y contraseña");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      // Authenticate anonymously to access Firestore
+      await signInAnonymously(auth);
+
+      // Query the users collection for matching username and password
+      const q = query(
+        collection(db, "users"), 
+        where("username", "==", username.trim().toLowerCase()),
+        where("password", "==", password)
+      );
+      
+      const querySnapshot = await getDocs(q);
+
+      if (querySnapshot.empty) {
+        toast.error("Usuario o contraseña incorrectos");
+        auth.signOut();
+        setLoading(false);
+        return;
+      }
+
+      const userDoc = querySnapshot.docs[0];
+      const userData = { id: userDoc.id, ...userDoc.data() } as User;
+
+      if (!userData.active) {
+        toast.error("Tu cuenta está desactivada. Contacta al administrador.");
+        auth.signOut();
+        setLoading(false);
+        return;
+      }
+
+      onLogin(userData);
+      toast.success(`Bienvenido, ${userData.name}`);
+    } catch (error: any) {
+      console.error("Credentials login error:", error);
+      if (error.code === 'auth/operation-not-allowed') {
+        toast.error("El inicio de sesión anónimo no está habilitado en Firebase. Por favor, usa Google o habilítalo en la consola.");
+      } else {
+        toast.error("Error al iniciar sesión: " + (error.message || "Error desconocido"));
+      }
+      auth.signOut();
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleGoogleLogin = async () => {
     setLoading(true);
@@ -84,26 +140,90 @@ export const Login = ({ onLogin }: LoginProps) => {
         </div>
 
         <CardContent className="p-8 flex flex-col items-center justify-center space-y-6">
-          <p className="text-center text-stone-600 mb-4">
-            Inicia sesión con tu cuenta de Google para acceder al sistema.
-          </p>
+          {loginMode === 'credentials' ? (
+            <form onSubmit={handleCredentialsLogin} className="w-full space-y-4">
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-stone-500 uppercase">Usuario</label>
+                <div className="relative">
+                  <UserIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" size={18} />
+                  <input 
+                    type="text" 
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    className="w-full pl-10 pr-4 py-3 rounded-xl border border-stone-200 focus:ring-2 focus:ring-mex-green/20 outline-none"
+                    placeholder="Tu nombre de usuario"
+                  />
+                </div>
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-stone-500 uppercase">Contraseña</label>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" size={18} />
+                  <input 
+                    type="password" 
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="w-full pl-10 pr-4 py-3 rounded-xl border border-stone-200 focus:ring-2 focus:ring-mex-green/20 outline-none"
+                    placeholder="••••••••"
+                  />
+                </div>
+              </div>
+              <Button 
+                type="submit"
+                variant="primary" 
+                className="w-full h-12 text-lg bg-mex-green hover:bg-mex-green/90 gap-2 shadow-sm" 
+                disabled={loading}
+              >
+                <LogIn size={20} />
+                {loading ? "Iniciando..." : "Entrar"}
+              </Button>
+              
+              <div className="pt-4 border-t border-stone-100">
+                <Button 
+                  type="button"
+                  variant="ghost" 
+                  className="w-full text-stone-500 hover:text-stone-800"
+                  onClick={() => setLoginMode('google')}
+                >
+                  O usar cuenta de Google
+                </Button>
+              </div>
+            </form>
+          ) : (
+            <div className="w-full space-y-4">
+              <p className="text-center text-stone-600 mb-4">
+                Inicia sesión con tu cuenta de Google para acceder al sistema.
+              </p>
 
-          <Button 
-            onClick={handleGoogleLogin}
-            variant="primary" 
-            className="w-full h-14 text-lg bg-white text-stone-800 border border-stone-200 hover:bg-stone-50 gap-3 shadow-sm" 
-            disabled={loading}
-          >
-            <svg viewBox="0 0 24 24" width="24" height="24" xmlns="http://www.w3.org/2000/svg">
-              <g transform="matrix(1, 0, 0, 1, 27.009001, -39.238998)">
-                <path fill="#4285F4" d="M -3.264 51.509 C -3.264 50.719 -3.334 49.969 -3.454 49.239 L -14.754 49.239 L -14.754 53.749 L -8.284 53.749 C -8.574 55.229 -9.424 56.479 -10.684 57.329 L -10.684 60.329 L -6.824 60.329 C -4.564 58.239 -3.264 55.159 -3.264 51.509 Z"/>
-                <path fill="#34A853" d="M -14.754 63.239 C -11.514 63.239 -8.804 62.159 -6.824 60.329 L -10.684 57.329 C -11.764 58.049 -13.134 58.489 -14.754 58.489 C -17.884 58.489 -20.534 56.379 -21.484 53.529 L -25.464 53.529 L -25.464 56.619 C -23.494 60.539 -19.444 63.239 -14.754 63.239 Z"/>
-                <path fill="#FBBC05" d="M -21.484 53.529 C -21.734 52.809 -21.864 52.039 -21.864 51.239 C -21.864 50.439 -21.724 49.669 -21.484 48.949 L -21.484 45.859 L -25.464 45.859 C -26.284 47.479 -26.754 49.299 -26.754 51.239 C -26.754 53.179 -26.284 54.999 -25.464 56.619 L -21.484 53.529 Z"/>
-                <path fill="#EA4335" d="M -14.754 43.989 C -12.984 43.989 -11.404 44.599 -10.154 45.789 L -6.734 42.369 C -8.804 40.429 -11.514 39.239 -14.754 39.239 C -19.444 39.239 -23.494 41.939 -25.464 45.859 L -21.484 48.949 C -20.534 46.099 -17.884 43.989 -14.754 43.989 Z"/>
-              </g>
-            </svg>
-            {loading ? "Iniciando..." : "Continuar con Google"}
-          </Button>
+              <Button 
+                onClick={handleGoogleLogin}
+                variant="primary" 
+                className="w-full h-14 text-lg bg-white text-stone-800 border border-stone-200 hover:bg-stone-50 gap-3 shadow-sm" 
+                disabled={loading}
+              >
+                <svg viewBox="0 0 24 24" width="24" height="24" xmlns="http://www.w3.org/2000/svg">
+                  <g transform="matrix(1, 0, 0, 1, 27.009001, -39.238998)">
+                    <path fill="#4285F4" d="M -3.264 51.509 C -3.264 50.719 -3.334 49.969 -3.454 49.239 L -14.754 49.239 L -14.754 53.749 L -8.284 53.749 C -8.574 55.229 -9.424 56.479 -10.684 57.329 L -10.684 60.329 L -6.824 60.329 C -4.564 58.239 -3.264 55.159 -3.264 51.509 Z"/>
+                    <path fill="#34A853" d="M -14.754 63.239 C -11.514 63.239 -8.804 62.159 -6.824 60.329 L -10.684 57.329 C -11.764 58.049 -13.134 58.489 -14.754 58.489 C -17.884 58.489 -20.534 56.379 -21.484 53.529 L -25.464 53.529 L -25.464 56.619 C -23.494 60.539 -19.444 63.239 -14.754 63.239 Z"/>
+                    <path fill="#FBBC05" d="M -21.484 53.529 C -21.734 52.809 -21.864 52.039 -21.864 51.239 C -21.864 50.439 -21.724 49.669 -21.484 48.949 L -21.484 45.859 L -25.464 45.859 C -26.284 47.479 -26.754 49.299 -26.754 51.239 C -26.754 53.179 -26.284 54.999 -25.464 56.619 L -21.484 53.529 Z"/>
+                    <path fill="#EA4335" d="M -14.754 43.989 C -12.984 43.989 -11.404 44.599 -10.154 45.789 L -6.734 42.369 C -8.804 40.429 -11.514 39.239 -14.754 39.239 C -19.444 39.239 -23.494 41.939 -25.464 45.859 L -21.484 48.949 C -20.534 46.099 -17.884 43.989 -14.754 43.989 Z"/>
+                  </g>
+                </svg>
+                {loading ? "Iniciando..." : "Continuar con Google"}
+              </Button>
+
+              <div className="pt-4 border-t border-stone-100">
+                <Button 
+                  type="button"
+                  variant="ghost" 
+                  className="w-full text-stone-500 hover:text-stone-800"
+                  onClick={() => setLoginMode('credentials')}
+                >
+                  Volver a Usuario y Contraseña
+                </Button>
+              </div>
+            </div>
+          )}
 
           <p className="text-center text-xs text-stone-400 mt-4">
             Acceso restringido a personal autorizado

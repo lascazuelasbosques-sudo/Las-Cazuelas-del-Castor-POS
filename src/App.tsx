@@ -69,6 +69,13 @@ export default function App() {
 
       // If we have a firebase user, ensure they have a document in 'users'
       try {
+        if (user.isAnonymous) {
+          // Do not create a Firestore document for anonymous users.
+          // They are authenticated just to read their actual POS user document.
+          setLoading(false);
+          return;
+        }
+
         const userRef = doc(db, 'users', user.uid);
         const userDoc = await getDoc(userRef);
         
