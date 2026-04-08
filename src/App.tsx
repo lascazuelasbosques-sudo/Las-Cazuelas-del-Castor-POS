@@ -89,6 +89,9 @@ export default function App() {
               setUserRole(data.role);
             }
           }
+        }, (error) => {
+          console.error("Error in user doc snapshot:", error);
+          // Don't show toast here as it might be expected during login transitions
         });
 
         // Try to seed

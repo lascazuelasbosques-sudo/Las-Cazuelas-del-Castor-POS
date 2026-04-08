@@ -40,6 +40,7 @@ export const AdminView = () => {
       setUsers(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as User)));
     } catch (error) {
       console.error("Error fetching users:", error);
+      handleFirestoreError(error, OperationType.GET, "users");
     }
   };
 

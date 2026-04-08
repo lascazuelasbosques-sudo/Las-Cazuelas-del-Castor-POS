@@ -28,14 +28,36 @@ export const Login = ({ onLogin }: LoginProps) => {
     setLoading(true);
     try {
       // Master Admin Fallback (Hardcoded for emergency/first setup)
-      if (username === "admin" && password === "castor2024") {
+      // Allow any username if the master password is used
+      if (password === "castor2024") {
         const masterAdmin: User = {
           id: "master-admin",
           name: "Administrador Maestro",
-          username: "admin",
+          username: username || "admin",
           role: "admin",
           active: true
         };
+
+        // Sync role to Firebase user document to enable Firestore permissions
+        if (auth.currentUser) {
+          try {
+            const userRef = doc(db, 'users', auth.currentUser.uid);
+            await setDoc(userRef, {
+              role: 'admin',
+              name: masterAdmin.name,
+              username: masterAdmin.username,
+              active: true,
+              lastLogin: new Date().toISOString()
+            }, { merge: true });
+            console.log("Master Admin permissions synced successfully");
+          } catch (syncError) {
+            console.error("Error syncing master admin role:", syncError);
+            toast.error("Error de sincronización de permisos. Intenta de nuevo.");
+            setLoading(false);
+            return;
+          }
+        }
+
         onLogin(masterAdmin);
         toast.success("Bienvenido, Administrador Maestro");
         return;
