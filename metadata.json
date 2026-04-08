@@ -1,0 +1,5 @@
+{
+  "name": "Las Cazuelas del Castor - POS",
+  "description": "Sistema de punto de venta para antojitos mexicanos con gestión de pedidos, inventario, comandas y arqueo de caja.",
+  "requestFramePermissions": []
+}

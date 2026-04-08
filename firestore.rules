@@ -1,0 +1,93 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: users
+    // Fields: name (string), email (string), role (string), active (bool)
+    //
+    // Collection: categories
+    // Fields: name (string), order (number)
+    //
+    // Collection: products
+    // Fields: name (string), price (number), categoryId (string), stock (number), available (bool)
+    //
+    // Collection: orders
+    // Fields: tableNumber (string), status (string), items (list), total (number), createdAt (timestamp), waiterId (string)
+    //
+    // Collection: cashLogs
+    // Fields: type (string), amount (number), timestamp (timestamp), userId (string)
+    //
+    // ===============================================================
+
+    // Helper Functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isEmailAdmin() {
+      return isAuthenticated() && 
+             request.auth.token.email == "lascazuelasbosques@gmail.com" && 
+             request.auth.token.email_verified == true;
+    }
+
+    function isAdmin() {
+      return isEmailAdmin() || (isAuthenticated() && 
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin');
+    }
+
+    function isStaff() {
+      return isAdmin() || (isAuthenticated() && 
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)));
+    }
+
+    function isValidUser(data) {
+      return data.keys().hasAll(['name', 'email', 'role']) &&
+             data.name is string && data.name.size() < 100 &&
+             data.email is string && data.role in ['admin', 'waiter', 'kitchen', 'cashier'];
+    }
+
+    match /users/{userId} {
+      allow read: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
+      allow create: if isAuthenticated() && isValidUser(request.resource.data) && (request.auth.uid == userId || isAdmin());
+      allow update: if isAuthenticated() && isValidUser(request.resource.data) && (isAdmin() || (request.auth.uid == userId && request.resource.data.role == resource.data.role));
+      allow delete: if isAdmin();
+    }
+
+    match /categories/{catId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    match /products/{prodId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    match /orders/{orderId} {
+      allow read: if isStaff();
+      allow create: if isStaff();
+      allow update: if isStaff();
+      allow delete: if isAdmin();
+    }
+
+    match /cashLogs/{logId} {
+      allow read: if isStaff();
+      allow create: if isStaff();
+      allow update: if isAdmin() || (isAuthenticated() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'cashier');
+      allow delete: if isAdmin();
+    }
+
+    // Add transactions match just in case it's used as a collection
+    match /transactions/{id} {
+      allow read, write: if isAdmin();
+    }
+
+    match /counters/{counterId} {
+      allow read, write: if isStaff();
+    }
+  }
+}

@@ -1,0 +1,83 @@
+{
+  "entities": {
+    "Category": {
+      "title": "Category",
+      "description": "Categorías de productos (ej. Antojitos, Bebidas, Postres)",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "Nombre de la categoría" },
+        "order": { "type": "number", "description": "Orden de visualización" }
+      },
+      "required": ["name"]
+    },
+    "Product": {
+      "title": "Product",
+      "description": "Productos del menú",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "price": { "type": "number" },
+        "categoryId": { "type": "string" },
+        "stock": { "type": "number" },
+        "available": { "type": "boolean" },
+        "imageUrl": { "type": "string" }
+      },
+      "required": ["name", "price", "categoryId"]
+    },
+    "Order": {
+      "title": "Order",
+      "description": "Pedidos/Comandas",
+      "type": "object",
+      "properties": {
+        "folio": { "type": "string" },
+        "tableNumber": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "preparing", "ready", "served", "paid", "cancelled"] },
+        "items": { 
+          "type": "array",
+          "description": "Lista de productos en el pedido"
+        },
+        "total": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "waiterId": { "type": "string" },
+        "waiterName": { "type": "string" },
+        "notes": { "type": "string" }
+      },
+      "required": ["status", "items", "total", "createdAt"]
+    },
+    "User": {
+      "title": "User",
+      "description": "Usuarios del sistema",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "role": { "type": "string", "enum": ["admin", "waiter", "kitchen", "cashier"] },
+        "active": { "type": "boolean" }
+      },
+      "required": ["name", "email", "role"]
+    },
+    "CashLog": {
+      "title": "CashLog",
+      "description": "Registros de caja (apertura, cierre, gastos)",
+      "type": "object",
+      "properties": {
+        "type": { "type": "string", "enum": ["opening", "closing", "expense", "income"] },
+        "amount": { "type": "number" },
+        "reason": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "userId": { "type": "string" },
+        "userName": { "type": "string" }
+      },
+      "required": ["type", "amount", "timestamp", "userId"]
+    }
+  },
+  "firestore": {
+    "/categories": { "schema": "Category", "description": "Colección de categorías" },
+    "/products": { "schema": "Product", "description": "Colección de productos" },
+    "/orders": { "schema": "Order", "description": "Colección de pedidos" },
+    "/users": { "schema": "User", "description": "Colección de usuarios" },
+    "/cashLogs": { "schema": "CashLog", "description": "Colección de registros de caja" }
+  }
+}
