@@ -14,15 +14,16 @@ import { auth } from "../firebase";
 export const AdminView = () => {
   const [loading, setLoading] = useState(false);
   const [users, setUsers] = useState<User[]>([]);
-  const [editingUser, setEditingUser] = useState<User | null>(null);
-  const [newPin, setNewPin] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [showAddUserModal, setShowAddUserModal] = useState(false);
-  const [newUser, setNewUser] = useState({
+  const [showUserModal, setShowUserModal] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  const [userForm, setUserForm] = useState({
     name: "",
     username: "",
     password: "",
-    role: "waiter" as UserRole
+    pin: "0000",
+    role: "waiter" as UserRole,
+    active: true
   });
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [confirmAction, setConfirmAction] = useState<{
@@ -45,68 +46,101 @@ export const AdminView = () => {
     }
   };
 
-  const handleUpdateUser = async (userId: string) => {
-    if (newPassword && newPassword.length < 4) {
-      toast.error("La contraseña debe tener al menos 4 caracteres");
+  const handleOpenAddModal = () => {
+    setIsEditing(false);
+    setSelectedUserId(null);
+    setUserForm({
+      name: "",
+      username: "",
+      password: "",
+      pin: "0000",
+      role: "waiter",
+      active: true
+    });
+    setShowUserModal(true);
+  };
+
+  const handleOpenEditModal = (user: User) => {
+    setIsEditing(true);
+    setSelectedUserId(user.id);
+    setUserForm({
+      name: user.name,
+      username: user.username || "",
+      password: user.password || "",
+      pin: user.pin || "0000",
+      role: user.role,
+      active: user.active
+    });
+    setShowUserModal(true);
+  };
+
+  const handleSaveUser = async () => {
+    if (!userForm.name || !userForm.username || (!isEditing && !userForm.password)) {
+      toast.error("Completa todos los campos obligatorios");
       return;
     }
+
+    const usernameLower = userForm.username.toLowerCase().trim();
+    
+    // Check for duplicate username (excluding current user if editing)
+    const isDuplicate = users.some(u => u.username?.toLowerCase() === usernameLower && u.id !== selectedUserId);
+    if (isDuplicate) {
+      toast.error("El nombre de usuario ya existe");
+      return;
+    }
+    
+    const toastId = toast.loading(isEditing ? "Actualizando usuario..." : "Creando usuario...");
     setLoading(true);
     try {
-      const updates: any = {};
-      if (newPassword) updates.password = newPassword;
-      if (newPin) updates.pin = newPin;
-      
-      await updateDoc(doc(db, "users", userId), updates);
-      toast.success("Usuario actualizado");
-      setEditingUser(null);
-      setNewPassword("");
-      setNewPin("");
+      // Ensure admin permissions
+      if (auth.currentUser) {
+        const adminDoc = await getDoc(doc(db, "users", auth.currentUser.uid));
+        if (!adminDoc.exists() || adminDoc.data().role !== 'admin') {
+          await setDoc(doc(db, "users", auth.currentUser.uid), { role: 'admin', active: true }, { merge: true });
+        }
+      }
+
+      const userData = {
+        ...userForm,
+        username: usernameLower,
+        updatedAt: new Date().toISOString()
+      };
+
+      if (isEditing && selectedUserId) {
+        await updateDoc(doc(db, "users", selectedUserId), userData);
+        toast.success("Usuario actualizado exitosamente", { id: toastId });
+      } else {
+        await addDoc(collection(db, "users"), {
+          ...userData,
+          createdAt: new Date().toISOString()
+        });
+        toast.success("Usuario creado exitosamente", { id: toastId });
+      }
+
+      setShowUserModal(false);
       fetchUsers();
-    } catch (error) {
-      handleFirestoreError(error, OperationType.UPDATE, "users");
+    } catch (error: any) {
+      console.error("Error saving user:", error);
+      toast.error("Error al guardar usuario", { id: toastId });
+      handleFirestoreError(error, isEditing ? OperationType.UPDATE : OperationType.CREATE, "users");
     } finally {
       setLoading(false);
     }
   };
 
-  const handleAddUser = async () => {
-    if (!newUser.name || !newUser.username || !newUser.password) {
-      toast.error("Completa todos los campos obligatorios");
+  const toggleUserStatus = async (user: User) => {
+    if (user.id === auth.currentUser?.uid) {
+      toast.error("No puedes desactivar tu propia cuenta");
       return;
     }
-    
-    const toastId = toast.loading("Creando usuario...");
-    setLoading(true);
-    try {
-      // Try to verify admin status before adding
-      if (auth.currentUser) {
-        const adminDoc = await getDoc(doc(db, "users", auth.currentUser.uid));
-        if (!adminDoc.exists() || adminDoc.data().role !== 'admin') {
-          console.warn("User might not have admin permissions in Firestore. Attempting auto-repair...");
-          await setDoc(doc(db, "users", auth.currentUser.uid), { role: 'admin', active: true }, { merge: true });
-        }
-      }
 
-      await addDoc(collection(db, "users"), {
-        ...newUser,
-        pin: "0000",
-        active: true,
-        createdAt: new Date().toISOString()
-      });
-      toast.success("Usuario creado exitosamente", { id: toastId });
-      setShowAddUserModal(false);
-      setNewUser({ name: "", username: "", password: "", role: "waiter" });
+    const newStatus = !user.active;
+    try {
+      await updateDoc(doc(db, "users", user.id), { active: newStatus });
+      toast.success(`Usuario ${newStatus ? 'activado' : 'desactivado'}`);
       fetchUsers();
-    } catch (error: any) {
-      console.error("Error adding user:", error);
-      if (error.message?.includes("permission-denied")) {
-        toast.error("Error de permisos. Intenta usar el botón 'Reparar Permisos' abajo.", { id: toastId });
-      } else {
-        toast.error("Error al crear usuario. Verifica tu conexión.", { id: toastId });
-      }
-      handleFirestoreError(error, OperationType.CREATE, "users");
-    } finally {
-      setLoading(false);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, "users");
     }
   };
 
@@ -232,7 +266,7 @@ export const AdminView = () => {
               variant="primary" 
               size="sm" 
               className="bg-mex-green hover:bg-mex-green/90 gap-2"
-              onClick={() => setShowAddUserModal(true)}
+              onClick={handleOpenAddModal}
             >
               <Users size={16} />
               Nuevo Usuario
@@ -245,13 +279,14 @@ export const AdminView = () => {
                   <tr className="border-b border-stone-100 text-xs text-stone-400 uppercase tracking-widest">
                     <th className="pb-3 font-bold">Nombre / Usuario</th>
                     <th className="pb-3 font-bold">Rol</th>
-                    <th className="pb-3 font-bold">Contraseña / PIN</th>
+                    <th className="pb-3 font-bold">Estado</th>
+                    <th className="pb-3 font-bold">PIN</th>
                     <th className="pb-3 font-bold text-right">Acciones</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-stone-50">
                   {users.map(u => (
-                    <tr key={u.id} className="group">
+                    <tr key={u.id} className="group hover:bg-stone-50/50 transition-colors">
                       <td className="py-4">
                         <p className="font-bold text-stone-800">{u.name}</p>
                         <p className="text-xs text-stone-400">@{u.username || 'sin_usuario'}</p>
@@ -265,86 +300,55 @@ export const AdminView = () => {
                         </span>
                       </td>
                       <td className="py-4">
-                        {editingUser?.id === u.id ? (
-                          <div className="flex flex-col gap-2">
-                            <input 
-                              type="text" 
-                              value={newPassword}
-                              onChange={e => setNewPassword(e.target.value)}
-                              placeholder="Nueva Contraseña"
-                              className="w-32 px-2 py-1 text-xs rounded border border-stone-200 focus:outline-none focus:ring-2 focus:ring-mex-green/20"
-                            />
-                            <input 
-                              type="text" 
-                              maxLength={4}
-                              value={newPin}
-                              onChange={e => setNewPin(e.target.value.replace(/\D/g, ''))}
-                              placeholder="Nuevo PIN (4 dig)"
-                              className="w-32 px-2 py-1 text-xs rounded border border-stone-200 focus:outline-none focus:ring-2 focus:ring-mex-green/20"
-                            />
-                          </div>
-                        ) : (
-                          <div className="text-xs text-stone-500">
-                            <p>Pass: {u.password ? '****' : <span className="text-mex-red">No establecida</span>}</p>
-                            <p>PIN: {u.pin || '1234'}</p>
-                          </div>
-                        )}
+                        <button 
+                          onClick={() => toggleUserStatus(u)}
+                          className={cn(
+                            "flex items-center gap-1.5 text-[10px] font-bold uppercase px-2 py-1 rounded-lg transition-all",
+                            u.active ? "bg-green-100 text-green-700 hover:bg-green-200" : "bg-red-100 text-red-700 hover:bg-red-200"
+                          )}
+                        >
+                          <div className={cn("w-1.5 h-1.5 rounded-full", u.active ? "bg-green-600" : "bg-red-600")} />
+                          {u.active ? 'Activo' : 'Inactivo'}
+                        </button>
+                      </td>
+                      <td className="py-4">
+                        <span className="font-mono text-sm text-stone-500 bg-stone-100 px-2 py-1 rounded">
+                          {u.pin || '0000'}
+                        </span>
                       </td>
                       <td className="py-4 text-right">
-                        {editingUser?.id === u.id ? (
-                          <div className="flex justify-end gap-2">
+                        <div className="flex justify-end gap-2">
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            onClick={() => handleOpenEditModal(u)}
+                            className="text-stone-400 hover:text-mex-green"
+                          >
+                            <Edit2 size={16} />
+                          </Button>
+                          {u.role !== 'admin' && (
                             <Button 
                               variant="ghost" 
                               size="sm" 
-                              onClick={() => { setEditingUser(null); setNewPassword(""); setNewPin(""); }}
-                              className="text-stone-400"
+                              onClick={() => {
+                                setConfirmAction({
+                                  title: "Eliminar Usuario",
+                                  message: `¿Estás seguro de eliminar a ${u.name}? Esta acción no se puede deshacer.`,
+                                  action: async () => {
+                                    await deleteDoc(doc(db, "users", u.id));
+                                    toast.success("Usuario eliminado");
+                                    fetchUsers();
+                                    setShowConfirmModal(false);
+                                  }
+                                });
+                                setShowConfirmModal(true);
+                              }}
+                              className="text-stone-400 hover:text-mex-red"
                             >
-                              <X size={16} />
+                              <Trash2 size={16} />
                             </Button>
-                            <Button 
-                              variant="primary" 
-                              size="sm" 
-                              onClick={() => handleUpdateUser(u.id)}
-                              disabled={loading}
-                              className="bg-mex-green hover:bg-mex-green/90"
-                            >
-                              <Save size={16} />
-                            </Button>
-                          </div>
-                        ) : (
-                          <div className="flex justify-end gap-2">
-                            <Button 
-                              variant="ghost" 
-                              size="sm" 
-                              onClick={() => { setEditingUser(u); setNewPassword(u.password || ""); setNewPin(u.pin || ""); }}
-                              className="text-stone-400 hover:text-mex-green"
-                            >
-                              <Edit2 size={16} />
-                            </Button>
-                            {u.role !== 'admin' && (
-                              <Button 
-                                variant="ghost" 
-                                size="sm" 
-                                onClick={() => {
-                                  setConfirmAction({
-                                    title: "Eliminar Usuario",
-                                    message: `¿Estás seguro de eliminar a ${u.name}?`,
-                                    action: async () => {
-                                      await deleteDoc(doc(db, "users", u.id));
-                                      toast.success("Usuario eliminado");
-                                      fetchUsers();
-                                      setShowConfirmModal(false);
-                                    }
-                                  });
-                                  setShowConfirmModal(true);
-                                }}
-                                className="text-stone-400 hover:text-mex-red"
-                              >
-                                <Trash2 size={16} />
-                              </Button>
-                            )}
-                          </div>
-                        )}
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -404,38 +408,73 @@ export const AdminView = () => {
           </CardContent>
         </Card>
 
-        <Card className="border-mex-red/20">
-          <CardHeader className="bg-mex-red/5 border-b border-mex-red/10">
-            <div className="flex items-center gap-2 text-mex-red">
+        <Card className="border-stone-200">
+          <CardHeader className="bg-stone-50 border-b border-stone-100">
+            <div className="flex items-center gap-2 text-stone-700">
               <ShieldAlert size={20} />
-              <h2 className="font-bold uppercase tracking-wider">Zona de Peligro</h2>
+              <h2 className="font-bold uppercase tracking-wider">Mantenimiento de Sistema</h2>
             </div>
           </CardHeader>
           <CardContent className="p-6 space-y-4">
-            <Button 
-              variant="outline" 
-              className="w-full gap-3 border-mex-green text-mex-green hover:bg-mex-green/5"
-              onClick={handleRepairPermissions}
-              disabled={loading}
-            >
-              <RefreshCw size={18} />
-              Reparar Permisos de Admin
-            </Button>
+            <div className="space-y-4">
+              <div className="p-3 bg-amber-50 rounded-lg border border-amber-100">
+                <p className="text-xs font-bold text-amber-800 uppercase mb-1">Permisos de Admin</p>
+                <p className="text-[10px] text-amber-600 mb-2">Restaura tu rol de administrador si pierdes acceso.</p>
+                <Button 
+                  variant="outline" 
+                  className="w-full h-9 text-xs gap-2 border-amber-200 text-amber-700 hover:bg-amber-100"
+                  onClick={handleRepairPermissions}
+                  disabled={loading}
+                >
+                  <RefreshCw size={14} />
+                  Reparar Mis Permisos
+                </Button>
+              </div>
 
-            <p className="text-xs text-stone-500">
-              Usa este botón si el sistema dice que no tienes permiso para agregar usuarios.
-            </p>
+              <div className="p-3 bg-blue-50 rounded-lg border border-blue-100">
+                <p className="text-xs font-bold text-blue-800 uppercase mb-1">Sincronizar Usuarios</p>
+                <p className="text-[10px] text-blue-600 mb-2">Asegura que todos tengan usuario y contraseña (defecto: 1234).</p>
+                <Button 
+                  variant="outline" 
+                  className="w-full h-9 text-xs gap-2 border-blue-200 text-blue-700 hover:bg-blue-100"
+                  onClick={async () => {
+                    const toastId = toast.loading("Sincronizando...");
+                    try {
+                      const snap = await getDocs(collection(db, "users"));
+                      const batch = writeBatch(db);
+                      let count = 0;
+                      snap.forEach(uDoc => {
+                        const data = uDoc.data();
+                        const updates: any = {};
+                        let changed = false;
+                        if (!data.username) { updates.username = data.name.toLowerCase().replace(/\s/g, ''); changed = true; }
+                        if (!data.password) { updates.password = "1234"; changed = true; }
+                        if (data.active === undefined) { updates.active = true; changed = true; }
+                        if (changed) { batch.update(uDoc.ref, updates); count++; }
+                      });
+                      await batch.commit();
+                      toast.success(`${count} usuarios actualizados`, { id: toastId });
+                      fetchUsers();
+                    } catch (e) { toast.error("Error al sincronizar", { id: toastId }); }
+                  }}
+                  disabled={loading}
+                >
+                  <Users size={14} />
+                  Sincronizar Credenciales
+                </Button>
+              </div>
 
-            <div className="pt-4 border-t border-stone-100">
-              <Button 
-                variant="primary" 
-                className="w-full gap-3 bg-mex-red hover:bg-red-700"
-                onClick={handleResetSystem}
-                disabled={loading}
-              >
-                <AlertTriangle size={18} />
-                Reiniciar Sistema Completo
-              </Button>
+              <div className="pt-2">
+                <Button 
+                  variant="ghost" 
+                  className="w-full h-9 text-xs gap-2 text-mex-red hover:bg-red-50"
+                  onClick={handleResetSystem}
+                  disabled={loading}
+                >
+                  <AlertTriangle size={14} />
+                  Reiniciar Sistema
+                </Button>
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -486,73 +525,99 @@ export const AdminView = () => {
         </div>
       )}
 
-      {/* Add User Modal */}
-      {showAddUserModal && (
+      {/* User Modal (Add/Edit) */}
+      {showUserModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[150] p-4">
           <Card className="w-full max-w-md shadow-2xl">
             <CardHeader className="bg-mex-green text-white flex flex-row items-center justify-between">
               <h3 className="text-xl font-serif flex items-center gap-2">
                 <Users size={20} />
-                Nuevo Usuario
+                {isEditing ? 'Editar Usuario' : 'Nuevo Usuario'}
               </h3>
-              <button onClick={() => setShowAddUserModal(false)}><X size={24}/></button>
+              <button onClick={() => setShowUserModal(false)}><X size={24}/></button>
             </CardHeader>
             <CardContent className="p-6 space-y-4">
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-stone-500 uppercase">Nombre Completo</label>
-                <input 
-                  type="text" 
-                  value={newUser.name}
-                  onChange={e => setNewUser({...newUser, name: e.target.value})}
-                  className="w-full px-3 py-2 rounded border border-stone-200 focus:ring-2 focus:ring-mex-green/20 outline-none"
-                  placeholder="Ej. Juan Pérez"
-                />
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1 col-span-2">
+                  <label className="text-xs font-bold text-stone-500 uppercase">Nombre Completo</label>
+                  <input 
+                    type="text" 
+                    value={userForm.name}
+                    onChange={e => setUserForm({...userForm, name: e.target.value})}
+                    className="w-full px-3 py-2 rounded border border-stone-200 focus:ring-2 focus:ring-mex-green/20 outline-none"
+                    placeholder="Ej. Juan Pérez"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-stone-500 uppercase">Usuario</label>
+                  <input 
+                    type="text" 
+                    value={userForm.username}
+                    onChange={e => setUserForm({...userForm, username: e.target.value.toLowerCase().replace(/\s/g, '')})}
+                    className="w-full px-3 py-2 rounded border border-stone-200 focus:ring-2 focus:ring-mex-green/20 outline-none"
+                    placeholder="Ej. juanp"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-stone-500 uppercase">Rol</label>
+                  <select 
+                    value={userForm.role}
+                    onChange={e => setUserForm({...userForm, role: e.target.value as UserRole})}
+                    className="w-full px-3 py-2 rounded border border-stone-200 focus:ring-2 focus:ring-mex-green/20 outline-none bg-white"
+                  >
+                    <option value="waiter">Mesero</option>
+                    <option value="kitchen">Cocina</option>
+                    <option value="cashier">Cajero</option>
+                    <option value="admin">Administrador</option>
+                  </select>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-stone-500 uppercase">Contraseña</label>
+                  <input 
+                    type="text" 
+                    value={userForm.password}
+                    onChange={e => setUserForm({...userForm, password: e.target.value})}
+                    className="w-full px-3 py-2 rounded border border-stone-200 focus:ring-2 focus:ring-mex-green/20 outline-none"
+                    placeholder={isEditing ? "Dejar vacío para no cambiar" : "Mínimo 4 caracteres"}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-stone-500 uppercase">PIN de Acceso</label>
+                  <input 
+                    type="text" 
+                    maxLength={4}
+                    value={userForm.pin}
+                    onChange={e => setUserForm({...userForm, pin: e.target.value.replace(/\D/g, '')})}
+                    className="w-full px-3 py-2 rounded border border-stone-200 focus:ring-2 focus:ring-mex-green/20 outline-none font-mono"
+                    placeholder="0000"
+                  />
+                </div>
               </div>
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-stone-500 uppercase">Nombre de Usuario</label>
+
+              <div className="flex items-center gap-2 pt-2">
                 <input 
-                  type="text" 
-                  value={newUser.username}
-                  onChange={e => setNewUser({...newUser, username: e.target.value.toLowerCase().replace(/\s/g, '')})}
-                  className="w-full px-3 py-2 rounded border border-stone-200 focus:ring-2 focus:ring-mex-green/20 outline-none"
-                  placeholder="Ej. juanp"
+                  type="checkbox" 
+                  id="user-active"
+                  checked={userForm.active}
+                  onChange={e => setUserForm({...userForm, active: e.target.checked})}
+                  className="w-4 h-4 text-mex-green rounded border-stone-300 focus:ring-mex-green"
                 />
-              </div>
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-stone-500 uppercase">Contraseña</label>
-                <input 
-                  type="text" 
-                  value={newUser.password}
-                  onChange={e => setNewUser({...newUser, password: e.target.value})}
-                  className="w-full px-3 py-2 rounded border border-stone-200 focus:ring-2 focus:ring-mex-green/20 outline-none"
-                  placeholder="Mínimo 4 caracteres"
-                />
-              </div>
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-stone-500 uppercase">Rol</label>
-                <select 
-                  value={newUser.role}
-                  onChange={e => setNewUser({...newUser, role: e.target.value as UserRole})}
-                  className="w-full px-3 py-2 rounded border border-stone-200 focus:ring-2 focus:ring-mex-green/20 outline-none bg-white"
-                >
-                  <option value="waiter">Mesero</option>
-                  <option value="kitchen">Cocina / Plancha</option>
-                  <option value="cashier">Cajero</option>
-                  <option value="admin">Administrador</option>
-                </select>
+                <label htmlFor="user-active" className="text-sm font-medium text-stone-700 cursor-pointer">
+                  Usuario Activo (Permitir acceso)
+                </label>
               </div>
             </CardContent>
             <CardFooter className="flex gap-2 p-4 bg-stone-50">
-              <Button variant="ghost" className="flex-1" onClick={() => setShowAddUserModal(false)}>
+              <Button variant="ghost" className="flex-1" onClick={() => setShowUserModal(false)}>
                 Cancelar
               </Button>
               <Button 
                 variant="primary" 
                 className="flex-1 bg-mex-green hover:bg-mex-green/90" 
-                onClick={handleAddUser}
+                onClick={handleSaveUser}
                 disabled={loading}
               >
-                {loading ? <RefreshCw className="animate-spin" size={18} /> : "Crear Usuario"}
+                {loading ? <RefreshCw className="animate-spin" size={18} /> : (isEditing ? "Guardar Cambios" : "Crear Usuario")}
               </Button>
             </CardFooter>
           </Card>

@@ -28,32 +28,53 @@ export const Login = ({ onLogin }: LoginProps) => {
     }
 
     setLoading(true);
+    console.log("Iniciando login con credenciales para:", username);
     try {
-      // Authenticate anonymously to access Firestore
-      await signInAnonymously(auth);
+      // 1. Ensure we have a Firebase session (Anonymous) to read Firestore
+      if (!auth.currentUser) {
+        console.log("No hay usuario Firebase, iniciando sesión anónima...");
+        await signInAnonymously(auth);
+        console.log("Sesión anónima establecida:", auth.currentUser?.uid);
+      } else {
+        console.log("Ya existe una sesión Firebase:", auth.currentUser.uid, "Anónimo:", auth.currentUser.isAnonymous);
+      }
 
-      // Query the users collection for matching username and password
+      // 2. Query only by username to avoid composite index issues
+      const usernameLower = username.trim().toLowerCase();
+      console.log("Buscando usuario en Firestore:", usernameLower);
+      
       const q = query(
         collection(db, "users"), 
-        where("username", "==", username.trim().toLowerCase()),
-        where("password", "==", password)
+        where("username", "==", usernameLower)
       );
       
       const querySnapshot = await getDocs(q);
+      console.log("Usuarios encontrados con ese nombre:", querySnapshot.size);
 
       if (querySnapshot.empty) {
-        toast.error("Usuario o contraseña incorrectos");
-        auth.signOut();
+        toast.error("Usuario no encontrado");
         setLoading(false);
         return;
       }
 
-      const userDoc = querySnapshot.docs[0];
+      // 3. Find the user with the matching password in JS
+      const userDoc = querySnapshot.docs.find(doc => {
+        const data = doc.data();
+        return data.password === password;
+      });
+
+      if (!userDoc) {
+        console.log("Contraseña incorrecta para el usuario encontrado");
+        toast.error("Contraseña incorrecta");
+        setLoading(false);
+        return;
+      }
+
       const userData = { id: userDoc.id, ...userDoc.data() } as User;
+      console.log("Login exitoso para:", userData.name, "Rol:", userData.role);
 
       if (!userData.active) {
         toast.error("Tu cuenta está desactivada. Contacta al administrador.");
-        auth.signOut();
         setLoading(false);
         return;
       }
@@ -61,13 +82,12 @@ export const Login = ({ onLogin }: LoginProps) => {
       onLogin(userData);
       toast.success(`Bienvenido, ${userData.name}`);
     } catch (error: any) {
-      console.error("Credentials login error:", error);
+      console.error("Error detallado en login de credenciales:", error);
       if (error.code === 'auth/operation-not-allowed') {
-        toast.error("El inicio de sesión anónimo no está habilitado en Firebase. Por favor, usa Google o habilítalo en la consola.");
+        toast.error("El inicio de sesión anónimo no está habilitado en Firebase. Por favor, habilítalo en la consola.");
       } else {
-        toast.error("Error al iniciar sesión: " + (error.message || "Error desconocido"));
+        toast.error("Error de conexión: " + (error.message || "Error desconocido"));
       }
-      auth.signOut();
     } finally {
       setLoading(false);
     }
@@ -76,6 +96,11 @@ export const Login = ({ onLogin }: LoginProps) => {
   const handleGoogleLogin = async () => {
     setLoading(true);
     try {
+      // If we are currently anonymous (from a previous failed/partial login), sign out first
+      if (auth.currentUser?.isAnonymous) {
+        await auth.signOut();
+      }
+      
       const provider = new GoogleAuthProvider();
       const result = await signInWithPopup(auth, provider);
       const user = result.user;
