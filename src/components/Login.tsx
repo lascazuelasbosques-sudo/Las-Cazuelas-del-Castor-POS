@@ -1,9 +1,9 @@
 import { useState, FormEvent } from "react";
-import { db } from "../firebase";
-import { collection, getDocs, query, where, limit } from "firebase/firestore";
+import { collection, getDocs, query, where, limit, setDoc, doc } from "firebase/firestore";
 import { Button } from "./Button";
 import { Card, CardContent } from "./Card";
 import { User } from "../types";
+import { auth, db } from "../firebase";
 import { Lock, User as UserIcon, LogIn } from "lucide-react";
 import toast from "react-hot-toast";
 
@@ -54,6 +54,22 @@ export const Login = ({ onLogin }: LoginProps) => {
       
       if (!snap.empty) {
         const userData = { id: snap.docs[0].id, ...snap.docs[0].data() } as User;
+        
+        // Sync role to Firebase user document to enable Firestore permissions
+        if (auth.currentUser) {
+          try {
+            // Use setDoc with merge to ensure the document exists and has the correct role
+            await setDoc(doc(db, 'users', auth.currentUser.uid), {
+              role: userData.role,
+              name: userData.name,
+              active: true
+            }, { merge: true });
+            console.log("Permissions synced for role:", userData.role);
+          } catch (syncError) {
+            console.error("Error syncing role to Firebase:", syncError);
+          }
+        }
+
         onLogin(userData);
         toast.success(`Bienvenido, ${userData.name}`);
       } else {

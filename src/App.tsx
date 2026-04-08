@@ -8,7 +8,7 @@ import { AdminView } from './components/AdminView';
 import { Login } from './components/Login';
 import { auth } from './firebase';
 import { onAuthStateChanged, User as FirebaseUser, signInAnonymously } from 'firebase/auth';
-import { doc, getDoc, setDoc, onSnapshot, collection, getDocs } from 'firebase/firestore';
+import { doc, getDoc, setDoc, onSnapshot, collection, getDocs, query, limit } from 'firebase/firestore';
 import { Toaster } from 'react-hot-toast';
 
 import { seedDatabase } from './seed';
@@ -61,9 +61,14 @@ export default function App() {
         const userDoc = await getDoc(userRef);
         
         if (!userDoc.exists()) {
-          const defaultRole = user.email === 'lascazuelasbosques@gmail.com' ? 'admin' : 'waiter';
+          // Check if this is the first user to bootstrap admin
+          const usersSnap = await getDocs(query(collection(db, 'users'), limit(1)));
+          const isFirstUser = usersSnap.empty;
+          
+          const defaultRole = (user.email === 'lascazuelasbosques@gmail.com' || isFirstUser) ? 'admin' : 'waiter';
+          
           await setDoc(userRef, {
-            name: user.displayName || user.email?.split('@')[0] || 'Usuario Anónimo',
+            name: user.displayName || user.email?.split('@')[0] || (isFirstUser ? 'Admin Inicial' : 'Usuario Anónimo'),
             email: user.email || 'anon@system.com',
             role: defaultRole,
             active: true,

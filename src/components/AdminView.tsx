@@ -69,21 +69,26 @@ export const AdminView = () => {
 
   const handleAddUser = async () => {
     if (!newUser.name || !newUser.username || !newUser.password) {
-      toast.error("Completa todos los campos");
+      toast.error("Completa todos los campos obligatorios");
       return;
     }
+    
+    const toastId = toast.loading("Creando usuario...");
     setLoading(true);
     try {
       await addDoc(collection(db, "users"), {
         ...newUser,
+        pin: "0000", // Default PIN for new users
         active: true,
         createdAt: new Date().toISOString()
       });
-      toast.success("Usuario creado exitosamente");
+      toast.success("Usuario creado exitosamente", { id: toastId });
       setShowAddUserModal(false);
       setNewUser({ name: "", username: "", password: "", role: "waiter" });
       fetchUsers();
     } catch (error) {
+      console.error("Error adding user:", error);
+      toast.error("Error al crear usuario. Verifica tus permisos.", { id: toastId });
       handleFirestoreError(error, OperationType.CREATE, "users");
     } finally {
       setLoading(false);
