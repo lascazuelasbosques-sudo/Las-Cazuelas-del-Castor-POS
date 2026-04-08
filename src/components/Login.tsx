@@ -83,8 +83,19 @@ export const Login = ({ onLogin }: LoginProps) => {
       toast.success(`Bienvenido, ${userData.name}`);
     } catch (error: any) {
       console.error("Error detallado en login de credenciales:", error);
-      if (error.code === 'auth/operation-not-allowed') {
-        toast.error("El inicio de sesión anónimo no está habilitado en Firebase. Por favor, habilítalo en la consola.");
+      
+      if (error.code === 'auth/admin-restricted-operation') {
+        toast.error(
+          "El acceso anónimo está restringido en tu proyecto de Firebase. " +
+          "Ve a la consola de Firebase > Authentication > Sign-in method y HABILITA el proveedor 'Anónimo'.", 
+          { duration: 8000 }
+        );
+      } else if (error.code === 'auth/operation-not-allowed') {
+        toast.error(
+          "El inicio de sesión anónimo no está habilitado. " +
+          "Debes activarlo en la consola de Firebase (Authentication > Sign-in method).",
+          { duration: 8000 }
+        );
       } else {
         toast.error("Error de conexión: " + (error.message || "Error desconocido"));
       }
