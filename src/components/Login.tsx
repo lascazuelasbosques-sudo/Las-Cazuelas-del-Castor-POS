@@ -57,8 +57,10 @@ export const Login = ({ onLogin }: LoginProps) => {
       console.error("Login error:", error);
       if (error.code === 'auth/popup-closed-by-user') {
         toast.error("Inicio de sesión cancelado");
+      } else if (error.code === 'auth/unauthorized-domain') {
+        toast.error("Dominio no autorizado. Debes agregar tu URL de Netlify en la consola de Firebase (Authentication > Settings > Authorized domains).", { duration: 8000 });
       } else {
-        toast.error("Error al iniciar sesión con Google");
+        toast.error("Error al iniciar sesión con Google: " + (error.message || "Error desconocido"));
       }
     } finally {
       setLoading(false);

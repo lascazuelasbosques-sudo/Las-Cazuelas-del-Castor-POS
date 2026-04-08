@@ -61,6 +61,8 @@ export default function App() {
       setFirebaseUser(user);
       
       if (!user) {
+        setPosUser(null);
+        localStorage.removeItem('posUser');
         setLoading(false);
         return;
       }
