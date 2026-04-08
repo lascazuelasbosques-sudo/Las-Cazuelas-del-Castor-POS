@@ -184,7 +184,7 @@ export const AdminView = () => {
 
   const handleResetSystem = async () => {
     setConfirmAction({
-      title: "Reiniciar Sistema Completo",
+      title: "Reinicio de Fábrica",
       message: "¿ESTÁS COMPLETAMENTE SEGURO? Esto borrará TODOS los pedidos, registros de caja, productos y categorías. No se puede deshacer.",
       action: async () => {
         setLoading(true);
@@ -215,8 +215,8 @@ export const AdminView = () => {
 
   const handleClearTransactions = async () => {
     setConfirmAction({
-      title: "Limpiar Caja y Pedidos",
-      message: "¿Borrar todos los pedidos y registros de caja? El menú (productos) se mantendrá.",
+      title: "Reinicio Operacional",
+      message: "¿Borrar todos los pedidos y registros de caja? El menú (productos) y usuarios se mantendrán.",
       action: async () => {
         setLoading(true);
         try {
@@ -464,7 +464,17 @@ export const AdminView = () => {
                 </Button>
               </div>
 
-              <div className="pt-2">
+              <div className="pt-2 space-y-2">
+                <Button 
+                  variant="outline" 
+                  className="w-full h-9 text-xs gap-2 text-stone-600 hover:bg-stone-50 border-stone-200"
+                  onClick={handleClearTransactions}
+                  disabled={loading}
+                >
+                  <RefreshCw size={14} className="text-blue-500" />
+                  Reinicio Operacional (Caja, Cocina, Pedidos)
+                </Button>
+
                 <Button 
                   variant="ghost" 
                   className="w-full h-9 text-xs gap-2 text-mex-red hover:bg-red-50"
@@ -472,7 +482,7 @@ export const AdminView = () => {
                   disabled={loading}
                 >
                   <AlertTriangle size={14} />
-                  Reiniciar Sistema
+                  Reinicio de Fábrica (Borrar Todo)
                 </Button>
               </div>
             </div>
