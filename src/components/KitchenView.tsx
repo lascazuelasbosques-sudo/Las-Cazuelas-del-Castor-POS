@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardFooter } from "./Card";
 import { Button } from "./Button";
 import { Order, OrderStatus, OrderItem } from "@/src/types";
-import { Clock, CheckCircle2, PlayCircle } from "lucide-react";
+import { Clock, CheckCircle2, PlayCircle, ClipboardList, PlusCircle } from "lucide-react";
 import { db } from "../firebase";
 import { collection, onSnapshot, query, where, orderBy, doc, updateDoc } from "firebase/firestore";
 import { cn } from "@/src/lib/utils";
@@ -18,9 +18,14 @@ interface KitchenTicket {
   stationStatus: 'pending' | 'preparing';
 }
 
-export const KitchenView = () => {
+interface KitchenViewProps {
+  onEditOrder?: (order: Order) => void;
+}
+
+export const KitchenView = ({ onEditOrder }: KitchenViewProps) => {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
+  const [activeStation, setActiveStation] = useState<'all' | 'plancha' | 'cocina'>('all');
 
   useEffect(() => {
     const q = query(
@@ -60,7 +65,7 @@ export const KitchenView = () => {
         updateData.status = 'preparing';
 
         await updateDoc(doc(db, "orders", orderId), updateData);
-        toast.success(`Comanda de ${station === 'plancha' ? 'Plancha' : 'Cocina'} en preparación`);
+        toast.success(`Comanda de ${station === 'plancha' ? 'Parrilla' : 'Cocina'} en preparación`);
       } else if (action === 'finish_station') {
         // Mark items for this station as completed
         const updatedItems = order.items.map(item => {
@@ -80,7 +85,7 @@ export const KitchenView = () => {
         }
 
         await updateDoc(doc(db, "orders", orderId), updateData);
-        toast.success(`Comanda de ${station === 'plancha' ? 'Plancha' : 'Cocina'} lista`);
+        toast.success(`Comanda de ${station === 'plancha' ? 'Parrilla' : 'Cocina'} lista`);
       }
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, "orders");
@@ -117,7 +122,7 @@ export const KitchenView = () => {
     const hasPendingPlancha = planchaItems.some(i => i.status !== 'completed');
     const hasPendingCocina = cocinaItems.some(i => i.status !== 'completed');
 
-    if (hasPendingPlancha) {
+    if (hasPendingPlancha && (activeStation === 'all' || activeStation === 'plancha')) {
       tickets.push({
         id: `${order.id}-plancha`,
         orderId: order.id,
@@ -128,7 +133,7 @@ export const KitchenView = () => {
       });
     }
     
-    if (hasPendingCocina) {
+    if (hasPendingCocina && (activeStation === 'all' || activeStation === 'cocina')) {
       tickets.push({
         id: `${order.id}-cocina`,
         orderId: order.id,
@@ -141,93 +146,142 @@ export const KitchenView = () => {
   });
 
   return (
-    <div className="p-6 h-full overflow-hidden flex flex-col">
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-serif text-mex-terracotta">Comandas en Cocina</h1>
-        <div className="flex gap-4">
-          <div className="flex items-center gap-2 text-sm text-stone-500">
-            <div className="w-3 h-3 rounded-full bg-amber-500" /> Pendiente
-          </div>
-          <div className="flex items-center gap-2 text-sm text-stone-500">
-            <div className="w-3 h-3 rounded-full bg-blue-500" /> Preparando
-          </div>
+    <div className="p-3 md:p-6 h-full overflow-hidden flex flex-col">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 md:mb-6 gap-4">
+        <div>
+          <h1 className="text-xl md:text-2xl font-serif text-mex-terracotta">Comandas en Cocina</h1>
+          <p className="text-xs text-stone-500 uppercase font-bold tracking-widest mt-1">
+            {activeStation === 'all' ? 'Todas las estaciones' : activeStation === 'plancha' ? 'Estación: Parrilla' : 'Estación: Cocina'}
+          </p>
+        </div>
+
+        <div className="flex bg-stone-100 p-1 rounded-xl self-start sm:self-auto">
+          <button 
+            onClick={() => setActiveStation('all')}
+            className={cn(
+              "px-4 py-2 rounded-lg text-xs font-bold uppercase transition-all",
+              activeStation === 'all' ? "bg-white text-mex-brown shadow-sm" : "text-stone-500 hover:text-stone-700"
+            )}
+          >
+            Todas
+          </button>
+          <button 
+            onClick={() => setActiveStation('cocina')}
+            className={cn(
+              "px-4 py-2 rounded-lg text-xs font-bold uppercase transition-all",
+              activeStation === 'cocina' ? "bg-blue-600 text-white shadow-sm" : "text-stone-500 hover:text-stone-700"
+            )}
+          >
+            Cocina
+          </button>
+          <button 
+            onClick={() => setActiveStation('plancha')}
+            className={cn(
+              "px-4 py-2 rounded-lg text-xs font-bold uppercase transition-all",
+              activeStation === 'plancha' ? "bg-orange-600 text-white shadow-sm" : "text-stone-500 hover:text-stone-700"
+            )}
+          >
+            Parrilla
+          </button>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 overflow-y-auto pr-2 pb-20 md:pb-6">
-        {tickets.map(ticket => (
-          <Card key={ticket.id} className={ticket.stationStatus === 'preparing' ? 'border-blue-500 ring-1 ring-blue-500/20' : ''}>
-            <CardHeader className="flex flex-row items-center justify-between bg-stone-50">
-              <div>
-                <p className="text-xs text-stone-500 uppercase tracking-wider font-semibold">Mesa</p>
-                <p className="text-2xl font-bold text-mex-green">
-                  {ticket.order.isTakeaway ? 'LLEVAR' : ticket.order.tableNumber}
-                </p>
-                {ticket.order.folio && (
-                  <p className="text-[10px] text-stone-400 font-mono mt-1">Folio: {ticket.order.folio}</p>
-                )}
-                <div className={cn("px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider w-fit mt-2", 
-                  ticket.station === 'plancha' ? "bg-orange-100 text-orange-700" : "bg-blue-100 text-blue-700"
-                )}>
-                  {ticket.station === 'plancha' ? '🔥 Plancha' : '🍳 Cocina'}
-                </div>
-              </div>
-              <div className="text-right">
-                {ticket.order.isTakeaway && (
-                  <div className="px-2 py-0.5 rounded bg-mex-terracotta text-white text-[10px] font-bold uppercase mb-1">
-                    Para Llevar
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6 overflow-y-auto pr-1 pb-24 md:pb-6">
+        {tickets.length === 0 ? (
+          <div className="col-span-full flex flex-col items-center justify-center py-20 text-stone-400 opacity-40">
+            <ClipboardList size={64} className="mb-4" />
+            <p className="text-xl font-serif">No hay comandas pendientes</p>
+            <p className="text-sm">En esta estación: {activeStation === 'plancha' ? 'Parrilla' : activeStation === 'cocina' ? 'Cocina' : 'Todas'}</p>
+          </div>
+        ) : (
+          tickets.map(ticket => (
+            <Card key={ticket.id} className={ticket.stationStatus === 'preparing' ? 'border-blue-500 ring-1 ring-blue-500/20' : ''}>
+              <CardHeader className="flex flex-row items-center justify-between bg-stone-50">
+                <div>
+                  <p className="text-xs text-stone-500 uppercase tracking-wider font-semibold">Mesa</p>
+                  <p className="text-2xl font-bold text-mex-green">
+                    {ticket.order.isTakeaway ? 'LLEVAR' : ticket.order.tableNumber}
+                  </p>
+                  {ticket.order.folio && (
+                    <p className="text-[10px] text-stone-400 font-mono mt-1">Folio: {ticket.order.folio}</p>
+                  )}
+                  <div className={cn("px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider w-fit mt-2", 
+                    ticket.station === 'plancha' ? "bg-orange-100 text-orange-700" : "bg-blue-100 text-blue-700"
+                  )}>
+                    {ticket.station === 'plancha' ? '🔥 Parrilla' : '🍳 Cocina'}
                   </div>
-                )}
-                <div className={cn("px-2 py-1 rounded-full text-[10px] font-bold uppercase border mb-1", getStatusColor(ticket.stationStatus as OrderStatus))}>
-                  {ticket.stationStatus === 'pending' ? 'Pendiente' : 'Preparando'}
                 </div>
-                <div className="flex items-center gap-1 text-stone-400 text-xs">
-                  <Clock size={12} />
-                  {getTimeElapsed(ticket.order.createdAt)}
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="p-4 space-y-3">
-              {ticket.items.map((item, idx) => (
-                <div key={idx} className={cn("flex justify-between items-start p-2 rounded", item.status === 'completed' ? "bg-stone-100 opacity-50" : "")}>
-                  <div className="flex gap-2">
-                    <span className={cn("font-bold", item.status === 'completed' ? "text-stone-500" : "text-mex-terracotta")}>{item.quantity}x</span>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <p className={cn("font-medium leading-tight", item.status === 'completed' ? "text-stone-500 line-through" : "text-stone-800")}>{item.name}</p>
-                        {item.status === 'completed' && (
-                          <span className="text-[10px] bg-stone-200 text-stone-600 px-1.5 py-0.5 rounded font-bold uppercase">Listo</span>
-                        )}
+                <div className="flex flex-col items-end gap-2">
+                  <div className="text-right">
+                    {ticket.order.isTakeaway && (
+                      <div className="px-2 py-0.5 rounded bg-mex-terracotta text-white text-[10px] font-bold uppercase mb-1">
+                        Para Llevar
                       </div>
-                      {item.notes && <p className="text-xs text-mex-red italic">{item.notes}</p>}
+                    )}
+                    <div className={cn("px-2 py-1 rounded-full text-[10px] font-bold uppercase border mb-1", getStatusColor(ticket.stationStatus as OrderStatus))}>
+                      {ticket.stationStatus === 'pending' ? 'Pendiente' : 'Preparando'}
+                    </div>
+                    <div className="flex items-center gap-1 text-stone-400 text-xs">
+                      <Clock size={12} />
+                      {getTimeElapsed(ticket.order.createdAt)}
                     </div>
                   </div>
+                  
+                  {onEditOrder && (
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      className="h-8 gap-1 text-[10px] font-bold uppercase text-mex-green hover:bg-mex-green/10 border border-mex-green/20"
+                      onClick={() => onEditOrder(ticket.order)}
+                    >
+                      <PlusCircle size={14} />
+                      Agregar
+                    </Button>
+                  )}
                 </div>
-              ))}
-            </CardContent>
-            <CardFooter className="p-3 bg-white border-t border-stone-100 flex gap-2">
-              {ticket.stationStatus === 'pending' ? (
-                <Button 
-                  variant="primary" 
-                  className="w-full gap-2 bg-blue-600 hover:bg-blue-700"
-                  onClick={() => updateOrderStatus(ticket.orderId, 'start_station', ticket.station)}
-                >
-                  <PlayCircle size={18} />
-                  Empezar
-                </Button>
-              ) : (
-                <Button 
-                  variant="primary" 
-                  className="w-full gap-2"
-                  onClick={() => updateOrderStatus(ticket.orderId, 'finish_station', ticket.station)}
-                >
-                  <CheckCircle2 size={18} />
-                  Listo
-                </Button>
-              )}
-            </CardFooter>
-          </Card>
-        ))}
+              </CardHeader>
+              <CardContent className="p-4 space-y-3">
+                {ticket.items.map((item, idx) => (
+                  <div key={idx} className={cn("flex justify-between items-start p-2 rounded", item.status === 'completed' ? "bg-stone-100 opacity-50" : "")}>
+                    <div className="flex gap-2">
+                      <span className={cn("font-bold", item.status === 'completed' ? "text-stone-500" : "text-mex-terracotta")}>{item.quantity}x</span>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <p className={cn("font-medium leading-tight", item.status === 'completed' ? "text-stone-500 line-through" : "text-stone-800")}>{item.name}</p>
+                          {item.status === 'completed' && (
+                            <span className="text-[10px] bg-stone-200 text-stone-600 px-1.5 py-0.5 rounded font-bold uppercase">Listo</span>
+                          )}
+                        </div>
+                        {item.notes && <p className="text-xs text-mex-red italic">{item.notes}</p>}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </CardContent>
+              <CardFooter className="p-3 bg-white border-t border-stone-100 flex gap-2">
+                {ticket.stationStatus === 'pending' ? (
+                  <Button 
+                    variant="primary" 
+                    className="w-full gap-2 bg-blue-600 hover:bg-blue-700"
+                    onClick={() => updateOrderStatus(ticket.orderId, 'start_station', ticket.station)}
+                  >
+                    <PlayCircle size={18} />
+                    Empezar
+                  </Button>
+                ) : (
+                  <Button 
+                    variant="primary" 
+                    className="w-full gap-2"
+                    onClick={() => updateOrderStatus(ticket.orderId, 'finish_station', ticket.station)}
+                  >
+                    <CheckCircle2 size={18} />
+                    Listo
+                  </Button>
+                )}
+              </CardFooter>
+            </Card>
+          ))
+        )}
       </div>
     </div>
   );

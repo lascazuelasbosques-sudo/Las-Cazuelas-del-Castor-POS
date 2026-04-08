@@ -9,7 +9,11 @@ import { collection, onSnapshot, query, orderBy, doc, deleteDoc, addDoc, updateD
 import { handleFirestoreError, OperationType } from "../lib/firestoreErrorHandler";
 import toast from "react-hot-toast";
 
-export const InventoryView = () => {
+interface InventoryViewProps {
+  userRole?: string;
+}
+
+export const InventoryView = ({ userRole = 'waiter' }: InventoryViewProps) => {
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -134,33 +138,102 @@ export const InventoryView = () => {
   }
 
   return (
-    <div className="p-6 h-full overflow-hidden flex flex-col gap-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-serif text-mex-terracotta">Gestión de Inventario</h1>
-        <Button variant="primary" className="gap-2" onClick={openAddModal}>
+    <div className="p-3 md:p-6 h-full overflow-hidden flex flex-col gap-4 md:gap-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <h1 className="text-xl md:text-2xl font-serif text-mex-terracotta">Inventario</h1>
+        <Button variant="primary" className="gap-2 h-11" onClick={openAddModal}>
           <Plus size={18} />
           Nuevo Producto
         </Button>
       </div>
 
-      <div className="flex gap-4 items-center">
+      <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" size={20} />
           <input 
             type="text" 
-            placeholder="Buscar en inventario..." 
+            placeholder="Buscar..." 
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 rounded-xl border border-stone-200 focus:outline-none focus:ring-2 focus:ring-mex-green/20"
+            className="w-full pl-10 pr-4 py-3 md:py-2 rounded-xl border border-stone-200 focus:outline-none focus:ring-2 focus:ring-mex-green/20 text-base"
           />
         </div>
-        <Button variant="outline" className="gap-2">
+        <Button variant="outline" className="gap-2 h-11">
           Categorías
         </Button>
       </div>
 
-      <div className="flex-1 overflow-y-auto pr-2 pb-20 md:pb-6">
-        <div className="bg-white rounded-xl border border-stone-200 overflow-hidden">
+      <div className="flex-1 overflow-y-auto pr-1 pb-24 md:pb-6">
+        {/* Mobile Card Layout */}
+        <div className="grid grid-cols-1 sm:hidden gap-3">
+          {filteredProducts.map(product => (
+            <Card key={product.id} className="overflow-hidden">
+              <CardContent className="p-4">
+                <div className="flex justify-between items-start mb-2">
+                  <div>
+                    <h3 className="font-bold text-stone-800">{product.name}</h3>
+                    <p className="text-xs text-stone-500 line-clamp-1">{product.description}</p>
+                  </div>
+                  <p className="font-bold text-mex-terracotta">{formatCurrency(product.price)}</p>
+                </div>
+                <div className="flex flex-wrap gap-2 mb-3">
+                  <span className={cn(
+                    "text-[10px] px-2 py-0.5 rounded-full font-bold uppercase",
+                    product.station === 'plancha' ? "bg-orange-100 text-orange-700" : "bg-blue-100 text-blue-700"
+                  )}>
+                    {product.station === 'plancha' ? 'Plancha' : 'Cocina'}
+                  </span>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full font-bold uppercase bg-stone-100 text-stone-600">
+                    {categories.find(c => c.id === product.categoryId)?.name || 'Sin categoría'}
+                  </span>
+                  <span className={cn(
+                    "text-[10px] px-2 py-0.5 rounded-full font-bold uppercase border",
+                    product.available 
+                      ? "bg-mex-green/10 text-mex-green border-mex-green/20" 
+                      : "bg-stone-100 text-stone-400 border-stone-200"
+                  )}>
+                    {product.available ? 'Activo' : 'Inactivo'}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between pt-3 border-t border-stone-100">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-stone-500">Stock:</span>
+                    <span className={cn(
+                      "font-bold text-sm",
+                      product.stock <= 10 ? "text-mex-red" : "text-stone-800"
+                    )}>
+                      {product.stock}
+                    </span>
+                    {product.stock <= 10 && <AlertTriangle size={14} className="text-mex-red" />}
+                  </div>
+                  <div className="flex gap-2">
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      className="h-9 w-9 p-0 text-stone-400 hover:text-mex-green"
+                      onClick={() => openEditModal(product)}
+                    >
+                      <Edit2 size={18} />
+                    </Button>
+                    {userRole === 'admin' && (
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        className="h-9 w-9 p-0 text-stone-400 hover:text-mex-red"
+                        onClick={() => handleDeleteProduct(product.id)}
+                      >
+                        <Trash2 size={18} />
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+
+        {/* Desktop Table Layout */}
+        <div className="hidden sm:block bg-white rounded-xl border border-stone-200 overflow-hidden">
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-stone-50 border-b border-stone-200">
@@ -222,14 +295,16 @@ export const InventoryView = () => {
                       >
                         <Edit2 size={16} />
                       </Button>
-                      <Button 
-                        variant="ghost" 
-                        size="icon" 
-                        className="text-stone-400 hover:text-mex-red"
-                        onClick={() => handleDeleteProduct(product.id)}
-                      >
-                        <Trash2 size={16} />
-                      </Button>
+                      {userRole === 'admin' && (
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          className="text-stone-400 hover:text-mex-red"
+                          onClick={() => handleDeleteProduct(product.id)}
+                        >
+                          <Trash2 size={16} />
+                        </Button>
+                      )}
                     </div>
                   </td>
                 </tr>

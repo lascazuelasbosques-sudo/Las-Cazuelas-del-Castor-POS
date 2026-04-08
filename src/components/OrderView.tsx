@@ -15,9 +15,10 @@ import { handleFirestoreError, OperationType } from "../lib/firestoreErrorHandle
 interface OrderViewProps {
   orderToEdit?: Order | null;
   clearOrderToEdit?: () => void;
+  userRole?: string;
 }
 
-export const OrderView = ({ orderToEdit, clearOrderToEdit }: OrderViewProps) => {
+export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }: OrderViewProps) => {
   const [categories, setCategories] = useState<Category[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>('');
@@ -31,6 +32,7 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit }: OrderViewProps) => 
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [showActiveOrders, setShowActiveOrders] = useState(false);
+  const [showCartMobile, setShowCartMobile] = useState(false);
 
   const TAKEAWAY_FEE_PERCENTAGE = 0.05; // 5% fee for disposables as requested
 
@@ -205,22 +207,22 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit }: OrderViewProps) => 
       setIsTakeaway(false);
       setEditingOrderId(null);
       setEditingOrderStatus(null);
+      setShowCartMobile(false);
     } catch (error) {
       handleFirestoreError(error, editingOrderId ? OperationType.UPDATE : OperationType.CREATE, "orders");
     }
   };
 
   const loadOrder = (order: Order) => {
-    // Instead of editing the existing order, we just pre-fill the table number
-    // so the waiter can add a NEW ticket to the same table.
+    // Cargamos los items existentes para poder agregar más
+    setCart(order.items);
     setTableNumber(order.tableNumber === 'Para Llevar' ? '' : order.tableNumber);
     setIsTakeaway(order.isTakeaway);
-    setCart([]);
-    setNotes('');
-    setEditingOrderId(null);
-    setEditingOrderStatus(null);
+    setNotes(order.notes || '');
+    setEditingOrderId(order.id);
+    setEditingOrderStatus(order.status);
     setShowActiveOrders(false);
-    toast.success(`Mesa ${order.tableNumber} seleccionada para agregar`);
+    toast.success(`Editando pedido de Mesa ${order.tableNumber}`);
   };
 
   if (loading) {
@@ -232,10 +234,10 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit }: OrderViewProps) => 
   }
 
   return (
-    <div className="flex flex-col h-full md:flex-row overflow-hidden">
+    <div className="flex flex-col h-full md:flex-row overflow-hidden relative">
       {/* Products Section */}
-      <div className="flex-1 flex flex-col p-4 overflow-hidden">
-        <div className="flex items-center gap-4 mb-6">
+      <div className="flex-1 flex flex-col p-3 md:p-4 overflow-hidden">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 mb-4 md:mb-6">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" size={20} />
             <input 
@@ -243,10 +245,10 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit }: OrderViewProps) => 
               placeholder="Buscar antojito..." 
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 rounded-xl border border-stone-200 focus:outline-none focus:ring-2 focus:ring-mex-green/20"
+              className="w-full pl-10 pr-4 py-3 md:py-2 rounded-xl border border-stone-200 focus:outline-none focus:ring-2 focus:ring-mex-green/20 text-base"
             />
           </div>
-          <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
+          <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
             {categories.map(cat => (
               <Button
                 key={cat.id}
@@ -256,7 +258,7 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit }: OrderViewProps) => 
                   setSelectedCategory(cat.id);
                   setSearchQuery(''); // Clear search when selecting category
                 }}
-                className="whitespace-nowrap"
+                className="whitespace-nowrap px-4 py-2 h-auto"
               >
                 {cat.name}
               </Button>
@@ -264,7 +266,7 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit }: OrderViewProps) => 
           </div>
         </div>
 
-        <div className="flex flex-col gap-2 overflow-y-auto pr-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-2 md:gap-3 overflow-y-auto pr-1">
           {products.filter(p => {
             if (!p.available) return false;
             if (searchQuery) {
@@ -275,28 +277,26 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit }: OrderViewProps) => 
           }).map(product => (
             <Card 
               key={product.id} 
-              className="cursor-pointer hover:border-mex-green transition-colors group"
-              onDoubleClick={() => addToCart(product)}
-              onClick={() => {
-                // Optional: visual feedback for single click could go here
-                // but we rely on double click to add as requested
-              }}
+              className="cursor-pointer hover:border-mex-green transition-colors group active:scale-[0.98]"
+              onClick={() => addToCart(product)}
             >
-              <CardContent className="p-3 flex items-center gap-4">
-                <div className="w-12 h-12 bg-stone-100 rounded-lg flex items-center justify-center text-stone-400 shrink-0">
+              <CardContent className="p-3 flex items-center gap-3">
+                <div className="w-14 h-14 bg-stone-100 rounded-lg flex items-center justify-center text-stone-400 shrink-0">
                   {product.imageUrl ? (
                     <img src={product.imageUrl} alt={product.name} className="w-full h-full object-cover rounded-lg" referrerPolicy="no-referrer" />
                   ) : (
-                    <Utensils size={20} />
+                    <Utensils size={24} />
                   )}
                 </div>
-                <div className="flex-1">
-                  <h3 className="font-semibold text-stone-800 group-hover:text-mex-green">{product.name}</h3>
-                  <p className="text-xs text-stone-500 line-clamp-1">{product.description}</p>
+                <div className="flex-1 min-w-0">
+                  <h3 className="font-bold text-stone-800 group-hover:text-mex-green truncate">{product.name}</h3>
+                  <p className="text-[11px] text-stone-500 line-clamp-1">{product.description}</p>
+                  <p className="font-bold text-mex-terracotta mt-0.5">{formatCurrency(product.price)}</p>
                 </div>
-                <div className="text-right flex flex-col items-end">
-                  <p className="font-bold text-mex-terracotta">{formatCurrency(product.price)}</p>
-                  <p className="text-[10px] text-stone-400 bg-stone-100 px-2 py-0.5 rounded-full mt-1">Doble clic para agregar</p>
+                <div className="shrink-0">
+                  <div className="w-8 h-8 rounded-full bg-mex-green/10 text-mex-green flex items-center justify-center">
+                    <Plus size={18} />
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -304,23 +304,53 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit }: OrderViewProps) => 
         </div>
       </div>
 
+      {/* Mobile Cart Toggle Button */}
+      <div className="md:hidden fixed bottom-24 right-4 z-40">
+        <Button 
+          variant="primary" 
+          size="lg" 
+          className="rounded-full w-14 h-14 shadow-2xl flex items-center justify-center p-0"
+          onClick={() => setShowCartMobile(true)}
+        >
+          <div className="relative">
+            <ShoppingCart size={24} />
+            {cart.length > 0 && (
+              <span className="absolute -top-2 -right-2 bg-mex-red text-white text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center ring-2 ring-white">
+                {cart.reduce((acc, item) => acc + item.quantity, 0)}
+              </span>
+            )}
+          </div>
+        </Button>
+      </div>
+
       {/* Cart Section */}
-      <div className="w-full md:w-80 lg:w-96 bg-white border-l border-stone-200 flex flex-col shadow-xl z-10">
+      <div className={cn(
+        "fixed inset-0 z-50 bg-white flex flex-col transition-transform duration-300 md:relative md:inset-auto md:translate-x-0 md:w-80 lg:w-96 md:border-l md:border-stone-200 md:shadow-xl",
+        showCartMobile ? "translate-x-0" : "translate-x-full md:translate-x-0"
+      )}>
         <div className="p-4 border-b border-stone-100 flex flex-col gap-3 bg-stone-50">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-bold flex items-center gap-2">
               <ShoppingCart size={20} className="text-mex-green" />
               {editingOrderId ? 'Editar Pedido' : 'Nueva Comanda'}
             </h2>
-            <Button 
-              variant="ghost" 
-              size="sm" 
-              className="text-mex-brown gap-1 h-8"
-              onClick={() => setShowActiveOrders(!showActiveOrders)}
-            >
-              <History size={16} />
-              Activos
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                className="text-mex-brown gap-1 h-9 px-3"
+                onClick={() => setShowActiveOrders(!showActiveOrders)}
+              >
+                <History size={16} />
+                Activos
+              </Button>
+              <button 
+                className="md:hidden p-2 text-stone-400 hover:text-stone-600"
+                onClick={() => setShowCartMobile(false)}
+              >
+                <X size={24} />
+              </button>
+            </div>
           </div>
           
           <div className="flex items-center gap-2">
@@ -431,23 +461,24 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit }: OrderViewProps) => 
             <span className="text-mex-terracotta">{formatCurrency(total)}</span>
           </div>
           <div className="grid grid-cols-2 gap-2">
-            <Button variant="outline" className="w-full" onClick={() => {
+            <Button variant="outline" className="w-full h-12" onClick={() => {
               setCart([]);
               setIsTakeaway(false);
               setTableNumber('');
               setNotes('');
               setEditingOrderId(null);
               setEditingOrderStatus(null);
+              setShowCartMobile(false);
             }}>
               {editingOrderId ? 'Cancelar' : 'Limpiar'}
             </Button>
             <Button 
               variant="primary" 
-              className="w-full" 
+              className="w-full h-12" 
               disabled={cart.length === 0 || (!isTakeaway && !tableNumber)}
               onClick={handleSendOrder}
             >
-              {editingOrderId ? 'Actualizar' : 'Enviar Pedido'}
+              {editingOrderId ? 'Actualizar' : 'Enviar'}
             </Button>
           </div>
         </div>

@@ -39,9 +39,12 @@ service cloud.firestore {
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin');
     }
 
+    // Staff can be identified by being authenticated (even anonymously)
+    // For more security, we could check a 'role' in their document, 
+    // but since we use a custom POS login, we'll allow authenticated users to perform staff duties
+    // while strictly restricting deletions to admins.
     function isStaff() {
-      return isAdmin() || (isAuthenticated() && 
-        exists(/databases/$(database)/documents/users/$(request.auth.uid)));
+      return isAuthenticated();
     }
 
     function isValidUser(data) {

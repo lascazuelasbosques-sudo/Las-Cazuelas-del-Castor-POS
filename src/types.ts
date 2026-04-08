@@ -3,9 +3,12 @@ export type UserRole = 'admin' | 'waiter' | 'kitchen' | 'cashier';
 export interface User {
   id: string;
   name: string;
-  email: string;
+  username?: string;
+  password?: string;
+  email?: string;
   role: UserRole;
   active: boolean;
+  pin?: string;
 }
 
 export interface Category {

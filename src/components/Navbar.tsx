@@ -1,16 +1,49 @@
+import { useState, useEffect } from "react";
 import { Utensils, ClipboardList, Package, CreditCard, Settings, LogOut, Menu, Squirrel } from "lucide-react";
 import { Button } from "./Button";
 import { cn } from "@/src/lib/utils";
-import { auth } from "../firebase";
+import { auth, db } from "../firebase";
+import { collection, query, where, onSnapshot } from "firebase/firestore";
+import { Order } from "../types";
 
 interface NavbarProps {
   activeTab: string;
   setActiveTab: (tab: string) => void;
   userRole?: string;
   userName?: string;
+  onLogout: () => void;
 }
 
-export const Navbar = ({ activeTab, setActiveTab, userRole = 'waiter', userName = 'Usuario' }: NavbarProps) => {
+export const Navbar = ({ activeTab, setActiveTab, userRole = 'waiter', userName = 'Usuario', onLogout }: NavbarProps) => {
+  const [pendingStations, setPendingStations] = useState<{plancha: boolean, cocina: boolean}>({ plancha: false, cocina: false });
+
+  useEffect(() => {
+    const q = query(
+      collection(db, "orders"),
+      where("status", "in", ["pending", "preparing"])
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const orders = snapshot.docs.map(doc => doc.data() as Order);
+      
+      let hasPlancha = false;
+      let hasCocina = false;
+
+      orders.forEach(order => {
+        order.items.forEach(item => {
+          if (item.status !== 'completed') {
+            if (item.station === 'plancha') hasPlancha = true;
+            if (item.station === 'cocina' || !item.station) hasCocina = true;
+          }
+        });
+      });
+
+      setPendingStations({ plancha: hasPlancha, cocina: hasCocina });
+    });
+
+    return () => unsubscribe();
+  }, []);
+
   const logoUrl = "https://scontent.fmex3-3.fna.fbcdn.net/v/t39.30808-6/305224800_502697315191276_5159032473398491144_n.jpg?_nc_cat=101&ccb=1-7&_nc_sid=1d70fc&_nc_ohc=XrHd6WIU72QQ7kNvwH4YUuv&_nc_oc=AdqN0uR_hiClwhlsHD-5cWnrOZLIkwl_1rc9xLpSMyzbq0BKhUhMp2k1zhiOM0IB2rU&_nc_zt=23&_nc_ht=scontent.fmex3-3.fna&_nc_gid=cVCP6594ky4G9QxsLv3J3w&_nc_ss=7a389&oh=00_Af2UhG1KSo71QAgmxpKVLu_7coTXMMFPWzKQ6epACyTvvA&oe=69DB4A18";
   const navItems = [
     { id: 'orders', label: 'Pedidos', icon: Utensils, roles: ['admin', 'waiter', 'cashier'] },
@@ -53,13 +86,25 @@ export const Navbar = ({ activeTab, setActiveTab, userRole = 'waiter', userName 
           key={item.id}
           onClick={() => setActiveTab(item.id)}
           className={cn(
-            "flex flex-col items-center gap-1 p-2 rounded-xl transition-all md:flex-row md:w-full md:px-4 md:py-3 md:gap-3",
+            "flex flex-col items-center gap-1 p-2 rounded-xl transition-all md:flex-row md:w-full md:px-4 md:py-3 md:gap-3 relative",
             activeTab === item.id 
               ? "text-mex-green bg-mex-green/10 font-semibold" 
               : "text-stone-500 hover:bg-stone-100"
           )}
         >
-          <item.icon size={24} />
+          <div className="relative">
+            <item.icon size={24} />
+            {item.id === 'kitchen' && (pendingStations.cocina || pendingStations.plancha) && (
+              <div className="absolute -top-1 -right-1 flex gap-0.5">
+                {pendingStations.cocina && (
+                  <span className="w-2.5 h-2.5 bg-blue-500 rounded-full border-2 border-white animate-pulse" title="Pedido en Cocina" />
+                )}
+                {pendingStations.plancha && (
+                  <span className="w-2.5 h-2.5 bg-orange-500 rounded-full border-2 border-white animate-pulse" title="Pedido en Parrilla" />
+                )}
+              </div>
+            )}
+          </div>
           <span className="text-[10px] md:text-base">{item.label}</span>
         </button>
       ))}
@@ -72,7 +117,7 @@ export const Navbar = ({ activeTab, setActiveTab, userRole = 'waiter', userName 
         <Button 
           variant="ghost" 
           className="justify-start gap-3 w-full text-stone-500"
-          onClick={() => auth.signOut()}
+          onClick={onLogout}
         >
           <LogOut size={20} />
           Cerrar Sesión

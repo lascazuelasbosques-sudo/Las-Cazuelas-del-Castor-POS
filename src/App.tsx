@@ -7,26 +7,48 @@ import { InventoryView } from './components/InventoryView';
 import { AdminView } from './components/AdminView';
 import { Login } from './components/Login';
 import { auth } from './firebase';
-import { onAuthStateChanged, User } from 'firebase/auth';
-import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
+import { onAuthStateChanged, User as FirebaseUser, signInAnonymously } from 'firebase/auth';
+import { doc, getDoc, setDoc, onSnapshot, collection, getDocs } from 'firebase/firestore';
 import { Toaster } from 'react-hot-toast';
 
 import { seedDatabase } from './seed';
 import { db } from './firebase';
 
-import { Order } from './types';
+import { Order, User as POSUser } from './types';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('orders');
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<FirebaseUser | null>(null);
+  const [posUser, setPosUser] = useState<POSUser | null>(null);
   const [userRole, setUserRole] = useState<string>('waiter');
   const [loading, setLoading] = useState(true);
   const [orderToEdit, setOrderToEdit] = useState<Order | null>(null);
 
   useEffect(() => {
+    // Check for local session
+    const savedUser = localStorage.getItem('posUser');
+    if (savedUser) {
+      try {
+        const parsedUser = JSON.parse(savedUser);
+        setPosUser(parsedUser);
+        setUserRole(parsedUser.role);
+      } catch (e) {
+        console.error("Error parsing saved user", e);
+      }
+    }
+
     let unsubUserDoc: (() => void) | null = null;
 
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (!user) {
+        try {
+          await signInAnonymously(auth);
+        } catch (error) {
+          console.error("Error signing in anonymously:", error);
+        }
+        return;
+      }
+
       if (user) {
         // Ensure user document exists
         try {
@@ -39,7 +61,8 @@ export default function App() {
               name: user.displayName || user.email?.split('@')[0] || 'Usuario',
               email: user.email,
               role: role,
-              active: true
+              active: true,
+              pin: '1234'
             });
             setUserRole(role);
           }
@@ -77,14 +100,24 @@ export default function App() {
     );
   }
 
-  if (!user) {
+  if (!posUser && !user) {
     return (
       <>
-        <Login />
+        <Login onLogin={(u) => {
+          setPosUser(u);
+          setUserRole(u.role);
+          localStorage.setItem('posUser', JSON.stringify(u));
+        }} />
         <Toaster position="top-right" />
       </>
     );
   }
+
+  const handleLogout = () => {
+    auth.signOut();
+    setPosUser(null);
+    localStorage.removeItem('posUser');
+  };
 
   const handleEditOrder = (order: Order) => {
     setOrderToEdit(order);
@@ -94,17 +127,17 @@ export default function App() {
   const renderView = () => {
     switch (activeTab) {
       case 'orders':
-        return <OrderView orderToEdit={orderToEdit} clearOrderToEdit={() => setOrderToEdit(null)} />;
+        return <OrderView orderToEdit={orderToEdit} clearOrderToEdit={() => setOrderToEdit(null)} userRole={userRole} />;
       case 'kitchen':
-        return <KitchenView />;
+        return <KitchenView onEditOrder={handleEditOrder} />;
       case 'cash':
-        return <CashierView onEditOrder={handleEditOrder} />;
+        return <CashierView onEditOrder={handleEditOrder} userRole={userRole} />;
       case 'inventory':
-        return <InventoryView />;
+        return <InventoryView userRole={userRole} />;
       case 'admin':
         return <AdminView />;
       default:
-        return <OrderView orderToEdit={orderToEdit} clearOrderToEdit={() => setOrderToEdit(null)} />;
+        return <OrderView orderToEdit={orderToEdit} clearOrderToEdit={() => setOrderToEdit(null)} userRole={userRole} />;
     }
   };
 
@@ -114,7 +147,8 @@ export default function App() {
         activeTab={activeTab} 
         setActiveTab={setActiveTab} 
         userRole={userRole} 
-        userName={user?.displayName || user?.email?.split('@')[0] || 'Usuario'} 
+        userName={posUser?.name || user?.displayName || user?.email?.split('@')[0] || 'Usuario'} 
+        onLogout={handleLogout}
       />
       
       <main className="flex-1 overflow-hidden pb-20 md:pb-0">

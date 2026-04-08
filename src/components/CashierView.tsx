@@ -11,9 +11,10 @@ import toast from "react-hot-toast";
 
 interface CashierViewProps {
   onEditOrder?: (order: Order) => void;
+  userRole?: string;
 }
 
-export const CashierView = ({ onEditOrder }: CashierViewProps) => {
+export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewProps) => {
   const [orders, setOrders] = useState<Order[]>([]);
   const [cashLogs, setCashLogs] = useState<CashLog[]>([]);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
@@ -229,68 +230,68 @@ export const CashierView = ({ onEditOrder }: CashierViewProps) => {
   }
 
   return (
-    <div className="p-6 h-full overflow-hidden flex flex-col gap-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-serif text-mex-terracotta">Caja y Cobros</h1>
+    <div className="p-3 md:p-6 h-full overflow-hidden flex flex-col gap-4 md:gap-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <h1 className="text-xl md:text-2xl font-serif text-mex-terracotta">Caja y Cobros</h1>
         <div className="flex gap-2">
           <Button 
             variant="outline" 
-            className="gap-2"
+            className="flex-1 sm:flex-none gap-2 h-10 text-xs md:text-sm"
             onClick={() => {
               setLogForm({ type: 'expense', amount: '', reason: '' });
               setShowLogModal(true);
             }}
           >
-            <TrendingDown size={18} />
+            <TrendingDown size={16} />
             Gasto / Entrada
           </Button>
-          <Button variant="secondary" className="gap-2">
-            <TrendingUp size={18} />
-            Arqueo / Cierre
+          <Button variant="secondary" className="flex-1 sm:flex-none gap-2 h-10 text-xs md:text-sm">
+            <TrendingUp size={16} />
+            Cierre
           </Button>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-6">
         <Card className="bg-mex-green text-white border-none">
-          <CardContent className="p-6 flex items-center gap-4">
-            <div className="p-3 bg-white/20 rounded-full">
-              <DollarSign size={32} />
+          <CardContent className="p-4 md:p-6 flex items-center gap-4">
+            <div className="p-2 bg-white/20 rounded-full">
+              <DollarSign size={24} className="md:w-8 md:h-8" />
             </div>
             <div>
-              <p className="text-sm opacity-80">Efectivo en Caja</p>
-              <p className="text-3xl font-bold">{formatCurrency(totalCash)}</p>
+              <p className="text-[10px] md:text-sm opacity-80 uppercase font-bold tracking-wider">Efectivo</p>
+              <p className="text-xl md:text-3xl font-bold">{formatCurrency(totalCash)}</p>
             </div>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="p-6 flex items-center gap-4">
-            <div className="p-3 bg-mex-terracotta/10 text-mex-terracotta rounded-full">
-              <Receipt size={32} />
+          <CardContent className="p-4 md:p-6 flex items-center gap-4">
+            <div className="p-2 bg-mex-terracotta/10 text-mex-terracotta rounded-full">
+              <Receipt size={24} className="md:w-8 md:h-8" />
             </div>
             <div>
-              <p className="text-sm text-stone-500">Ventas del Día</p>
-              <p className="text-3xl font-bold text-stone-800">{formatCurrency(dailySales)}</p>
+              <p className="text-[10px] md:text-sm text-stone-500 uppercase font-bold tracking-wider">Ventas Hoy</p>
+              <p className="text-xl md:text-3xl font-bold text-stone-800">{formatCurrency(dailySales)}</p>
             </div>
           </CardContent>
         </Card>
-        <Card>
-          <CardContent className="p-6 flex items-center gap-4">
-            <div className="p-3 bg-blue-100 text-blue-600 rounded-full">
-              <Clock size={32} />
+        <Card className="hidden sm:block">
+          <CardContent className="p-4 md:p-6 flex items-center gap-4">
+            <div className="p-2 bg-blue-100 text-blue-600 rounded-full">
+              <Clock size={24} className="md:w-8 md:h-8" />
             </div>
             <div>
-              <p className="text-sm text-stone-500">Pedidos por Cobrar</p>
-              <p className="text-3xl font-bold text-stone-800">{orders.length}</p>
+              <p className="text-[10px] md:text-sm text-stone-500 uppercase font-bold tracking-wider">Por Cobrar</p>
+              <p className="text-xl md:text-3xl font-bold text-stone-800">{orders.length}</p>
             </div>
           </CardContent>
         </Card>
       </div>
 
-      <div className="flex-1 overflow-hidden grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="flex flex-col gap-4 overflow-hidden">
-          <h2 className="text-xl font-serif text-stone-800">Pedidos por Cobrar</h2>
-          <div className="flex-1 overflow-y-auto pr-2 space-y-4 pb-20 md:pb-6">
+      <div className="flex-1 overflow-hidden grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
+        <div className="flex flex-col gap-3 overflow-hidden">
+          <h2 className="text-lg md:text-xl font-serif text-stone-800">Pedidos por Cobrar</h2>
+          <div className="flex-1 overflow-y-auto pr-1 space-y-3 pb-24 md:pb-6">
             {groupedOrders.length === 0 ? (
               <div className="h-40 flex flex-col items-center justify-center text-stone-400 border-2 border-dashed border-stone-200 rounded-2xl">
                 <CheckCircle2 size={32} className="mb-2 opacity-20" />
@@ -381,12 +382,14 @@ export const CashierView = ({ onEditOrder }: CashierViewProps) => {
                     >
                       <Edit2 size={14} />
                     </button>
-                    <button 
-                      onClick={() => handleDeleteLog(log.id)}
-                      className="p-1 text-stone-400 hover:text-red-600"
-                    >
-                      <Trash2 size={14} />
-                    </button>
+                    {userRole === 'admin' && (
+                      <button 
+                        onClick={() => handleDeleteLog(log.id)}
+                        className="p-1 text-stone-400 hover:text-red-600"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
