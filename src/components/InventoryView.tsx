@@ -34,10 +34,15 @@ export const InventoryView = ({ userRole = 'waiter' }: InventoryViewProps) => {
     const unsubProd = onSnapshot(query(collection(db, "products"), orderBy("name", "asc")), (snapshot) => {
       setProducts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Product)));
       setLoading(false);
+    }, (error) => {
+      setLoading(false);
+      handleFirestoreError(error, OperationType.LIST, "products");
     });
 
     const unsubCat = onSnapshot(query(collection(db, "categories"), orderBy("order", "asc")), (snapshot) => {
       setCategories(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Category)));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, "categories");
     });
 
     return () => {

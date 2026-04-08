@@ -54,6 +54,7 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
       setProducts(prods);
       setLoading(false);
     }, (error) => {
+      setLoading(false);
       handleFirestoreError(error, OperationType.LIST, "products");
     });
 

@@ -38,6 +38,9 @@ export const KitchenView = ({ onEditOrder }: KitchenViewProps) => {
       const orderData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Order));
       setOrders(orderData);
       setLoading(false);
+    }, (error) => {
+      setLoading(false);
+      handleFirestoreError(error, OperationType.LIST, "orders");
     });
 
     return () => unsubscribe();

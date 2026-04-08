@@ -48,14 +48,14 @@ service cloud.firestore {
     }
 
     function isValidUser(data) {
-      return data.keys().hasAll(['name', 'email', 'role']) &&
+      return data.keys().hasAll(['name', 'role']) &&
              data.name is string && data.name.size() < 100 &&
-             data.email is string && data.role in ['admin', 'waiter', 'kitchen', 'cashier'];
+             data.role in ['admin', 'waiter', 'kitchen', 'cashier'];
     }
 
     match /users/{userId} {
-      allow read: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
-      allow create: if isAuthenticated() && isValidUser(request.resource.data) && (request.auth.uid == userId || isAdmin());
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isValidUser(request.resource.data) && isAdmin();
       allow update: if isAuthenticated() && isValidUser(request.resource.data) && (isAdmin() || (request.auth.uid == userId && request.resource.data.role == resource.data.role));
       allow delete: if isAdmin();
     }

@@ -1,5 +1,5 @@
 import { db } from "./firebase";
-import { collection, addDoc, getDocs, query, limit, deleteDoc, doc, writeBatch } from "firebase/firestore";
+import { collection, addDoc, getDocs, query, limit, deleteDoc, doc, writeBatch, where } from "firebase/firestore";
 
 export const seedDatabase = async (force = false) => {
   try {
@@ -75,6 +75,20 @@ export const seedDatabase = async (force = false) => {
 
     for (const prod of products) {
       await addDoc(collection(db, "products"), prod);
+    }
+
+    // Seed initial Admin User if not exists
+    const userSnap = await getDocs(query(collection(db, "users"), where("username", "==", "admin"), limit(1)));
+    if (userSnap.empty) {
+      await addDoc(collection(db, "users"), {
+        name: "Administrador",
+        username: "admin",
+        password: "admin", // Default password, user should change it
+        role: "admin",
+        active: true,
+        createdAt: new Date().toISOString()
+      });
+      console.log("Initial admin user created");
     }
 
     console.log("Database seeded successfully");

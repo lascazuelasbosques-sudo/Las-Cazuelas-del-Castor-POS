@@ -90,12 +90,17 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
       const orderData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Order));
       setOrders(orderData);
       setLoading(false);
+    }, (error) => {
+      setLoading(false);
+      handleFirestoreError(error, OperationType.LIST, "orders");
     });
 
     const qLogs = query(collection(db, "cashLogs"), orderBy("timestamp", "desc"));
     const unsubLogs = onSnapshot(qLogs, (snapshot) => {
       const logData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as CashLog));
       setCashLogs(logData);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, "cashLogs");
     });
 
     return () => {

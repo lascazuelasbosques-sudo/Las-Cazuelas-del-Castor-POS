@@ -18,14 +18,14 @@ import { Order, User as POSUser } from './types';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('orders');
-  const [user, setUser] = useState<FirebaseUser | null>(null);
+  const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
   const [posUser, setPosUser] = useState<POSUser | null>(null);
   const [userRole, setUserRole] = useState<string>('waiter');
   const [loading, setLoading] = useState(true);
   const [orderToEdit, setOrderToEdit] = useState<Order | null>(null);
 
   useEffect(() => {
-    // Check for local session
+    // 1. Load POS user from local storage
     const savedUser = localStorage.getItem('posUser');
     if (savedUser) {
       try {
@@ -34,56 +34,65 @@ export default function App() {
         setUserRole(parsedUser.role);
       } catch (e) {
         console.error("Error parsing saved user", e);
+        localStorage.removeItem('posUser');
       }
     }
 
+    // 2. Handle Firebase Auth
     let unsubUserDoc: (() => void) | null = null;
 
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      setFirebaseUser(user);
+      
       if (!user) {
         try {
           await signInAnonymously(auth);
         } catch (error) {
           console.error("Error signing in anonymously:", error);
+          setLoading(false);
         }
         return;
       }
 
-      if (user) {
-        // Ensure user document exists
-        try {
-          const userRef = doc(db, 'users', user.uid);
-          const userDoc = await getDoc(userRef);
-          
-          if (!userDoc.exists()) {
-            const role = user.email === 'lascazuelasbosques@gmail.com' ? 'admin' : 'waiter';
-            await setDoc(userRef, {
-              name: user.displayName || user.email?.split('@')[0] || 'Usuario',
-              email: user.email,
-              role: role,
-              active: true,
-              pin: '1234'
-            });
-            setUserRole(role);
-          }
-
-          // Listen for role changes
-          unsubUserDoc = onSnapshot(userRef, (doc) => {
-            if (doc.exists()) {
-              setUserRole(doc.data().role);
-            }
+      // If we have a firebase user, ensure they have a document in 'users'
+      // This is mainly for the anonymous user to have a basic profile
+      try {
+        const userRef = doc(db, 'users', user.uid);
+        const userDoc = await getDoc(userRef);
+        
+        if (!userDoc.exists()) {
+          const defaultRole = user.email === 'lascazuelasbosques@gmail.com' ? 'admin' : 'waiter';
+          await setDoc(userRef, {
+            name: user.displayName || user.email?.split('@')[0] || 'Usuario Anónimo',
+            email: user.email || 'anon@system.com',
+            role: defaultRole,
+            active: true,
+            pin: '0000'
           });
-
-        } catch (error) {
-          console.error("Error ensuring user document:", error);
+          // Only set role if not already set by POS user
+          if (!localStorage.getItem('posUser')) {
+            setUserRole(defaultRole);
+          }
         }
-        seedDatabase(); // Only seed if empty
-      } else {
-        if (unsubUserDoc) unsubUserDoc();
-        setUserRole('waiter');
+
+        // Listen for role changes if this is the primary user
+        unsubUserDoc = onSnapshot(userRef, (doc) => {
+          if (doc.exists()) {
+            const data = doc.data();
+            // Only sync role if we don't have a POS user or if the POS user matches this UID
+            if (!localStorage.getItem('posUser')) {
+              setUserRole(data.role);
+            }
+          }
+        });
+
+        // Try to seed
+        seedDatabase();
+      } catch (error) {
+        console.error("Error in auth setup:", error);
+      } finally {
+        setLoading(false);
       }
-      setUser(user);
-      setLoading(false);
     });
 
     return () => {
@@ -95,12 +104,15 @@ export default function App() {
   if (loading) {
     return (
       <div className="h-screen flex items-center justify-center bg-mex-cream">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-mex-brown"></div>
+        <div className="flex flex-col items-center gap-4">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-mex-brown"></div>
+          <p className="text-mex-brown font-serif animate-pulse">Cargando sistema...</p>
+        </div>
       </div>
     );
   }
 
-  if (!posUser && !user) {
+  if (!posUser) {
     return (
       <>
         <Login onLogin={(u) => {
@@ -147,7 +159,7 @@ export default function App() {
         activeTab={activeTab} 
         setActiveTab={setActiveTab} 
         userRole={userRole} 
-        userName={posUser?.name || user?.displayName || user?.email?.split('@')[0] || 'Usuario'} 
+        userName={posUser?.name || firebaseUser?.displayName || firebaseUser?.email?.split('@')[0] || 'Usuario'} 
         onLogout={handleLogout}
       />
       
