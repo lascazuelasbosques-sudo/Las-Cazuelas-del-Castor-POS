@@ -24,3 +24,13 @@ export function formatCurrency(amount: number) {
     currency: "MXN",
   }).format(amount);
 }
+
+export function getRoleLabel(role: string): string {
+  const roles: Record<string, string> = {
+    admin: 'Administrador',
+    waiter: 'Mesero',
+    kitchen: 'Cocina',
+    cashier: 'Cajero'
+  };
+  return roles[role] || role;
+}

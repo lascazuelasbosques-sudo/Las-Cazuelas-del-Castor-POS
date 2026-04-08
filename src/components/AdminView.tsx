@@ -8,7 +8,7 @@ import toast from "react-hot-toast";
 import { seedDatabase } from "../seed";
 import { handleFirestoreError, OperationType } from "../lib/firestoreErrorHandler";
 import { User, UserRole } from "../types";
-import { cn } from "@/src/lib/utils";
+import { cn, getRoleLabel } from "@/src/lib/utils";
 import { auth } from "../firebase";
 
 export const AdminView = () => {
@@ -261,7 +261,7 @@ export const AdminView = () => {
                           "text-[10px] px-2 py-0.5 rounded-full font-bold uppercase",
                           u.role === 'admin' ? "bg-mex-brown text-white" : "bg-stone-100 text-stone-600"
                         )}>
-                          {u.role}
+                          {getRoleLabel(u.role)}
                         </span>
                       </td>
                       <td className="py-4">

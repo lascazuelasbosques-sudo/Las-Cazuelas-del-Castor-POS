@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Utensils, ClipboardList, Package, CreditCard, Settings, LogOut, Menu, Squirrel } from "lucide-react";
 import { Button } from "./Button";
-import { cn } from "@/src/lib/utils";
+import { cn, getRoleLabel } from "@/src/lib/utils";
 import { auth, db } from "../firebase";
 import { collection, query, where, onSnapshot } from "firebase/firestore";
 import { Order } from "../types";
@@ -49,21 +49,11 @@ export const Navbar = ({ activeTab, setActiveTab, userRole = 'waiter', userName 
     { id: 'orders', label: 'Pedidos', icon: Utensils, roles: ['admin', 'waiter', 'cashier'] },
     { id: 'kitchen', label: 'Cocina', icon: ClipboardList, roles: ['admin', 'kitchen'] },
     { id: 'inventory', label: 'Inventario', icon: Package, roles: ['admin'] },
-    { id: 'cash', label: 'Caja', icon: CreditCard, roles: ['admin', 'cashier'] },
+    { id: 'cash', label: 'Caja', icon: CreditCard, roles: ['admin', 'cashier', 'waiter'] },
     { id: 'admin', label: 'Admin', icon: Settings, roles: ['admin'] },
   ];
 
   const filteredItems = navItems.filter(item => item.roles.includes(userRole));
-
-  const getRoleLabel = (role: string) => {
-    const roles: Record<string, string> = {
-      admin: 'Administrador',
-      waiter: 'Mesero',
-      kitchen: 'Cocina',
-      cashier: 'Cajero'
-    };
-    return roles[role] || role;
-  };
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-stone-200 px-4 py-2 flex justify-around items-center md:relative md:flex-col md:h-screen md:w-64 md:border-t-0 md:border-r md:justify-start md:gap-4 md:py-8 z-50">
