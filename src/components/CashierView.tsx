@@ -63,6 +63,7 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
 
   // CRUD for Cash Logs
   const [showLogModal, setShowLogModal] = useState(false);
+  const [showClosingModal, setShowClosingModal] = useState(false);
   const [editingLog, setEditingLog] = useState<CashLog | null>(null);
   const [logForm, setLogForm] = useState({
     type: 'expense' as 'income' | 'expense' | 'opening' | 'closing',
@@ -222,9 +223,44 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
     return acc;
   }, 0);
 
-  const dailySales = cashLogs
-    .filter(log => log.type === 'income' && new Date(log.timestamp).toDateString() === new Date().toDateString())
-    .reduce((acc, log) => acc + log.amount, 0);
+  const stats = cashLogs.reduce((acc, log) => {
+    const isToday = new Date(log.timestamp).toDateString() === new Date().toDateString();
+    if (!isToday) return acc;
+
+    if (log.type === 'income') {
+      if (log.reason.toLowerCase().includes('tarjeta')) {
+        acc.cardSales += log.amount;
+      } else {
+        acc.cashSales += log.amount;
+      }
+    } else if (log.type === 'expense') {
+      acc.expenses += log.amount;
+    } else if (log.type === 'opening') {
+      acc.opening = log.amount;
+    }
+    return acc;
+  }, { cashSales: 0, cardSales: 0, expenses: 0, opening: 0 });
+
+  const handleCloseDay = async () => {
+    if (!auth.currentUser) return;
+    
+    try {
+      await addDoc(collection(db, "cashLogs"), {
+        type: 'closing',
+        amount: totalCash,
+        reason: `Cierre de Caja - Ventas Efectivo: ${formatCurrency(stats.cashSales)}, Tarjeta: ${formatCurrency(stats.cardSales)}, Gastos: ${formatCurrency(stats.expenses)}`,
+        timestamp: new Date().toISOString(),
+        userId: auth.currentUser.uid,
+        userName: auth.currentUser.displayName || auth.currentUser.email
+      });
+      
+      setShowClosingModal(false);
+      toast.success("Caja cerrada correctamente");
+    } catch (error) {
+      console.error("Error closing cash:", error);
+      toast.error("Error al cerrar la caja");
+    }
+  };
 
   if (loading) {
     return (
@@ -250,7 +286,11 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
             <TrendingDown size={16} />
             Gasto / Entrada
           </Button>
-          <Button variant="secondary" className="flex-1 sm:flex-none gap-2 h-10 text-xs md:text-sm">
+          <Button 
+            variant="secondary" 
+            className="flex-1 sm:flex-none gap-2 h-10 text-xs md:text-sm"
+            onClick={() => setShowClosingModal(true)}
+          >
             <TrendingUp size={16} />
             Cierre
           </Button>
@@ -274,9 +314,13 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
             <div className="p-2 bg-mex-terracotta/10 text-mex-terracotta rounded-full">
               <Receipt size={24} className="md:w-8 md:h-8" />
             </div>
-            <div>
+            <div className="flex-1">
               <p className="text-[10px] md:text-sm text-stone-500 uppercase font-bold tracking-wider">Ventas Hoy</p>
-              <p className="text-xl md:text-3xl font-bold text-stone-800">{formatCurrency(dailySales)}</p>
+              <p className="text-xl md:text-3xl font-bold text-stone-800">{formatCurrency(stats.cashSales + stats.cardSales)}</p>
+              <div className="flex gap-2 mt-1">
+                <span className="text-[10px] text-mex-green font-medium">Efe: {formatCurrency(stats.cashSales)}</span>
+                <span className="text-[10px] text-blue-600 font-medium">Tar: {formatCurrency(stats.cardSales)}</span>
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -465,6 +509,59 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
           </Card>
         </div>
       )}
+      {/* Closing Modal */}
+      {showClosingModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[110] p-4">
+          <Card className="w-full max-w-md">
+            <CardHeader className="bg-mex-terracotta text-white flex flex-row items-center justify-between">
+              <h3 className="text-xl font-serif">Cierre de Caja</h3>
+              <button onClick={() => setShowClosingModal(false)}><X size={20}/></button>
+            </CardHeader>
+            <CardContent className="p-6 space-y-4">
+              <div className="space-y-3">
+                <div className="flex justify-between items-center pb-2 border-b border-stone-100">
+                  <span className="text-stone-500">Fondo Inicial</span>
+                  <span className="font-medium">{formatCurrency(stats.opening)}</span>
+                </div>
+                <div className="flex justify-between items-center pb-2 border-b border-stone-100">
+                  <span className="text-stone-500">Ventas en Efectivo</span>
+                  <span className="font-medium text-mex-green">+{formatCurrency(stats.cashSales)}</span>
+                </div>
+                <div className="flex justify-between items-center pb-2 border-b border-stone-100">
+                  <span className="text-stone-500">Ventas con Tarjeta</span>
+                  <span className="font-medium text-blue-600">+{formatCurrency(stats.cardSales)}</span>
+                </div>
+                <div className="flex justify-between items-center pb-2 border-b border-stone-100">
+                  <span className="text-stone-500">Gastos / Salidas</span>
+                  <span className="font-medium text-red-600">-{formatCurrency(stats.expenses)}</span>
+                </div>
+                <div className="flex justify-between items-center pt-2">
+                  <span className="text-lg font-bold text-stone-800">Total en Caja</span>
+                  <span className="text-2xl font-bold text-mex-terracotta">{formatCurrency(totalCash)}</span>
+                </div>
+              </div>
+
+              <div className="p-4 bg-amber-50 rounded-xl border border-amber-100 flex gap-3">
+                <AlertTriangle className="text-amber-600 shrink-0" size={20} />
+                <p className="text-xs text-amber-800">
+                  Al confirmar el cierre, se generará un registro histórico con el balance final. 
+                  Asegúrate de que el efectivo físico coincida con el total en caja.
+                </p>
+              </div>
+            </CardContent>
+            <CardFooter className="flex gap-2">
+              <Button variant="ghost" className="flex-1" onClick={() => setShowClosingModal(false)}>
+                Cancelar
+              </Button>
+              <Button variant="primary" className="flex-1 gap-2 bg-mex-terracotta hover:bg-mex-terracotta/90" onClick={handleCloseDay}>
+                <CheckCircle2 size={18} />
+                Confirmar Cierre
+              </Button>
+            </CardFooter>
+          </Card>
+        </div>
+      )}
+
       {/* Log Modal (Create/Update) */}
       {showLogModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[110] p-4">
@@ -474,21 +571,29 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
               <button onClick={() => setShowLogModal(false)}><X size={20}/></button>
             </CardHeader>
             <CardContent className="p-6 space-y-4">
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-3 gap-2">
+                <Button 
+                  variant={logForm.type === 'opening' ? 'primary' : 'outline'}
+                  onClick={() => setLogForm({...logForm, type: 'opening'})}
+                  className="gap-1 px-1 text-[10px]"
+                >
+                  <Plus size={14} />
+                  Fondo Inicial
+                </Button>
                 <Button 
                   variant={logForm.type === 'income' ? 'primary' : 'outline'}
                   onClick={() => setLogForm({...logForm, type: 'income'})}
-                  className="gap-2"
+                  className="gap-1 px-1 text-[10px]"
                 >
-                  <TrendingUp size={18} />
+                  <TrendingUp size={14} />
                   Ingreso
                 </Button>
                 <Button 
                   variant={logForm.type === 'expense' ? 'primary' : 'outline'}
                   onClick={() => setLogForm({...logForm, type: 'expense'})}
-                  className="gap-2"
+                  className="gap-1 px-1 text-[10px]"
                 >
-                  <TrendingDown size={18} />
+                  <TrendingDown size={14} />
                   Egreso
                 </Button>
               </div>
