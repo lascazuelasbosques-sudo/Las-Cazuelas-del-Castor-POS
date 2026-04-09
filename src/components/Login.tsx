@@ -124,6 +124,13 @@ export const Login = ({ onLogin }: LoginProps) => {
 
       if (userDoc.exists()) {
         userData = { id: userDoc.id, ...userDoc.data() } as User;
+        
+        // Update email if it's missing or changed
+        if (userData.email !== user.email) {
+          await setDoc(userRef, { email: user.email }, { merge: true });
+          userData.email = user.email || undefined;
+        }
+
         if (!userData.active) {
           toast.error("Tu cuenta está desactivada. Contacta al administrador.");
           auth.signOut();
@@ -137,6 +144,7 @@ export const Login = ({ onLogin }: LoginProps) => {
           id: user.uid,
           name: user.displayName || user.email?.split('@')[0] || "Usuario",
           username: user.email || "",
+          email: user.email || undefined,
           role: isOwner ? "admin" : "waiter", // Default to waiter unless owner
           active: true,
         };
