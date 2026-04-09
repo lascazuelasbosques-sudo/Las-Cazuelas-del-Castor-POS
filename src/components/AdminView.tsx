@@ -3,7 +3,7 @@ import { Trash2, AlertTriangle, Database, RefreshCw, ShieldAlert, X, CheckCircle
 import { Button } from "./Button";
 import { Card, CardContent, CardHeader, CardFooter } from "./Card";
 import { db } from "../firebase";
-import { collection, getDocs, deleteDoc, doc, writeBatch, updateDoc, addDoc, getDoc, setDoc } from "firebase/firestore";
+import { collection, getDocs, deleteDoc, doc, writeBatch, updateDoc, addDoc, getDoc, setDoc, getDocsFromServer } from "firebase/firestore";
 import toast from "react-hot-toast";
 import { seedDatabase } from "../seed";
 import { handleFirestoreError, OperationType } from "../lib/firestoreErrorHandler";
@@ -189,9 +189,9 @@ export const AdminView = () => {
       action: async () => {
         setLoading(true);
         try {
-          const collections = ["orders", "cashLogs", "products", "categories"];
+          const collections = ["orders", "cashLogs", "products", "categories", "counters"];
           for (const name of collections) {
-            const snapshot = await getDocs(collection(db, name));
+            const snapshot = await getDocsFromServer(collection(db, name));
             if (snapshot.empty) continue;
 
             // Chunk deletions in batches of 500 (Firestore limit)
@@ -225,9 +225,9 @@ export const AdminView = () => {
       action: async () => {
         setLoading(true);
         try {
-          const collections = ["orders", "cashLogs"];
+          const collections = ["orders", "cashLogs", "counters"];
           for (const name of collections) {
-            const snapshot = await getDocs(collection(db, name));
+            const snapshot = await getDocsFromServer(collection(db, name));
             if (snapshot.empty) continue;
 
             // Chunk deletions in batches of 500 (Firestore limit)
@@ -481,21 +481,21 @@ export const AdminView = () => {
                   variant="outline" 
                   className="w-full h-9 text-xs gap-2 border-red-200 text-red-700 hover:bg-red-100"
                   onClick={async () => {
-                    if (!confirm("¿Estás seguro de borrar TODO el historial de caja? Esta acción no se puede deshacer.")) return;
-                    const toastId = toast.loading("Borrando historial...");
+                    if (!confirm("¿Borrar TODO el historial de ventas, pedidos y caja? Se reiniciarán los folios a 001.")) return;
+                    const toastId = toast.loading("Borrando historial completo...");
                     try {
-                      const snap = await getDocs(collection(db, "cashLogs"));
-                      if (snap.empty) {
-                        toast.success("No hay registros que borrar", { id: toastId });
-                        return;
+                      const collections = ["cashLogs", "orders", "counters"];
+                      for (const name of collections) {
+                        const snap = await getDocsFromServer(collection(db, name));
+                        if (snap.empty) continue;
+                        const docs = snap.docs;
+                        for (let i = 0; i < docs.length; i += 500) {
+                          const batch = writeBatch(db);
+                          docs.slice(i, i + 500).forEach(d => batch.delete(d.ref));
+                          await batch.commit();
+                        }
                       }
-                      const docs = snap.docs;
-                      for (let i = 0; i < docs.length; i += 500) {
-                        const batch = writeBatch(db);
-                        docs.slice(i, i + 500).forEach(d => batch.delete(d.ref));
-                        await batch.commit();
-                      }
-                      toast.success(`${docs.length} registros borrados`, { id: toastId });
+                      toast.success("Historial y folios reiniciados", { id: toastId });
                     } catch (e: any) {
                       console.error("Error al borrar historial:", e);
                       toast.error("Error: " + e.message, { id: toastId });
@@ -504,7 +504,7 @@ export const AdminView = () => {
                   disabled={loading}
                 >
                   <Trash2 size={14} />
-                  Limpiar Historial de Caja
+                  Limpiar Historial de Ventas y Caja
                 </Button>
               </div>
 

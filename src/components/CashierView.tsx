@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardFooter } from "./Card";
 import { formatCurrency, cn, customRound } from "@/src/lib/utils";
 import { Order, CashLog, OrderStatus } from "@/src/types";
 import { db, auth } from "../firebase";
-import { collection, onSnapshot, query, where, orderBy, doc, updateDoc, addDoc, deleteDoc, writeBatch, getDocs } from "firebase/firestore";
+import { collection, onSnapshot, query, where, orderBy, doc, updateDoc, addDoc, deleteDoc, writeBatch, getDocs, getDocsFromServer } from "firebase/firestore";
 import { handleFirestoreError, OperationType } from "../lib/firestoreErrorHandler";
 import toast from "react-hot-toast";
 
@@ -280,18 +280,24 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
               variant="ghost" 
               className="flex-1 sm:flex-none gap-2 h-10 text-xs md:text-sm text-red-600 hover:bg-red-50"
               onClick={async () => {
-                if (!confirm("¿Borrar TODO el historial de caja?")) return;
-                const toastId = toast.loading("Borrando...");
+                if (!confirm("¿Borrar TODO el historial de ventas, pedidos y caja? Se reiniciarán los folios a 001.")) return;
+                const toastId = toast.loading("Borrando historial completo...");
                 try {
-                  const snap = await getDocs(collection(db, "cashLogs"));
-                  const docs = snap.docs;
-                  for (let i = 0; i < docs.length; i += 500) {
-                    const batch = writeBatch(db);
-                    docs.slice(i, i + 500).forEach(d => batch.delete(d.ref));
-                    await batch.commit();
+                  const collections = ["cashLogs", "orders", "counters"];
+                  for (const name of collections) {
+                    const snap = await getDocsFromServer(collection(db, name));
+                    const docs = snap.docs;
+                    for (let i = 0; i < docs.length; i += 500) {
+                      const batch = writeBatch(db);
+                      docs.slice(i, i + 500).forEach(d => batch.delete(d.ref));
+                      await batch.commit();
+                    }
                   }
-                  toast.success("Historial borrado", { id: toastId });
-                } catch (e) { toast.error("Error al borrar", { id: toastId }); }
+                  toast.success("Historial y folios reiniciados", { id: toastId });
+                } catch (e: any) { 
+                  console.error("Error al borrar:", e);
+                  toast.error("Error: " + e.message, { id: toastId }); 
+                }
               }}
             >
               <Trash2 size={16} />
