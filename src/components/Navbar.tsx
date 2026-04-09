@@ -99,6 +99,17 @@ export const Navbar = ({ activeTab, setActiveTab, userRole = 'waiter', userName 
         </button>
       ))}
 
+      {/* Logout button for mobile */}
+      <button
+        onClick={() => {
+          if (confirm("¿Cerrar sesión?")) onLogout();
+        }}
+        className="flex flex-col items-center gap-1 p-2 rounded-xl text-red-500 md:hidden"
+      >
+        <LogOut size={24} />
+        <span className="text-[10px]">Salir</span>
+      </button>
+
       <div className="hidden md:mt-auto md:flex flex-col w-full gap-2 px-4">
         <div className="p-3 bg-stone-50 rounded-lg border border-stone-100 mb-2">
           <p className="text-xs text-stone-500">{getRoleLabel(userRole)}</p>
@@ -107,7 +118,9 @@ export const Navbar = ({ activeTab, setActiveTab, userRole = 'waiter', userName 
         <Button 
           variant="ghost" 
           className="justify-start gap-3 w-full text-stone-500"
-          onClick={onLogout}
+          onClick={() => {
+            if (confirm("¿Estás seguro de que deseas cerrar sesión?")) onLogout();
+          }}
         >
           <LogOut size={20} />
           Cerrar Sesión
