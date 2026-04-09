@@ -192,16 +192,21 @@ export const AdminView = () => {
           const collections = ["orders", "cashLogs", "products", "categories"];
           for (const name of collections) {
             const snapshot = await getDocs(collection(db, name));
-            const batch = writeBatch(db);
-            snapshot.docs.forEach((d) => {
-              batch.delete(doc(db, name, d.id));
-            });
-            if (snapshot.size > 0) {
+            if (snapshot.empty) continue;
+
+            // Chunk deletions in batches of 500 (Firestore limit)
+            const docs = snapshot.docs;
+            for (let i = 0; i < docs.length; i += 500) {
+              const batch = writeBatch(db);
+              const chunk = docs.slice(i, i + 500);
+              chunk.forEach((d) => {
+                batch.delete(doc(db, name, d.id));
+              });
               await batch.commit();
             }
           }
           await seedDatabase(true);
-          toast.success("Sistema reiniciado completamente");
+          toast.success("Sistema reiniciado: Pedidos, Caja, Productos y Categorías borrados.");
         } catch (error) {
           handleFirestoreError(error, OperationType.DELETE, "reset-system");
         } finally {
@@ -223,15 +228,20 @@ export const AdminView = () => {
           const collections = ["orders", "cashLogs"];
           for (const name of collections) {
             const snapshot = await getDocs(collection(db, name));
-            const batch = writeBatch(db);
-            snapshot.docs.forEach((d) => {
-              batch.delete(doc(db, name, d.id));
-            });
-            if (snapshot.size > 0) {
+            if (snapshot.empty) continue;
+
+            // Chunk deletions in batches of 500 (Firestore limit)
+            const docs = snapshot.docs;
+            for (let i = 0; i < docs.length; i += 500) {
+              const batch = writeBatch(db);
+              const chunk = docs.slice(i, i + 500);
+              chunk.forEach((d) => {
+                batch.delete(doc(db, name, d.id));
+              });
               await batch.commit();
             }
           }
-          toast.success("Pedidos y caja limpiados");
+          toast.success("Limpieza completada: Pedidos y Caja borrados.");
         } catch (error) {
           handleFirestoreError(error, OperationType.DELETE, "clear-transactions");
         } finally {
@@ -461,6 +471,40 @@ export const AdminView = () => {
                 >
                   <Users size={14} />
                   Sincronizar Credenciales
+                </Button>
+              </div>
+
+              <div className="p-3 bg-red-50 rounded-lg border border-red-100">
+                <p className="text-xs font-bold text-red-800 uppercase mb-1">Historial de Caja</p>
+                <p className="text-[10px] text-red-600 mb-2">Borra únicamente los registros de ingresos, egresos y cierres.</p>
+                <Button 
+                  variant="outline" 
+                  className="w-full h-9 text-xs gap-2 border-red-200 text-red-700 hover:bg-red-100"
+                  onClick={async () => {
+                    if (!confirm("¿Estás seguro de borrar TODO el historial de caja? Esta acción no se puede deshacer.")) return;
+                    const toastId = toast.loading("Borrando historial...");
+                    try {
+                      const snap = await getDocs(collection(db, "cashLogs"));
+                      if (snap.empty) {
+                        toast.success("No hay registros que borrar", { id: toastId });
+                        return;
+                      }
+                      const docs = snap.docs;
+                      for (let i = 0; i < docs.length; i += 500) {
+                        const batch = writeBatch(db);
+                        docs.slice(i, i + 500).forEach(d => batch.delete(d.ref));
+                        await batch.commit();
+                      }
+                      toast.success(`${docs.length} registros borrados`, { id: toastId });
+                    } catch (e: any) {
+                      console.error("Error al borrar historial:", e);
+                      toast.error("Error: " + e.message, { id: toastId });
+                    }
+                  }}
+                  disabled={loading}
+                >
+                  <Trash2 size={14} />
+                  Limpiar Historial de Caja
                 </Button>
               </div>
 

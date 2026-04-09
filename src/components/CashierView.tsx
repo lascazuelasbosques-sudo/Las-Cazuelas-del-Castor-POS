@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardFooter } from "./Card";
 import { formatCurrency, cn, customRound } from "@/src/lib/utils";
 import { Order, CashLog, OrderStatus } from "@/src/types";
 import { db, auth } from "../firebase";
-import { collection, onSnapshot, query, where, orderBy, doc, updateDoc, addDoc, deleteDoc } from "firebase/firestore";
+import { collection, onSnapshot, query, where, orderBy, doc, updateDoc, addDoc, deleteDoc, writeBatch, getDocs } from "firebase/firestore";
 import { handleFirestoreError, OperationType } from "../lib/firestoreErrorHandler";
 import toast from "react-hot-toast";
 
@@ -275,6 +275,29 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <h1 className="text-xl md:text-2xl font-serif text-mex-terracotta">Caja y Cobros</h1>
         <div className="flex gap-2">
+          {userRole === 'admin' && (
+            <Button 
+              variant="ghost" 
+              className="flex-1 sm:flex-none gap-2 h-10 text-xs md:text-sm text-red-600 hover:bg-red-50"
+              onClick={async () => {
+                if (!confirm("¿Borrar TODO el historial de caja?")) return;
+                const toastId = toast.loading("Borrando...");
+                try {
+                  const snap = await getDocs(collection(db, "cashLogs"));
+                  const docs = snap.docs;
+                  for (let i = 0; i < docs.length; i += 500) {
+                    const batch = writeBatch(db);
+                    docs.slice(i, i + 500).forEach(d => batch.delete(d.ref));
+                    await batch.commit();
+                  }
+                  toast.success("Historial borrado", { id: toastId });
+                } catch (e) { toast.error("Error al borrar", { id: toastId }); }
+              }}
+            >
+              <Trash2 size={16} />
+              Limpiar Historial
+            </Button>
+          )}
           <Button 
             variant="outline" 
             className="flex-1 sm:flex-none gap-2 h-10 text-xs md:text-sm"
