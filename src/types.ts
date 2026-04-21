@@ -27,6 +27,7 @@ export interface Product {
   available: boolean;
   imageUrl?: string;
   station?: 'plancha' | 'cocina';
+  allowsExtraCheese?: boolean;
 }
 
 export interface OrderItem {
@@ -37,6 +38,7 @@ export interface OrderItem {
   notes?: string;
   status?: 'pending' | 'preparing' | 'completed';
   station?: 'plancha' | 'cocina';
+  hasExtraCheese?: boolean;
 }
 
 export type OrderStatus = 'pending' | 'preparing' | 'ready' | 'served' | 'paid' | 'cancelled';

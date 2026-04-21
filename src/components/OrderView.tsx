@@ -94,10 +94,15 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
     }
   }, [orderToEdit]);
 
-  const addToCart = (product: Product) => {
+  const addToCart = (product: Product, hasExtraCheese: boolean = false) => {
     setCart(prev => {
-      // Only group with pending items
-      const existingPending = prev.find(item => item.productId === product.id && item.status !== 'completed');
+      // Only group with pending items that have the same extra cheese status
+      const existingPending = prev.find(item => 
+        item.productId === product.id && 
+        item.status !== 'completed' && 
+        item.hasExtraCheese === hasExtraCheese
+      );
+      
       if (existingPending) {
         return prev.map(item => 
           item === existingPending 
@@ -108,10 +113,11 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
       return [...prev, { 
         productId: product.id, 
         name: product.name, 
-        price: product.price, 
+        price: product.price + (hasExtraCheese ? 8 : 0), 
         quantity: 1,
         status: 'pending',
-        station: product.station || 'cocina'
+        station: product.station || 'cocina',
+        hasExtraCheese
       }];
     });
   };
@@ -294,7 +300,19 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
                   <p className="text-[11px] text-stone-500 line-clamp-1">{product.description}</p>
                   <p className="font-bold text-mex-terracotta mt-0.5">{formatCurrency(product.price)}</p>
                 </div>
-                <div className="shrink-0">
+                <div className="shrink-0 flex items-center gap-2">
+                  {product.allowsExtraCheese && (
+                    <button 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        addToCart(product, true);
+                      }}
+                      className="px-2 py-1 rounded text-[10px] font-bold bg-mex-gold/20 text-mex-gold border border-mex-gold flex items-center hover:bg-mex-gold/30 transition-colors"
+                      title="Agregar con queso extra (+$8)"
+                    >
+                      🧀 Extra
+                    </button>
+                  )}
                   <div className="w-8 h-8 rounded-full bg-mex-green/10 text-mex-green flex items-center justify-center">
                     <Plus size={18} />
                   </div>
@@ -420,7 +438,12 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
                       <span className="text-[10px] bg-stone-200 text-stone-600 px-1.5 py-0.5 rounded font-bold uppercase">Entregado</span>
                     )}
                   </div>
-                  <p className="text-xs text-stone-500">{formatCurrency(item.price)} c/u</p>
+                  <div className="flex flex-col gap-0.5">
+                    <p className="text-xs text-stone-500">{formatCurrency(item.price)} c/u</p>
+                    {item.hasExtraCheese && (
+                      <p className="text-[10px] text-mex-gold font-bold">🧀 + Queso Extra</p>
+                    )}
+                  </div>
                 </div>
                 <div className="flex items-center gap-2">
                   <button 
@@ -434,7 +457,7 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
                   <button 
                     onClick={() => {
                       const product = products.find(p => p.id === item.productId);
-                      if (product) addToCart(product);
+                      if (product) addToCart(product, item.hasExtraCheese);
                     }}
                     disabled={item.status === 'completed'}
                     className="p-1 rounded-md hover:bg-stone-200 text-mex-green disabled:opacity-30 disabled:cursor-not-allowed"

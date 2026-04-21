@@ -447,6 +447,18 @@ export const InventoryView = ({ userRole = 'waiter' }: InventoryViewProps) => {
                   </label>
                 </div>
 
+                <div className="flex items-end pb-2">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input 
+                      type="checkbox" 
+                      checked={editingProduct.allowsExtraCheese === true}
+                      onChange={e => setEditingProduct({...editingProduct, allowsExtraCheese: e.target.checked})}
+                      className="w-5 h-5 rounded border-stone-300 text-mex-gold focus:ring-mex-gold"
+                    />
+                    <span className="text-sm font-bold text-stone-700">Permite Queso Extra</span>
+                  </label>
+                </div>
+
                 <div className="space-y-1 md:col-span-2">
                   <label className="text-sm font-bold text-stone-700 flex items-center gap-2">
                     <ImageIcon size={16} />
