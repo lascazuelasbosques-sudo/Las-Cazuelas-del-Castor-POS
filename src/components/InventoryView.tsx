@@ -1,5 +1,5 @@
 import { useState, useEffect, FormEvent } from "react";
-import { Package, Plus, Search, Edit2, Trash2, AlertTriangle, X, Save, Image as ImageIcon, CheckCircle2 } from "lucide-react";
+import { Package, Plus, Search, Edit2, Trash2, AlertTriangle, X, Save, Image as ImageIcon, CheckCircle2, Copy } from "lucide-react";
 import { Button } from "./Button";
 import { Card, CardContent, CardHeader, CardFooter } from "./Card";
 import { formatCurrency, cn } from "@/src/lib/utils";
@@ -130,6 +130,15 @@ export const InventoryView = ({ userRole = 'waiter' }: InventoryViewProps) => {
     setShowModal(true);
   };
 
+  const handleDuplicateProduct = (product: Product) => {
+    const { id, ...rest } = product; // Remove original ID
+    setEditingProduct({
+      ...rest,
+      name: `${rest.name} (Copia)`
+    });
+    setShowModal(true);
+  };
+
   const filteredProducts = products.filter(p => 
     p.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
@@ -217,8 +226,18 @@ export const InventoryView = ({ userRole = 'waiter' }: InventoryViewProps) => {
                       size="sm" 
                       className="h-9 w-9 p-0 text-stone-400 hover:text-mex-green"
                       onClick={() => openEditModal(product)}
+                      title="Editar"
                     >
                       <Edit2 size={18} />
+                    </Button>
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      className="h-9 w-9 p-0 text-stone-400 hover:text-mex-gold"
+                      onClick={() => handleDuplicateProduct(product)}
+                      title="Duplicar"
+                    >
+                      <Copy size={18} />
                     </Button>
                     {userRole === 'admin' && (
                       <Button 
@@ -226,6 +245,7 @@ export const InventoryView = ({ userRole = 'waiter' }: InventoryViewProps) => {
                         size="sm" 
                         className="h-9 w-9 p-0 text-stone-400 hover:text-mex-red"
                         onClick={() => handleDeleteProduct(product.id)}
+                        title="Eliminar"
                       >
                         <Trash2 size={18} />
                       </Button>
@@ -297,8 +317,18 @@ export const InventoryView = ({ userRole = 'waiter' }: InventoryViewProps) => {
                         size="icon" 
                         className="text-stone-400 hover:text-mex-green"
                         onClick={() => openEditModal(product)}
+                        title="Editar"
                       >
                         <Edit2 size={16} />
+                      </Button>
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        className="text-stone-400 hover:text-mex-gold"
+                        onClick={() => handleDuplicateProduct(product)}
+                        title="Duplicar"
+                      >
+                        <Copy size={16} />
                       </Button>
                       {userRole === 'admin' && (
                         <Button 
@@ -306,6 +336,7 @@ export const InventoryView = ({ userRole = 'waiter' }: InventoryViewProps) => {
                           size="icon" 
                           className="text-stone-400 hover:text-mex-red"
                           onClick={() => handleDeleteProduct(product.id)}
+                          title="Eliminar"
                         >
                           <Trash2 size={16} />
                         </Button>
