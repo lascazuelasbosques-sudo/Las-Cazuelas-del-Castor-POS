@@ -1,5 +1,5 @@
-import { useState, useEffect, FormEvent } from "react";
-import { Package, Plus, Search, Edit2, Trash2, AlertTriangle, X, Save, Image as ImageIcon, CheckCircle2, Copy } from "lucide-react";
+import { useState, useEffect, FormEvent, ChangeEvent } from "react";
+import { Package, Plus, Search, Edit2, Trash2, AlertTriangle, X, Save, Image as ImageIcon, CheckCircle2, Copy, Upload } from "lucide-react";
 import { Button } from "./Button";
 import { Card, CardContent, CardHeader, CardFooter } from "./Card";
 import { formatCurrency, cn } from "@/src/lib/utils";
@@ -67,6 +67,50 @@ export const InventoryView = ({ userRole = 'waiter' }: InventoryViewProps) => {
       }
     });
     setShowConfirmModal(true);
+  };
+
+  const handleImageUpload = (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      toast.error('Por favor, selecciona una imagen válida.');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new window.Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const MAX_WIDTH = 400;
+        const MAX_HEIGHT = 400;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > MAX_WIDTH) {
+            height *= MAX_WIDTH / width;
+            width = MAX_WIDTH;
+          }
+        } else {
+          if (height > MAX_HEIGHT) {
+            width *= MAX_HEIGHT / height;
+            height = MAX_HEIGHT;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx?.drawImage(img, 0, 0, width, height);
+
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+        setEditingProduct(prev => prev ? { ...prev, imageUrl: dataUrl } : null);
+      };
+      img.src = event.target?.result as string;
+    };
+    reader.readAsDataURL(file);
   };
 
   const handleSaveProduct = async (e: FormEvent) => {
@@ -460,19 +504,33 @@ export const InventoryView = ({ userRole = 'waiter' }: InventoryViewProps) => {
                 </div>
 
                 <div className="space-y-1 md:col-span-2">
-                  <label className="text-sm font-bold text-stone-700 flex items-center gap-2">
-                    <ImageIcon size={16} />
-                    URL de la Imagen (Foto)
+                  <label className="text-sm font-bold text-stone-700 flex items-center justify-between">
+                    <span className="flex items-center gap-2">
+                      <ImageIcon size={16} />
+                      Imagen del Platillo (Archivo o URL)
+                    </span>
                   </label>
-                  <input 
-                    type="url" 
-                    placeholder="https://ejemplo.com/foto.jpg"
-                    value={editingProduct.imageUrl || ''}
-                    onChange={e => setEditingProduct({...editingProduct, imageUrl: e.target.value})}
-                    className="w-full px-4 py-2 rounded-xl border border-stone-200 focus:outline-none focus:ring-2 focus:ring-mex-green/20"
-                  />
+                  <div className="flex gap-2">
+                    <input 
+                      type="url" 
+                      placeholder="URL (https://ejemplo.com/foto.jpg)"
+                      value={editingProduct.imageUrl?.startsWith('data:image') ? '' : (editingProduct.imageUrl || '')}
+                      onChange={e => setEditingProduct({...editingProduct, imageUrl: e.target.value})}
+                      className="flex-1 px-4 py-2 rounded-xl border border-stone-200 focus:outline-none focus:ring-2 focus:ring-mex-green/20"
+                    />
+                    <label className="cursor-pointer bg-stone-100 hover:bg-stone-200 text-stone-700 px-4 py-2 rounded-xl border border-stone-200 flex items-center gap-2 transition-colors">
+                      <Upload size={18} />
+                      <span className="hidden sm:inline">Subir Foto</span>
+                      <input 
+                        type="file" 
+                        accept="image/*" 
+                        className="hidden" 
+                        onChange={handleImageUpload}
+                      />
+                    </label>
+                  </div>
                   {editingProduct.imageUrl && (
-                    <div className="mt-2 w-20 h-20 rounded-lg overflow-hidden border border-stone-200">
+                    <div className="mt-3 relative w-32 h-32 rounded-xl overflow-hidden border-2 border-stone-100 shadow-sm">
                       <img 
                         src={editingProduct.imageUrl} 
                         alt="Preview" 
@@ -482,6 +540,14 @@ export const InventoryView = ({ userRole = 'waiter' }: InventoryViewProps) => {
                           (e.target as HTMLImageElement).src = 'https://via.placeholder.com/150?text=Error';
                         }}
                       />
+                      <button
+                        type="button"
+                        onClick={() => setEditingProduct({...editingProduct, imageUrl: ''})}
+                        className="absolute top-1 right-1 bg-black/50 hover:bg-black text-white rounded-full p-1 transition-colors"
+                        title="Quitar imagen"
+                      >
+                        <X size={14} />
+                      </button>
                     </div>
                   )}
                 </div>
