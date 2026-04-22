@@ -135,6 +135,18 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
         });
       });
 
+      const itemsSummary: { name: string, quantity: number, price: number }[] = [];
+      selectedGroup.orders.forEach(order => {
+        order.items.forEach(item => {
+          const existing = itemsSummary.find(i => i.name === item.name);
+          if (existing) {
+            existing.quantity += item.quantity;
+          } else {
+            itemsSummary.push({ name: item.name, quantity: item.quantity, price: item.price });
+          }
+        });
+      });
+
       // Add cash log entry
       const logRef = doc(collection(db, "cashLogs"));
       batch.set(logRef, {
@@ -143,7 +155,8 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
         reason: `Pago ${selectedGroup.displayTitle} (${paymentMethod === 'card' ? 'Tarjeta' : 'Efectivo'}) - Folios: ${selectedGroup.folios.join(', ')}`,
         timestamp: new Date().toISOString(),
         userId: auth.currentUser.uid,
-        userName: auth.currentUser.displayName || auth.currentUser.email
+        userName: auth.currentUser.displayName || auth.currentUser.email,
+        itemsSummary
       });
 
       await batch.commit();
@@ -475,7 +488,7 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
 
           <div className="flex-1 overflow-y-auto px-2 space-y-2 no-scrollbar pb-6">
             {cashLogs.filter(l => new Date(l.timestamp).toDateString() === new Date().toDateString()).map(log => (
-              <div key={log.id} className="bg-white p-4 rounded-2xl border-none shadow-sm flex items-center justify-between group transition-all hover:shadow-md border border-stone-50">
+              <div key={log.id} className="bg-white p-4 rounded-2xl border-none shadow-sm flex flex-col sm:flex-row sm:items-center justify-between group transition-all hover:shadow-md border border-stone-50 gap-4">
                 <div className="flex items-center gap-4 min-w-0">
                   <div className={cn(
                     "w-12 h-12 rounded-xl flex items-center justify-center shrink-0 shadow-sm",
@@ -488,8 +501,20 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
                      <DollarSign size={22} />}
                   </div>
                   <div className="min-w-0">
-                    <p className="text-sm font-bold text-stone-800 leading-tight truncate pr-4">{log.reason}</p>
-                    <div className="flex items-center gap-1.5 mt-1 border border-stone-50 bg-stone-50/50 w-fit px-1.5 py-0.5 rounded-md">
+                    <p className="text-sm font-bold text-stone-800 leading-tight pr-4">{log.reason}</p>
+                    
+                    {log.itemsSummary && log.itemsSummary.length > 0 && (
+                      <div className="mt-2 space-y-1 bg-stone-50 p-2 rounded-lg border border-stone-100/50">
+                        <p className="text-[9px] font-black uppercase tracking-widest text-stone-400 mb-1">Items vendidos</p>
+                        {log.itemsSummary.map((item, idx) => (
+                          <div key={idx} className="flex justify-between items-center text-xs text-stone-500 gap-4">
+                            <span className="truncate flex-1">{item.quantity}x {item.name}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    <div className="flex items-center gap-1.5 mt-2 border border-stone-50 bg-stone-50/50 w-fit px-1.5 py-0.5 rounded-md">
                       <Clock size={10} className="text-stone-400" />
                       <p className="text-[9px] text-stone-500 font-bold uppercase tracking-wider">
                         {new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} • {log.userName}
@@ -497,7 +522,7 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
                     </div>
                   </div>
                 </div>
-                <div className="flex items-center gap-4 shrink-0">
+                <div className="flex items-center justify-between sm:justify-end gap-4 shrink-0 pl-16 sm:pl-0">
                   <p className={cn(
                     "text-lg font-black font-serif",
                     log.type === 'expense' ? "text-red-600" : "text-mex-green"

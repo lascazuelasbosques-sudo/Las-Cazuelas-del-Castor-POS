@@ -74,4 +74,5 @@ export interface CashLog {
   timestamp: string;
   userId: string;
   userName: string;
+  itemsSummary?: { name: string, quantity: number, price: number }[];
 }
