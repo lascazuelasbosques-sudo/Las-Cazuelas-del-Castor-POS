@@ -254,8 +254,8 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
     <div className="flex flex-col h-full md:flex-row overflow-hidden relative bg-mex-cream">
       {/* Products Section */}
       <div className="flex-1 flex flex-col p-3 md:p-6 overflow-hidden">
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 mb-4 md:mb-6 shrink-0">
-          <div className="relative flex-1">
+        <div className="flex flex-col gap-3 mb-4 md:mb-6 shrink-0">
+          <div className="relative w-full">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" size={18} />
             <input 
               type="text" 
@@ -290,8 +290,9 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
           {products.filter(p => {
             if (!p.available) return false;
             if (searchQuery) {
-              return p.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                     p.description?.toLowerCase().includes(searchQuery.toLowerCase());
+              const query = searchQuery.toLowerCase();
+              return (p.name && p.name.toLowerCase().includes(query)) || 
+                     (p.description && p.description.toLowerCase().includes(query));
             }
             return p.categoryId === selectedCategory;
           }).map(product => (
