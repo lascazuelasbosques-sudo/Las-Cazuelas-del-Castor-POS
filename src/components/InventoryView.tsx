@@ -196,36 +196,36 @@ export const InventoryView = ({ userRole = 'waiter' }: InventoryViewProps) => {
   }
 
   return (
-    <div className="p-4 md:p-8 h-full overflow-hidden flex flex-col bg-mex-cream">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 md:mb-8 shrink-0">
+    <div className="p-4 md:p-6 h-full overflow-hidden flex flex-col bg-mex-cream">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 shrink-0">
         <div>
-          <h1 className="text-2xl md:text-3xl font-serif text-mex-brown">Inventario</h1>
-          <p className="text-[10px] text-stone-400 font-bold uppercase tracking-widest mt-1">Gestión de Productos y Stock</p>
+          <h1 className="text-xl md:text-2xl font-serif text-mex-brown">Inventario</h1>
+          <p className="text-[10px] text-stone-400 font-bold uppercase tracking-widest mt-0.5">Gestión de Productos</p>
         </div>
         <Button 
           variant="primary" 
-          className="gap-2 h-12 shadow-lg shadow-mex-green/20 bg-mex-green hover:bg-mex-green/90 rounded-xl" 
+          className="gap-2 h-10 shadow-md shadow-mex-green/20 bg-mex-green hover:bg-mex-green/90 rounded-xl" 
           onClick={openAddModal}
         >
-          <Plus size={20} />
+          <Plus size={18} />
           <span className="font-bold uppercase tracking-widest text-xs">Nuevo Producto</span>
         </Button>
       </div>
 
-      <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center mb-6 shrink-0">
+      <div className="flex flex-col sm:flex-row gap-2 mb-4 shrink-0">
         <div className="relative flex-1 group">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-stone-400 transition-colors group-focus-within:text-mex-green" size={20} />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400 transition-colors group-focus-within:text-mex-green" size={18} />
           <input 
             type="text" 
             placeholder="Buscar por nombre..." 
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-12 pr-4 py-4 rounded-2xl border-none bg-white shadow-sm focus:ring-2 focus:ring-mex-green/20 text-base font-medium placeholder:text-stone-300 transition-all shadow-stone-200/50"
+            className="w-full pl-10 pr-4 py-2.5 rounded-xl border-none bg-white shadow-sm focus:ring-2 focus:ring-mex-green/20 text-sm font-medium placeholder:text-stone-300 transition-all shadow-stone-200/50"
           />
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" className="flex-1 sm:flex-none gap-2 h-14 rounded-2xl bg-white border-none shadow-sm whitespace-nowrap px-6">
-            <Package size={18} className="text-mex-gold" />
+          <Button variant="outline" className="flex-1 sm:flex-none gap-2 h-[44px] rounded-xl bg-white border-none shadow-sm whitespace-nowrap px-4 text-sm">
+            <Package size={16} className="text-mex-gold" />
             Categorías
           </Button>
         </div>
@@ -417,46 +417,45 @@ export const InventoryView = ({ userRole = 'waiter' }: InventoryViewProps) => {
       {/* Product Modal */}
       {showModal && editingProduct && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[150] p-4 backdrop-blur-sm overflow-y-auto">
-          <Card className="w-full max-w-lg rounded-[2rem] shadow-2xl animate-in zoom-in-95 duration-200 my-auto">
-            <CardHeader className="bg-mex-brown text-white rounded-t-[2rem] p-6 flex flex-row items-center justify-between">
+          <Card className="w-full max-w-lg rounded-2xl shadow-2xl animate-in zoom-in-95 duration-200 my-auto">
+            <CardHeader className="bg-mex-brown text-white rounded-t-2xl p-4 flex flex-row items-center justify-between">
               <div>
-                <h2 className="text-xl font-serif leading-tight">
+                <h2 className="text-lg font-serif leading-tight">
                   {editingProduct.id ? 'Editar Producto' : 'Nuevo Producto'}
                 </h2>
-                <p className="text-[10px] text-mex-gold font-bold uppercase tracking-widest mt-1">Información de Platillo</p>
               </div>
-              <button onClick={() => setShowModal(false)} className="bg-white/10 hover:bg-white/20 p-2 rounded-xl transition-colors">
-                <X size={20} />
+              <button onClick={() => setShowModal(false)} className="bg-white/10 hover:bg-white/20 p-1.5 rounded-lg transition-colors">
+                <X size={18} />
               </button>
             </CardHeader>
             
-            <form onSubmit={handleSaveProduct} className="p-6 space-y-5">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                <div className="space-y-1.5 sm:col-span-2">
+            <form onSubmit={handleSaveProduct} className="p-4 md:p-6 space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1 sm:col-span-2">
                   <label className="text-[10px] font-black text-stone-400 uppercase tracking-widest px-1">Nombre del Platillo *</label>
                   <input 
                     type="text" 
                     required
                     value={editingProduct.name || ''}
                     onChange={e => setEditingProduct({...editingProduct, name: e.target.value})}
-                    className="w-full px-5 py-3 rounded-2xl border border-stone-100 bg-stone-50 focus:bg-white focus:border-mex-brown focus:ring-0 outline-none transition-all font-bold"
+                    className="w-full px-4 py-2.5 rounded-xl border border-stone-100 bg-stone-50 focus:bg-white focus:border-mex-brown focus:ring-0 outline-none transition-all font-bold"
                   />
                 </div>
 
-                <div className="space-y-1.5 sm:col-span-2">
+                <div className="space-y-1 sm:col-span-2">
                   <label className="text-[10px] font-black text-stone-400 uppercase tracking-widest px-1">Descripción</label>
                   <textarea 
                     value={editingProduct.description || ''}
                     onChange={e => setEditingProduct({...editingProduct, description: e.target.value})}
-                    className="w-full px-5 py-3 rounded-2xl border border-stone-100 bg-stone-50 focus:bg-white focus:border-mex-brown focus:ring-0 outline-none transition-all min-h-[80px] no-scrollbar text-sm"
+                    className="w-full px-4 py-2.5 rounded-xl border border-stone-100 bg-stone-50 focus:bg-white focus:border-mex-brown focus:ring-0 outline-none transition-all min-h-[60px] no-scrollbar text-sm"
                     placeholder="Describe el platillo..."
                   />
                 </div>
 
-                <div className="space-y-1.5">
+                <div className="space-y-1">
                   <label className="text-[10px] font-black text-stone-400 uppercase tracking-widest px-1">Precio ($) *</label>
                   <div className="relative">
-                    <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 text-stone-400" size={18} />
+                    <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" size={16} />
                     <input 
                       type="number" 
                       required
@@ -464,18 +463,18 @@ export const InventoryView = ({ userRole = 'waiter' }: InventoryViewProps) => {
                       step="0.01"
                       value={editingProduct.price || 0}
                       onChange={e => setEditingProduct({...editingProduct, price: parseFloat(e.target.value)})}
-                      className="w-full pl-10 pr-4 py-3 rounded-2xl border border-stone-100 bg-stone-50 focus:bg-white focus:border-mex-brown focus:ring-0 outline-none transition-all font-bold"
+                      className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-stone-100 bg-stone-50 focus:bg-white focus:border-mex-brown focus:ring-0 outline-none transition-all font-bold"
                     />
                   </div>
                 </div>
 
-                <div className="space-y-1.5">
+                <div className="space-y-1">
                   <label className="text-[10px] font-black text-stone-400 uppercase tracking-widest px-1">Categoría *</label>
                   <select 
                     required
                     value={editingProduct.categoryId || ''}
                     onChange={e => setEditingProduct({...editingProduct, categoryId: e.target.value})}
-                    className="w-full px-5 py-3 rounded-2xl border border-stone-100 bg-stone-50 focus:bg-white focus:border-mex-brown focus:ring-0 outline-none transition-all font-bold appearance-none cursor-pointer"
+                    className="w-full px-4 py-2.5 rounded-xl border border-stone-100 bg-stone-50 focus:bg-white focus:border-mex-brown focus:ring-0 outline-none transition-all font-bold appearance-none cursor-pointer"
                   >
                     {categories.map(cat => (
                       <option key={cat.id} value={cat.id}>{cat.name}</option>
@@ -483,30 +482,30 @@ export const InventoryView = ({ userRole = 'waiter' }: InventoryViewProps) => {
                   </select>
                 </div>
 
-                <div className="space-y-1.5">
+                <div className="space-y-1">
                   <label className="text-[10px] font-black text-stone-400 uppercase tracking-widest px-1">Stock</label>
                   <input 
                     type="number" 
                     min="0"
                     value={editingProduct.stock || 0}
                     onChange={e => setEditingProduct({...editingProduct, stock: parseInt(e.target.value)})}
-                    className="w-full px-5 py-3 rounded-2xl border border-stone-100 bg-stone-50 focus:bg-white focus:border-mex-brown focus:ring-0 outline-none transition-all font-bold"
+                    className="w-full px-4 py-2.5 rounded-xl border border-stone-100 bg-stone-50 focus:bg-white focus:border-mex-brown focus:ring-0 outline-none transition-all font-bold"
                   />
                 </div>
 
-                <div className="space-y-1.5">
+                <div className="space-y-1">
                   <label className="text-[10px] font-black text-stone-400 uppercase tracking-widest px-1">Estación</label>
                   <select 
                     value={editingProduct.station || 'cocina'}
                     onChange={e => setEditingProduct({...editingProduct, station: e.target.value as 'plancha' | 'cocina'})}
-                    className="w-full px-5 py-3 rounded-2xl border border-stone-100 bg-stone-50 focus:bg-white focus:border-mex-brown focus:ring-0 outline-none transition-all font-bold appearance-none cursor-pointer"
+                    className="w-full px-4 py-2.5 rounded-xl border border-stone-100 bg-stone-50 focus:bg-white focus:border-mex-brown focus:ring-0 outline-none transition-all font-bold appearance-none cursor-pointer"
                   >
                     <option value="cocina">Cocina</option>
                     <option value="plancha">Parrilla / Plancha</option>
                   </select>
                 </div>
 
-                <div className="flex items-center gap-4 py-2 sm:col-span-2">
+                <div className="flex items-center gap-4 sm:col-span-2">
                   <label className="flex items-center gap-2 cursor-pointer group">
                     <div className={cn(
                       "w-10 h-6 rounded-full relative transition-colors",
@@ -546,22 +545,22 @@ export const InventoryView = ({ userRole = 'waiter' }: InventoryViewProps) => {
                   </label>
                 </div>
 
-                <div className="space-y-1.5 sm:col-span-2">
+                <div className="space-y-1 sm:col-span-2">
                   <label className="text-[10px] font-black text-stone-400 uppercase tracking-widest px-1">Imagen del Platillo</label>
                   <div className="flex flex-col sm:flex-row gap-3">
                     <div className="relative flex-1">
-                      <ImageIcon className="absolute left-4 top-1/2 -translate-y-1/2 text-stone-400" size={18} />
+                      <ImageIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" size={16} />
                       <input 
                         type="url" 
                         placeholder="URL de la imagen..."
                         value={editingProduct.imageUrl?.startsWith('data:image') ? '' : (editingProduct.imageUrl || '')}
                         onChange={e => setEditingProduct({...editingProduct, imageUrl: e.target.value})}
-                        className="w-full pl-11 pr-4 py-3 rounded-2xl border border-stone-100 bg-stone-50 focus:bg-white focus:border-mex-brown focus:ring-0 outline-none transition-all text-sm"
+                        className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-stone-100 bg-stone-50 focus:bg-white focus:border-mex-brown focus:ring-0 outline-none transition-all text-sm"
                       />
                     </div>
                     <div className="flex gap-2">
-                      <label className="flex-1 sm:flex-none cursor-pointer bg-stone-100 hover:bg-stone-200 text-stone-600 px-5 py-3 rounded-2xl border border-stone-200 flex items-center justify-center gap-2 transition-colors">
-                        <Upload size={18} />
+                      <label className="flex-1 sm:flex-none cursor-pointer bg-stone-100 hover:bg-stone-200 text-stone-600 px-4 py-2.5 rounded-xl border border-stone-200 flex items-center justify-center gap-2 transition-colors">
+                        <Upload size={16} />
                         <span className="text-[10px] font-black uppercase">Subir</span>
                         <input 
                           type="file" 
@@ -592,11 +591,11 @@ export const InventoryView = ({ userRole = 'waiter' }: InventoryViewProps) => {
                 </div>
               </div>
 
-              <div className="pt-4 flex gap-3">
+              <div className="pt-2 flex gap-3">
                 <Button 
                   type="button"
                   variant="ghost" 
-                  className="flex-1 h-12 rounded-2xl font-bold uppercase tracking-widest text-[10px]" 
+                  className="flex-1 h-10 rounded-xl font-bold uppercase tracking-widest text-[10px]" 
                   onClick={() => setShowModal(false)}
                 >
                   Cancelar
@@ -604,7 +603,7 @@ export const InventoryView = ({ userRole = 'waiter' }: InventoryViewProps) => {
                 <Button 
                   type="submit"
                   variant="primary" 
-                  className="flex-[2] h-12 rounded-2xl bg-mex-green hover:bg-mex-green/90 shadow-lg shadow-mex-green/20 font-bold uppercase tracking-widest text-[10px]"
+                  className="flex-[2] h-10 rounded-xl bg-mex-green hover:bg-mex-green/90 shadow-lg shadow-mex-green/20 font-bold uppercase tracking-widest text-[10px]"
                 >
                   Guardar Cambios
                 </Button>

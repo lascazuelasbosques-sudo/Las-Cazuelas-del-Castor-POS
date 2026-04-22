@@ -311,7 +311,13 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
 
               return (
                 <div className="bg-white rounded-xl border border-stone-200 overflow-hidden shadow-sm">
-                  <table className="w-full text-left border-collapse">
+                  <table className="w-full text-left border-collapse table-fixed">
+                    <colgroup>
+                      <col className="w-[60px] md:w-[76px]" />
+                      <col className="w-auto" />
+                      <col className="w-[80px] md:w-[96px]" />
+                      <col className="w-[44px] md:w-[56px]" />
+                    </colgroup>
                     <tbody className="divide-y divide-stone-100">
                       {currentProducts.map(product => (
                       <tr 
@@ -319,8 +325,8 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
                         onClick={() => handleProductClick(product)}
                         className="hover:bg-stone-50 cursor-pointer active:bg-stone-100 transition-colors group"
                       >
-                        <td className="p-2 md:p-3 w-16 align-middle">
-                          <div className="w-12 h-12 md:w-14 md:h-14 bg-stone-50 rounded-lg flex items-center justify-center text-stone-300 overflow-hidden shrink-0 border border-stone-100">
+                        <td className="p-2 md:p-3 align-middle">
+                          <div className="w-11 h-11 md:w-14 md:h-14 bg-stone-50 rounded-lg flex items-center justify-center text-stone-300 overflow-hidden shrink-0 border border-stone-100 mx-auto">
                             {product.imageUrl ? (
                               <img src={product.imageUrl} alt={product.name} className="w-full h-full object-cover transition-transform group-hover:scale-110" referrerPolicy="no-referrer" />
                             ) : (
@@ -328,15 +334,15 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
                             )}
                           </div>
                         </td>
-                        <td className="p-2 md:p-3 align-middle">
-                          <h3 className="font-bold text-stone-800 text-sm md:text-base group-hover:text-mex-green leading-tight mb-0.5 break-words">{product.name}</h3>
-                          <p className="text-[10px] md:text-xs text-stone-400 line-clamp-2 pr-2 leading-snug">{product.description || 'Delicioso platillo tradicional'}</p>
+                        <td className="p-2 md:p-3 align-middle overflow-hidden">
+                          <h3 className="font-bold text-stone-800 text-sm md:text-base group-hover:text-mex-green leading-tight mb-0.5 truncate">{product.name}</h3>
+                          <p className="text-[10px] md:text-xs text-stone-400 truncate pr-2 leading-snug">{product.description || 'Delicioso platillo tradicional'}</p>
                         </td>
-                        <td className="p-2 md:p-3 align-middle text-right whitespace-nowrap">
-                          <span className="font-black text-mex-terracotta text-sm md:text-base">{formatCurrency(product.price)}</span>
+                        <td className="p-2 md:p-3 align-middle text-right">
+                          <span className="font-black text-mex-terracotta text-sm md:text-base truncate block">{formatCurrency(product.price)}</span>
                         </td>
-                        <td className="p-2 md:p-3 w-12 align-middle text-right pr-3 md:pr-4">
-                           <div className="inline-flex w-8 h-8 rounded-full bg-stone-100 text-mex-green items-center justify-center group-hover:bg-mex-green group-hover:text-white transition-colors">
+                        <td className="p-2 md:p-3 align-middle text-right pr-3 md:pr-4">
+                           <div className="inline-flex w-8 h-8 rounded-full bg-stone-100 text-mex-green items-center justify-center group-hover:bg-mex-green group-hover:text-white transition-colors ml-auto">
                              <Plus size={18} />
                            </div>
                         </td>
