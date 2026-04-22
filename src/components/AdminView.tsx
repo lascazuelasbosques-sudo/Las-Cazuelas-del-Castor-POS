@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Trash2, AlertTriangle, Database, RefreshCw, ShieldAlert, X, CheckCircle2, Users, Key, Edit2, Save, Plus, TrendingUp, Calendar, BarChart3, Image as ImageIcon, Upload } from "lucide-react";
+import { Trash2, AlertTriangle, Database, RefreshCw, ShieldAlert, X, CheckCircle2, Users, Key, Edit2, Save, Plus, TrendingUp, Calendar, BarChart3, Image as ImageIcon, Upload, Download, FileJson } from "lucide-react";
 import { Button } from "./Button";
 import { Card, CardContent, CardHeader, CardFooter } from "./Card";
 import { db } from "../firebase";
@@ -187,6 +187,83 @@ export const AdminView = () => {
       toast.error("Error al guardar usuario", { id: toastId });
       handleFirestoreError(error, isEditing ? OperationType.UPDATE : OperationType.CREATE, "users");
     } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleExportData = async () => {
+    const toastId = toast.loading("Preparando respaldo...");
+    try {
+      const collections = ["categories", "products", "orders", "users", "cashLogs", "settings", "counters"];
+      const backupData: any = {};
+
+      for (const colName of collections) {
+        const snap = await getDocs(collection(db, colName));
+        backupData[colName] = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      }
+
+      const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `respaldo_pos_${new Date().toISOString().split('T')[0]}.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      toast.success("Respaldo descargado exitosamente", { id: toastId });
+    } catch (error) {
+      console.error("Export error:", error);
+      toast.error("Error al exportar datos", { id: toastId });
+    }
+  };
+
+  const handleImportData = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!window.confirm("¡ATENCIÓN! Importar datos sobrescribirá registros existentes con el mismo ID. ¿Deseas continuar?")) return;
+
+    const toastId = toast.loading("Importando datos...");
+    setLoading(true);
+
+    try {
+      const reader = new FileReader();
+      reader.onload = async (event) => {
+        try {
+          const backupData = JSON.parse(event.target?.result as string);
+          const collections = Object.keys(backupData);
+
+          for (const colName of collections) {
+            const batch = writeBatch(db);
+            const docs = backupData[colName];
+            
+            if (Array.isArray(docs)) {
+              docs.forEach((docData: any) => {
+                const { id, ...data } = docData;
+                const docRef = doc(db, colName, id);
+                batch.set(docRef, data);
+              });
+              await batch.commit();
+            }
+          }
+
+          toast.success("Datos importados exitosamente", { id: toastId });
+          fetchUsers();
+          fetchCashLogs();
+          fetchBranding();
+        } catch (err) {
+          console.error("Parse/Commit error:", err);
+          toast.error("Archivo de respaldo inválido", { id: toastId });
+        } finally {
+          setLoading(false);
+        }
+      };
+      reader.readAsText(file);
+    } catch (error) {
+      console.error("Import error:", error);
+      toast.error("Error al importar datos", { id: toastId });
       setLoading(false);
     }
   };
@@ -706,6 +783,59 @@ export const AdminView = () => {
             </div>
           </CardContent>
         </Card>
+      </div>
+
+      {/* Backup & System Section */}
+      <div className="grid grid-cols-1 gap-6 mb-8 pt-6 border-t border-stone-200">
+        <div className="flex items-center gap-3">
+          <div className="p-2 bg-mex-terracotta/10 text-mex-terracotta rounded-xl">
+            <Database size={20} />
+          </div>
+          <h2 className="text-xl font-serif text-stone-800">Sistema y Respaldo</h2>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <Card className="border-none shadow-md rounded-3xl overflow-hidden bg-white">
+            <CardContent className="p-6 flex items-center justify-between">
+              <div className="flex gap-4 items-center">
+                <div className="p-3 bg-stone-100 text-stone-500 rounded-2xl">
+                  <Download size={24} />
+                </div>
+                <div>
+                  <h3 className="font-bold text-stone-800">Exportar Datos</h3>
+                  <p className="text-xs text-stone-400">Descarga un respaldo completo (JSON)</p>
+                </div>
+              </div>
+              <Button 
+                variant="ghost" 
+                className="h-10 px-4 rounded-xl font-black uppercase tracking-widest text-[10px] bg-stone-50 hover:bg-stone-100"
+                onClick={handleExportData}
+              >
+                Exportar
+              </Button>
+            </CardContent>
+          </Card>
+
+          <Card className="border-none shadow-md rounded-3xl overflow-hidden bg-white">
+            <CardContent className="p-6 flex items-center justify-between">
+              <div className="flex gap-4 items-center">
+                <div className="p-3 bg-stone-100 text-stone-500 rounded-2xl">
+                  <Upload size={24} />
+                </div>
+                <div>
+                  <h3 className="font-bold text-stone-800">Importar Datos</h3>
+                  <p className="text-xs text-stone-400">Restaura datos desde un archivo</p>
+                </div>
+              </div>
+              <label className="cursor-pointer">
+                <input type="file" accept=".json" className="hidden" onChange={handleImportData} />
+                <div className="h-10 px-4 flex items-center justify-center rounded-xl font-black uppercase tracking-widest text-[10px] bg-stone-50 hover:bg-stone-100 text-stone-700 transition-colors">
+                  Importar
+                </div>
+              </label>
+            </CardContent>
+          </Card>
+        </div>
       </div>
 
       {/* Info Card - Original position, but updated content */}
