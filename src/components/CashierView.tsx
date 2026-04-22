@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { CreditCard, DollarSign, Receipt, TrendingUp, TrendingDown, Clock, CheckCircle2, Trash2, Edit2, Plus, X, AlertTriangle, History } from "lucide-react";
+import { CreditCard, DollarSign, Receipt, TrendingUp, TrendingDown, Clock, CheckCircle2, Trash2, Edit2, Plus, X, AlertTriangle, History, Package } from "lucide-react";
 import { Button } from "./Button";
 import { Card, CardContent, CardHeader, CardFooter } from "./Card";
 import { formatCurrency, cn, customRound } from "@/src/lib/utils";
@@ -8,6 +8,9 @@ import { db, auth } from "../firebase";
 import { collection, onSnapshot, query, where, orderBy, doc, updateDoc, addDoc, deleteDoc, writeBatch, getDocs, getDocsFromServer } from "firebase/firestore";
 import { handleFirestoreError, OperationType } from "../lib/firestoreErrorHandler";
 import toast from "react-hot-toast";
+
+import { jsPDF } from "jspdf";
+import html2canvas from "html2canvas";
 
 interface CashierViewProps {
   onEditOrder?: (order: Order) => void;
@@ -31,6 +34,9 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
     folios: string[];
     waiterNames: string[];
   }
+
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [lastPaymentData, setLastPaymentData] = useState<{group: GroupedOrder, method: 'cash' | 'card', total: number} | null>(null);
 
   const groupedOrders = orders.reduce((acc: GroupedOrder[], order) => {
     const key = order.isTakeaway ? order.id : order.tableNumber;
@@ -161,7 +167,9 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
 
       await batch.commit();
 
+      setLastPaymentData({ group: selectedGroup, method: paymentMethod, total: finalTotal });
       setShowPaymentModal(false);
+      setShowSuccessModal(true);
       setSelectedGroup(null);
       setPaymentMethod('cash');
       toast.success("Pago registrado correctamente", { id: toastId });
@@ -244,6 +252,46 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
     if (log.type === 'expense') return acc - log.amount;
     return acc;
   }, 0);
+
+  const generateTicketPDF = async (shouldDownload = true) => {
+    if (!lastPaymentData) return null;
+    const element = document.getElementById("ticket-content");
+    if (!element) return null;
+
+    try {
+      const canvas = await html2canvas(element, { scale: 2 });
+      const imgData = canvas.toDataURL("image/png");
+      const pdf = new jsPDF({
+        orientation: "portrait",
+        unit: "mm",
+        format: [80, 150] // Ticket size
+      });
+
+      const width = pdf.internal.pageSize.getWidth();
+      const height = (canvas.height * width) / canvas.width;
+      
+      pdf.addImage(imgData, "PNG", 0, 0, width, height);
+      if (shouldDownload) {
+        pdf.save(`ticket-${lastPaymentData.group.folios.join("-")}.pdf`);
+      }
+      return pdf;
+    } catch (error) {
+      console.error("Error generating PDF:", error);
+      toast.error("Error al generar el PDF");
+      return null;
+    }
+  };
+
+  const handleSendEmail = () => {
+    if (!lastPaymentData) return;
+    const subject = encodeURIComponent(`Ticket de Venta - Las Cazuelas del Castor`);
+    const body = encodeURIComponent(`Gracias por su compra.\n\nTotal: ${formatCurrency(lastPaymentData.total)}\nFolios: ${lastPaymentData.group.folios.join(", ")}`);
+    window.location.href = `mailto:?subject=${subject}&body=${body}`;
+  };
+
+  const handlePrint = () => {
+    window.print();
+  };
 
   const stats = cashLogs.reduce((acc, log) => {
     const isToday = new Date(log.timestamp).toDateString() === new Date().toDateString();
@@ -626,6 +674,88 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
                 onClick={handleConfirmPayment}
               >
                 CONFIRMAR PAGO
+              </Button>
+            </CardFooter>
+          </Card>
+        </div>
+      )}
+
+      {/* Success Modal */}
+      {showSuccessModal && lastPaymentData && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[200] p-4 backdrop-blur-sm">
+          <Card className="w-full max-w-sm rounded-[2rem] shadow-2xl animate-in zoom-in-95 duration-200">
+            <CardHeader className="bg-mex-green text-white rounded-t-[2rem] p-6 text-center">
+              <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                <CheckCircle2 size={32} />
+              </div>
+              <h3 className="text-2xl font-serif">¡Venta Exitosa!</h3>
+              <p className="text-white/80 text-sm mt-1">El pago ha sido registrado</p>
+            </CardHeader>
+            <CardContent className="p-6">
+              <div id="ticket-content" className="bg-white border-2 border-dashed border-stone-200 p-6 rounded-xl font-mono text-[10px] space-y-4 shadow-sm mb-6">
+                <div className="text-center space-y-1">
+                  <p className="font-bold text-xs">LAS CAZUELAS DEL CASTOR</p>
+                  <p>Ticket de Venta</p>
+                  <p>{new Date().toLocaleString()}</p>
+                </div>
+                <div className="border-t border-stone-200 pt-2 space-y-1">
+                  <p>Mesa: {lastPaymentData.group.displayTitle}</p>
+                  <p>Folios: {lastPaymentData.group.folios.join(", ")}</p>
+                  <p>Meseros: {lastPaymentData.group.waiterNames.join(", ")}</p>
+                </div>
+                <div className="border-t border-stone-200 pt-2 space-y-1">
+                  {lastPaymentData.group.orders.map(order => 
+                    order.items.map((item, idx) => (
+                      <div key={idx} className="flex justify-between">
+                        <span>{item.quantity}x {item.name}</span>
+                        <span>{formatCurrency(item.price * item.quantity)}</span>
+                      </div>
+                    ))
+                  )}
+                </div>
+                <div className="border-t border-stone-200 pt-2 space-y-1 font-bold text-xs">
+                  <div className="flex justify-between">
+                    <span>Total</span>
+                    <span>{formatCurrency(lastPaymentData.total)}</span>
+                  </div>
+                  <p className="text-center pt-4 italic">¡Gracias por su visita!</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <Button 
+                  variant="outline" 
+                  className="flex-col gap-2 h-20 rounded-2xl border-stone-100 hover:bg-stone-50"
+                  onClick={() => generateTicketPDF(true)}
+                >
+                  <Package size={20} className="text-mex-gold" />
+                  <span className="text-[10px] font-black uppercase">Guardar PDF</span>
+                </Button>
+                <Button 
+                  variant="outline" 
+                  className="flex-col gap-2 h-20 rounded-2xl border-stone-100 hover:bg-stone-50"
+                  onClick={handleSendEmail}
+                >
+                  <Receipt size={20} className="text-blue-500" />
+                  <span className="text-[10px] font-black uppercase">Enviar Mail</span>
+                </Button>
+                <Button 
+                  variant="outline" 
+                  className="flex-col gap-2 h-20 rounded-2xl border-stone-100 hover:bg-stone-50 md:col-span-2"
+                  onClick={handlePrint}
+                >
+                  <History size={20} className="text-stone-400" />
+                  <span className="text-[10px] font-black uppercase">Imprimir Ticket</span>
+                </Button>
+              </div>
+            </CardContent>
+            <CardFooter className="p-6 pt-0">
+              <Button 
+                variant="primary" 
+                className="w-full h-12 rounded-xl bg-mex-green hover:bg-mex-green/90 font-black tracking-widest text-xs uppercase"
+                onClick={() => setShowSuccessModal(false)}
+              >
+                Cerrar
               </Button>
             </CardFooter>
           </Card>

@@ -16,6 +16,7 @@ import { seedDatabase } from './seed';
 import { db } from './firebase';
 
 import { Order, User as POSUser } from './types';
+import { useBranding } from './lib/useBranding';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('orders');
@@ -24,6 +25,16 @@ export default function App() {
   const [userRole, setUserRole] = useState<string>('waiter');
   const [loading, setLoading] = useState(true);
   const [orderToEdit, setOrderToEdit] = useState<Order | null>(null);
+  const { branding } = useBranding();
+
+  useEffect(() => {
+    // Update Title and Favicon
+    document.title = branding.appName;
+    const favicon = document.querySelector("link[rel*='icon']") as HTMLLinkElement;
+    if (favicon) {
+      favicon.href = branding.logoUrl;
+    }
+  }, [branding]);
 
   useEffect(() => {
     // Test Firestore connection

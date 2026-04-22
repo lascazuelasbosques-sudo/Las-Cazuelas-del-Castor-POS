@@ -5,6 +5,7 @@ import { cn, getRoleLabel } from "@/src/lib/utils";
 import { auth, db } from "../firebase";
 import { collection, query, where, onSnapshot } from "firebase/firestore";
 import { Order } from "../types";
+import { useBranding } from "../lib/useBranding";
 
 interface NavbarProps {
   activeTab: string;
@@ -16,6 +17,7 @@ interface NavbarProps {
 
 export const Navbar = ({ activeTab, setActiveTab, userRole = 'waiter', userName = 'Usuario', onLogout }: NavbarProps) => {
   const [pendingStations, setPendingStations] = useState<{plancha: boolean, cocina: boolean}>({ plancha: false, cocina: false });
+  const { branding } = useBranding();
 
   useEffect(() => {
     const q = query(
@@ -44,7 +46,8 @@ export const Navbar = ({ activeTab, setActiveTab, userRole = 'waiter', userName 
     return () => unsubscribe();
   }, []);
 
-  const logoUrl = "https://scontent.fmex3-3.fna.fbcdn.net/v/t39.30808-6/305224800_502697315191276_5159032473398491144_n.jpg?_nc_cat=101&ccb=1-7&_nc_sid=1d70fc&_nc_ohc=CxNRayDEeW8Q7kNvwFU9Nsv&_nc_oc=AdoOjXlYpF7dp9it8umJob6ZcAwUuBFAvCrJVNO2j9SC3EUZOvMN2nLdVAk26fvdOJs&_nc_zt=23&_nc_ht=scontent.fmex3-3.fna&_nc_gid=TAiJ3YiA-onkgw2dKf3Srw&_nc_ss=7a389&oh=00_Af3exLs62O6jgKBSzMrQ3Me4h893zsaVtuxLyHF4pTsrVQ&oe=69E840D8";
+  const [imageError, setImageError] = useState(false);
+  const logoUrl = branding.logoUrl;
   const navItems = [
     { id: 'orders', label: 'Pedidos', icon: Utensils, roles: ['admin', 'waiter', 'cashier'] },
     { id: 'kitchen', label: 'Cocina', icon: ClipboardList, roles: ['admin', 'kitchen'] },
@@ -58,16 +61,21 @@ export const Navbar = ({ activeTab, setActiveTab, userRole = 'waiter', userName 
   return (
     <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-stone-200 px-4 py-2 flex justify-around items-center md:relative md:flex-col md:h-screen md:w-20 lg:w-64 md:border-t-0 md:border-r md:justify-start md:gap-4 md:px-2 lg:px-4 md:py-8 z-50 transition-all duration-300">
       <div className="hidden md:flex flex-col items-center mb-8 px-2 lg:px-4">
-        <div className="w-12 h-12 lg:w-24 lg:h-24 mb-4 rounded-full overflow-hidden border-2 lg:border-4 border-mex-gold shadow-xl transition-all duration-300">
-          <img 
-            src={logoUrl} 
-            alt="Las Cazuelas del Castor" 
-            className="w-full h-full object-cover"
-            referrerPolicy="no-referrer"
-          />
+        <div className="w-12 h-12 lg:w-24 lg:h-24 mb-4 rounded-full overflow-hidden border-2 lg:border-4 border-mex-gold shadow-xl transition-all duration-300 bg-white flex items-center justify-center">
+          {imageError ? (
+            <Squirrel className="text-mex-brown h-6 w-6 lg:h-12 lg:w-12" />
+          ) : (
+            <img 
+              src={logoUrl} 
+              alt="Las Cazuelas del Castor" 
+              className="w-full h-full object-cover"
+              referrerPolicy="no-referrer"
+              onError={() => setImageError(true)}
+            />
+          )}
         </div>
         <h1 className="hidden lg:block text-xl font-serif text-mex-brown text-center leading-tight">
-          Las Cazuelas<br/><span className="text-sm italic text-mex-terracotta font-sans font-bold">del Castor</span>
+          {branding.appName}
         </h1>
       </div>
 

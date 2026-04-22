@@ -71,6 +71,15 @@
         "userName": { "type": "string" }
       },
       "required": ["type", "amount", "timestamp", "userId"]
+    },
+    "Setting": {
+      "title": "Setting",
+      "description": "Configuraciones globales del sistema",
+      "type": "object",
+      "properties": {
+        "logoUrl": { "type": "string", "description": "URL o Base64 del logo del sistema" },
+        "appName": { "type": "string", "description": "Nombre de la aplicación" }
+      }
     }
   },
   "firestore": {
@@ -78,6 +87,7 @@
     "/products": { "schema": "Product", "description": "Colección de productos" },
     "/orders": { "schema": "Order", "description": "Colección de pedidos" },
     "/users": { "schema": "User", "description": "Colección de usuarios" },
-    "/cashLogs": { "schema": "CashLog", "description": "Colección de registros de caja" }
+    "/cashLogs": { "schema": "CashLog", "description": "Colección de registros de caja" },
+    "/settings": { "schema": "Setting", "description": "Configuraciones del sistema" }
   }
 }

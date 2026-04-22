@@ -118,5 +118,10 @@ service cloud.firestore {
     match /counters/{counterId} {
       allow read, write: if isStaff();
     }
+
+    match /settings/{settingId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
   }
 }

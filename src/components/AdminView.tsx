@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { Trash2, AlertTriangle, Database, RefreshCw, ShieldAlert, X, CheckCircle2, Users, Key, Edit2, Save, Plus } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import { Trash2, AlertTriangle, Database, RefreshCw, ShieldAlert, X, CheckCircle2, Users, Key, Edit2, Save, Plus, TrendingUp, Calendar, BarChart3, Image as ImageIcon, Upload } from "lucide-react";
 import { Button } from "./Button";
 import { Card, CardContent, CardHeader, CardFooter } from "./Card";
 import { db } from "../firebase";
@@ -7,13 +7,19 @@ import { collection, getDocs, deleteDoc, doc, writeBatch, updateDoc, addDoc, get
 import toast from "react-hot-toast";
 import { seedDatabase } from "../seed";
 import { handleFirestoreError, OperationType } from "../lib/firestoreErrorHandler";
-import { User, UserRole } from "../types";
-import { cn, getRoleLabel } from "@/src/lib/utils";
+import { User, UserRole, CashLog } from "../types";
+import { BarChart, Bar, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+import { formatCurrency, cn, getRoleLabel } from "@/src/lib/utils";
 import { auth } from "../firebase";
 
 export const AdminView = () => {
   const [loading, setLoading] = useState(false);
   const [users, setUsers] = useState<User[]>([]);
+  const [cashLogs, setCashLogs] = useState<CashLog[]>([]);
+  const [reportPeriod, setReportPeriod] = useState<'day' | 'week' | 'month'>('day');
+
+  const [logoPreview, setLogoPreview] = useState<string | null>(null);
+  const [brandingSettings, setBrandingSettings] = useState({ logoUrl: "", appName: "Las Cazuelas del Castor" });
   const [showUserModal, setShowUserModal] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
@@ -34,7 +40,64 @@ export const AdminView = () => {
 
   useEffect(() => {
     fetchUsers();
+    fetchCashLogs();
+    fetchBranding();
   }, []);
+
+  const fetchBranding = async () => {
+    try {
+      const docSnap = await getDoc(doc(db, "settings", "branding"));
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        setBrandingSettings({
+          logoUrl: data.logoUrl || "",
+          appName: data.appName || "Las Cazuelas del Castor"
+        });
+        setLogoPreview(data.logoUrl || null);
+      }
+    } catch (error) {
+      console.error("Error fetching branding:", error);
+    }
+  };
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 1024 * 500) {
+        toast.error("Imagen demasiado grande (máximo 500KB)");
+        return;
+      }
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const base64String = reader.result as string;
+        setLogoPreview(base64String);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const saveBranding = async () => {
+    const toastId = toast.loading("Guardando configuración...");
+    try {
+      await setDoc(doc(db, "settings", "branding"), {
+        logoUrl: logoPreview || brandingSettings.logoUrl,
+        appName: brandingSettings.appName,
+        updatedAt: new Date().toISOString()
+      }, { merge: true });
+      toast.success("Configuración guardada", { id: toastId });
+    } catch (error) {
+      toast.error("Error al guardar", { id: toastId });
+    }
+  };
+
+  const fetchCashLogs = async () => {
+    try {
+      const snap = await getDocs(collection(db, "cashLogs"));
+      setCashLogs(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as CashLog)));
+    } catch (error) {
+      console.error("Error fetching logs:", error);
+    }
+  };
 
   const fetchUsers = async () => {
     try {
@@ -491,15 +554,163 @@ export const AdminView = () => {
         </div>
       </div>
 
-      {/* Info Card */}
-      <div className="bg-white/40 border border-stone-100 rounded-[2.5rem] p-8 md:p-12 flex flex-col items-center text-center backdrop-blur-sm shrink-0">
-        <div className="w-16 h-16 bg-white rounded-2xl shadow-xl shadow-stone-200/30 flex items-center justify-center mb-6 text-stone-300">
-          <Database size={32} />
+      {/* Sales Reports Section */}
+      <div className="grid grid-cols-1 gap-6 mb-8 pt-6 border-t border-stone-200">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-blue-50 text-blue-600 rounded-xl">
+              <BarChart3 size={20} />
+            </div>
+            <h2 className="text-xl font-serif text-stone-800">Reportes de Ventas</h2>
+          </div>
+          <div className="flex bg-stone-100 p-1 rounded-xl">
+            {(['day', 'week', 'month'] as const).map(p => (
+              <button
+                key={p}
+                onClick={() => setReportPeriod(p)}
+                className={cn(
+                  "px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all",
+                  reportPeriod === p ? "bg-white text-stone-800 shadow-sm" : "text-stone-400 hover:text-stone-600"
+                )}
+              >
+                {p === 'day' ? 'Hoy' : p === 'week' ? 'Semana' : 'Mes'}
+              </button>
+            ))}
+          </div>
         </div>
-        <h3 className="text-xl font-serif text-stone-800 mb-2">Módulo de Reportes Avanzados</h3>
-        <p className="max-w-md text-stone-500 text-sm leading-relaxed">
-          Las gráficas de rendimiento y estadísticas detalladas por mesero estarán disponibles en la próxima actualización.
-        </p>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {(() => {
+            const now = new Date();
+            const filteredLogs = cashLogs.filter(log => {
+              if (log.type !== 'income') return false;
+              const logDate = new Date(log.timestamp);
+              if (reportPeriod === 'day') return logDate.toDateString() === now.toDateString();
+              if (reportPeriod === 'week') {
+                const startOfWeek = new Date(now);
+                startOfWeek.setDate(now.getDate() - now.getDay());
+                return logDate >= startOfWeek;
+              }
+              return logDate.getMonth() === now.getMonth() && logDate.getFullYear() === now.getFullYear();
+            });
+
+            const total = filteredLogs.reduce((sum, l) => sum + l.amount, 0);
+            const count = filteredLogs.length;
+            const avg = count > 0 ? total / count : 0;
+
+            const chartData = filteredLogs.reduce((acc: any[], log) => {
+              const label = new Date(log.timestamp).toLocaleDateString([], { day: '2-digit', month: 'short' });
+              const existing = acc.find(d => d.label === label);
+              if (existing) existing.total += log.amount;
+              else acc.push({ label, total: log.amount });
+              return acc;
+            }, []).sort((a, b) => a.label.localeCompare(b.label)).slice(-7);
+
+            return (
+              <>
+                <Card className="border-none shadow-lg shadow-stone-200/50 rounded-[2rem] p-6 flex flex-col justify-between bg-mex-green text-white">
+                  <div>
+                    <TrendingUp size={24} className="mb-4 opacity-50" />
+                    <p className="text-[10px] font-black uppercase tracking-[0.2em] mb-1 opacity-80">Total Ventas</p>
+                    <h3 className="text-3xl font-serif">{formatCurrency(total)}</h3>
+                  </div>
+                  <p className="text-[10px] mt-4 opacity-60 font-bold uppercase">{count} Transacciones</p>
+                </Card>
+
+                <Card className="border-none shadow-lg shadow-stone-200/50 rounded-[2rem] p-6 flex flex-col justify-between bg-mex-gold text-white">
+                  <div>
+                    <Calendar size={24} className="mb-4 opacity-50" />
+                    <p className="text-[10px] font-black uppercase tracking-[0.2em] mb-1 opacity-80">Ticket Promedio</p>
+                    <h3 className="text-3xl font-serif">{formatCurrency(avg)}</h3>
+                  </div>
+                  <p className="text-[10px] mt-4 opacity-60 font-bold uppercase">Basado en periodo actual</p>
+                </Card>
+
+                <Card className="border-none shadow-lg shadow-stone-200/50 rounded-[2rem] p-6 bg-white md:col-span-1 min-h-[200px]">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-stone-400 mb-4">Tendencia Reciente</p>
+                  <ResponsiveContainer width="100%" height={120}>
+                    <BarChart data={chartData}>
+                      <Bar dataKey="total" radius={[4, 4, 0, 0]}>
+                        {chartData.map((_, index) => (
+                          <Cell key={`cell-${index}`} fill={index === chartData.length - 1 ? '#4F7C4F' : '#E5E7EB'} />
+                        ))}
+                      </Bar>
+                      <Tooltip 
+                        cursor={{ fill: 'transparent' }}
+                        content={({ active, payload }) => {
+                          if (active && payload && payload.length) {
+                            return (
+                              <div className="bg-stone-800 text-white p-2 rounded-lg text-[10px] shadow-xl">
+                                {formatCurrency(payload[0].value as number)}
+                              </div>
+                            );
+                          }
+                          return null;
+                        }}
+                      />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </Card>
+              </>
+            );
+          })()}
+        </div>
+      </div>
+
+      {/* Branding Section */}
+      <div className="grid grid-cols-1 gap-6 mb-8 pt-6 border-t border-stone-200">
+        <div className="flex items-center gap-3">
+          <div className="p-2 bg-mex-gold/10 text-mex-gold rounded-xl">
+            <ImageIcon size={20} />
+          </div>
+          <h2 className="text-xl font-serif text-stone-800">Identidad de la Marca</h2>
+        </div>
+
+        <Card className="border-none shadow-lg shadow-stone-200/50 rounded-[2.5rem] overflow-hidden bg-white">
+          <CardContent className="p-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
+              <div className="flex flex-col items-center gap-4">
+                <div className="w-32 h-32 rounded-full overflow-hidden border-4 border-mex-gold shadow-xl bg-mex-cream flex items-center justify-center relative group">
+                  {logoPreview ? (
+                    <img src={logoPreview} alt="Preview" className="w-full h-full object-cover" />
+                  ) : (
+                    <ImageIcon size={48} className="text-stone-300" />
+                  )}
+                  <label className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer">
+                    <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
+                    <Upload size={24} className="text-white" />
+                  </label>
+                </div>
+                <p className="text-[10px] font-black uppercase text-stone-400">Click para subir logo</p>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="text-[10px] font-black uppercase tracking-widest text-stone-400 mb-1 block">Nombre del Sistema</label>
+                  <input
+                    type="text"
+                    value={brandingSettings.appName}
+                    onChange={(e) => setBrandingSettings({ ...brandingSettings, appName: e.target.value })}
+                    className="w-full bg-stone-50 border-stone-100 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-mex-gold/20"
+                    placeholder="Ej. Las Cazuelas del Castor"
+                  />
+                </div>
+                <Button 
+                  variant="primary" 
+                  className="w-full h-12 bg-mex-brown hover:bg-mex-brown/90 rounded-xl font-black uppercase tracking-widest text-[10px]"
+                  onClick={saveBranding}
+                >
+                  Guardar Cambios
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Info Card - Original position, but updated content */}
+      <div className="bg-white/40 border border-stone-100 rounded-[2.5rem] p-6 flex flex-col items-center text-center backdrop-blur-sm shrink-0 mb-8">
+        <p className="text-stone-400 text-[10px] font-black uppercase tracking-widest">Fin del Reporte</p>
       </div>
 
       {/* Confirmation Modal */}

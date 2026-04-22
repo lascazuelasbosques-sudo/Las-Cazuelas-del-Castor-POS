@@ -5,8 +5,9 @@ import { Button } from "./Button";
 import { Card, CardContent } from "./Card";
 import { User } from "../types";
 import { auth, db } from "../firebase";
-import { LogIn, User as UserIcon, Lock } from "lucide-react";
+import { LogIn, User as UserIcon, Lock, Squirrel, RefreshCw } from "lucide-react";
 import toast from "react-hot-toast";
+import { useBranding } from "../lib/useBranding";
 
 interface LoginProps {
   onLogin: (user: User) => void;
@@ -18,7 +19,10 @@ export const Login = ({ onLogin }: LoginProps) => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
 
-  const logoUrl = "https://scontent.fmex3-3.fna.fbcdn.net/v/t39.30808-6/305224800_502697315191276_5159032473398491144_n.jpg?_nc_cat=101&ccb=1-7&_nc_sid=1d70fc&_nc_ohc=CxNRayDEeW8Q7kNvwFU9Nsv&_nc_oc=AdoOjXlYpF7dp9it8umJob6ZcAwUuBFAvCrJVNO2j9SC3EUZOvMN2nLdVAk26fvdOJs&_nc_zt=23&_nc_ht=scontent.fmex3-3.fna&_nc_gid=TAiJ3YiA-onkgw2dKf3Srw&_nc_ss=7a389&oh=00_Af3exLs62O6jgKBSzMrQ3Me4h893zsaVtuxLyHF4pTsrVQ&oe=69E840D8";
+  const { branding } = useBranding();
+  const logoUrl = branding.logoUrl;
+
+  const [imageError, setImageError] = useState(false);
 
   const handleCredentialsLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -170,15 +174,20 @@ export const Login = ({ onLogin }: LoginProps) => {
     <div className="min-h-screen flex items-center justify-center bg-mex-cream p-4">
       <Card className="w-full max-w-md border-none shadow-2xl overflow-hidden">
         <div className="bg-mex-brown p-8 flex flex-col items-center text-center text-white">
-          <div className="w-24 h-24 mb-4 rounded-full overflow-hidden border-4 border-mex-gold shadow-xl">
-            <img 
-              src={logoUrl} 
-              alt="Las Cazuelas del Castor" 
-              className="w-full h-full object-cover"
-              referrerPolicy="no-referrer"
-            />
+          <div className="w-24 h-24 mb-4 rounded-full overflow-hidden border-4 border-mex-gold shadow-xl bg-white flex items-center justify-center">
+            {imageError ? (
+              <Squirrel size={48} className="text-mex-brown" />
+            ) : (
+              <img 
+                src={logoUrl} 
+                alt="Las Cazuelas del Castor" 
+                className="w-full h-full object-cover"
+                referrerPolicy="no-referrer"
+                onError={() => setImageError(true)}
+              />
+            )}
           </div>
-          <h1 className="text-2xl font-serif">Las Cazuelas del Castor</h1>
+          <h1 className="text-2xl font-serif">{branding.appName}</h1>
           <p className="text-mex-gold text-sm font-bold italic">Punto de Venta</p>
         </div>
 
