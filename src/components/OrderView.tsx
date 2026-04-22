@@ -284,42 +284,70 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
           </div>
         </div>
 
-        <div className="flex-1 flex flex-col gap-2 md:gap-3 overflow-y-auto pr-1 pb-24 md:pb-6 no-scrollbar relative">
-          {products.filter(p => {
-            if (!p.available) return false;
-            if (searchQuery) {
-              const query = searchQuery.toLowerCase();
-              return (p.name && p.name.toLowerCase().includes(query)) || 
-                     (p.description && p.description.toLowerCase().includes(query));
-            }
-            return p.categoryId === selectedCategory;
-          }).map(product => (
-            <Card 
-              key={product.id} 
-              className="cursor-pointer hover:border-mex-green transition-all group active:scale-[0.98] border border-stone-100 shadow-sm rounded-xl bg-white"
-              onClick={() => handleProductClick(product)}
-            >
-              <CardContent className="p-2 md:p-3 flex items-center gap-3 md:gap-4">
-                <div className="w-12 h-12 md:w-16 md:h-16 bg-stone-50 rounded-lg flex items-center justify-center text-stone-300 shrink-0 overflow-hidden border border-stone-100">
-                  {product.imageUrl ? (
-                    <img src={product.imageUrl} alt={product.name} className="w-full h-full object-cover transition-transform group-hover:scale-110" referrerPolicy="no-referrer" />
-                  ) : (
-                    <Utensils size={20} />
-                  )}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <h3 className="font-bold text-stone-800 group-hover:text-mex-green truncate text-sm md:text-base">{product.name}</h3>
-                  <p className="text-[10px] md:text-xs text-stone-400 line-clamp-1 leading-tight">{product.description || 'Delicioso platillo tradicional'}</p>
-                </div>
-                <div className="shrink-0 flex items-center gap-3">
-                  <p className="font-black text-mex-terracotta text-sm md:text-base">{formatCurrency(product.price)}</p>
-                  <div className="w-8 h-8 rounded-full bg-mex-green/10 text-mex-green flex items-center justify-center group-hover:bg-mex-green group-hover:text-white transition-colors">
-                    <Plus size={18} />
+        <div className="flex-1 min-h-0 relative">
+          <div className="absolute inset-0 overflow-y-auto pr-1 pb-24 md:pb-6 no-scrollbar">
+            {(() => {
+              const currentProducts = products.filter(p => {
+                if (!p.available) return false;
+                if (searchQuery) {
+                  const query = searchQuery.toLowerCase();
+                  return (p.name && p.name.toLowerCase().includes(query)) || 
+                         (p.description && p.description.toLowerCase().includes(query));
+                }
+                return p.categoryId === selectedCategory;
+              });
+              
+              if (currentProducts.length === 0) {
+                return (
+                  <div className="flex flex-col h-full min-h-[300px] items-center justify-center text-center p-8 bg-white/50 rounded-2xl border border-stone-100 border-dashed">
+                    <div className="w-16 h-16 bg-stone-100 text-stone-300 rounded-full flex items-center justify-center mb-3">
+                      <Utensils size={24} />
+                    </div>
+                    <h3 className="font-bold text-stone-500 mb-1">Sin productos</h3>
+                    <p className="text-xs text-stone-400 max-w-[200px]">No hay platillos disponibles en esta categoría o búsqueda.</p>
                   </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+                );
+              }
+
+              return (
+                <div className="bg-white rounded-xl border border-stone-200 overflow-hidden shadow-sm">
+                  <table className="w-full text-left border-collapse">
+                    <tbody className="divide-y divide-stone-100">
+                      {currentProducts.map(product => (
+                      <tr 
+                        key={product.id} 
+                        onClick={() => handleProductClick(product)}
+                        className="hover:bg-stone-50 cursor-pointer active:bg-stone-100 transition-colors group"
+                      >
+                        <td className="p-2 md:p-3 w-16 align-middle">
+                          <div className="w-12 h-12 md:w-14 md:h-14 bg-stone-50 rounded-lg flex items-center justify-center text-stone-300 overflow-hidden shrink-0 border border-stone-100">
+                            {product.imageUrl ? (
+                              <img src={product.imageUrl} alt={product.name} className="w-full h-full object-cover transition-transform group-hover:scale-110" referrerPolicy="no-referrer" />
+                            ) : (
+                              <Utensils size={20} />
+                            )}
+                          </div>
+                        </td>
+                        <td className="p-2 md:p-3 align-middle">
+                          <h3 className="font-bold text-stone-800 text-sm md:text-base group-hover:text-mex-green leading-tight mb-0.5 break-words">{product.name}</h3>
+                          <p className="text-[10px] md:text-xs text-stone-400 line-clamp-2 pr-2 leading-snug">{product.description || 'Delicioso platillo tradicional'}</p>
+                        </td>
+                        <td className="p-2 md:p-3 align-middle text-right whitespace-nowrap">
+                          <span className="font-black text-mex-terracotta text-sm md:text-base">{formatCurrency(product.price)}</span>
+                        </td>
+                        <td className="p-2 md:p-3 w-12 align-middle text-right pr-3 md:pr-4">
+                           <div className="inline-flex w-8 h-8 rounded-full bg-stone-100 text-mex-green items-center justify-center group-hover:bg-mex-green group-hover:text-white transition-colors">
+                             <Plus size={18} />
+                           </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            );
+          })()}
+          </div>
         </div>
       </div>
 
