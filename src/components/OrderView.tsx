@@ -286,7 +286,7 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
           </div>
         </div>
 
-        <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-3 md:gap-4 overflow-y-auto pr-1 pb-24 md:pb-6 no-scrollbar">
+        <div className="flex flex-col gap-2 md:gap-3 overflow-y-auto pr-1 pb-24 md:pb-6 no-scrollbar">
           {products.filter(p => {
             if (!p.available) return false;
             if (searchQuery) {
@@ -298,23 +298,23 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
           }).map(product => (
             <Card 
               key={product.id} 
-              className="cursor-pointer hover:border-mex-green transition-all group active:scale-[0.98] border border-stone-100 shadow-sm"
+              className="cursor-pointer hover:border-mex-green transition-all group active:scale-[0.98] border border-stone-100 shadow-sm rounded-xl bg-white"
               onClick={() => handleProductClick(product)}
             >
-              <CardContent className="p-3 flex items-center gap-3">
-                <div className="w-16 h-16 bg-stone-50 rounded-xl flex items-center justify-center text-stone-300 shrink-0 overflow-hidden border border-stone-100">
+              <CardContent className="p-2 md:p-3 flex items-center gap-3 md:gap-4">
+                <div className="w-12 h-12 md:w-16 md:h-16 bg-stone-50 rounded-lg flex items-center justify-center text-stone-300 shrink-0 overflow-hidden border border-stone-100">
                   {product.imageUrl ? (
                     <img src={product.imageUrl} alt={product.name} className="w-full h-full object-cover transition-transform group-hover:scale-110" referrerPolicy="no-referrer" />
                   ) : (
-                    <Utensils size={28} />
+                    <Utensils size={20} />
                   )}
                 </div>
                 <div className="flex-1 min-w-0">
                   <h3 className="font-bold text-stone-800 group-hover:text-mex-green truncate text-sm md:text-base">{product.name}</h3>
                   <p className="text-[10px] md:text-xs text-stone-400 line-clamp-1 leading-tight">{product.description || 'Delicioso platillo tradicional'}</p>
-                  <p className="font-black text-mex-terracotta mt-1 text-sm md:text-base">{formatCurrency(product.price)}</p>
                 </div>
-                <div className="shrink-0">
+                <div className="shrink-0 flex items-center gap-3">
+                  <p className="font-black text-mex-terracotta text-sm md:text-base">{formatCurrency(product.price)}</p>
                   <div className="w-8 h-8 rounded-full bg-mex-green/10 text-mex-green flex items-center justify-center group-hover:bg-mex-green group-hover:text-white transition-colors">
                     <Plus size={18} />
                   </div>
