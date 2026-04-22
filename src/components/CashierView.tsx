@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { CreditCard, DollarSign, Receipt, TrendingUp, TrendingDown, Clock, CheckCircle2, Trash2, Edit2, Plus, X, AlertTriangle } from "lucide-react";
+import { CreditCard, DollarSign, Receipt, TrendingUp, TrendingDown, Clock, CheckCircle2, Trash2, Edit2, Plus, X, AlertTriangle, History } from "lucide-react";
 import { Button } from "./Button";
 import { Card, CardContent, CardHeader, CardFooter } from "./Card";
 import { formatCurrency, cn, customRound } from "@/src/lib/utils";
@@ -83,7 +83,7 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
   useEffect(() => {
     const qOrders = query(
       collection(db, "orders"),
-      where("status", "in", ["ready", "served"]),
+      where("status", "in", ["pending", "preparing", "ready", "served"]),
       orderBy("createdAt", "asc")
     );
 
@@ -116,23 +116,28 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
   const handleConfirmPayment = async () => {
     if (!selectedGroup || !auth.currentUser) return;
 
+    const toastId = toast.loading("Registrando pago...");
     try {
+      const batch = writeBatch(db);
+      
       // Update all orders in the group to paid
-      await Promise.all(selectedGroup.orders.map(order => {
+      selectedGroup.orders.forEach(order => {
         const orderCardFee = paymentMethod === 'card' ? customRound(order.total * CARD_FEE_PERCENTAGE) : 0;
         const orderTotal = customRound(order.total + orderCardFee);
         
-        return updateDoc(doc(db, "orders", order.id), {
+        const orderRef = doc(db, "orders", order.id);
+        batch.update(orderRef, {
           status: 'paid',
           paymentMethod,
           cardFee: orderCardFee,
           total: orderTotal,
           updatedAt: new Date().toISOString()
         });
-      }));
+      });
 
       // Add cash log entry
-      await addDoc(collection(db, "cashLogs"), {
+      const logRef = doc(collection(db, "cashLogs"));
+      batch.set(logRef, {
         type: 'income',
         amount: finalTotal,
         reason: `Pago ${selectedGroup.displayTitle} (${paymentMethod === 'card' ? 'Tarjeta' : 'Efectivo'}) - Folios: ${selectedGroup.folios.join(', ')}`,
@@ -141,12 +146,16 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
         userName: auth.currentUser.displayName || auth.currentUser.email
       });
 
+      await batch.commit();
+
       setShowPaymentModal(false);
       setSelectedGroup(null);
       setPaymentMethod('cash');
-      toast.success("Pago registrado correctamente");
+      toast.success("Pago registrado correctamente", { id: toastId });
     } catch (error) {
+      console.error("Error in handleConfirmPayment:", error);
       handleFirestoreError(error, OperationType.WRITE, "orders/cashLogs");
+      toast.error("Error al procesar el pago", { id: toastId });
     }
   };
 
