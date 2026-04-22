@@ -255,7 +255,6 @@ export const KitchenView = ({ onEditOrder }: KitchenViewProps) => {
                             <span className="text-[10px] bg-stone-200 text-stone-600 px-1.5 py-0.5 rounded font-bold uppercase">Listo</span>
                           )}
                         </div>
-                        {item.hasExtraCheese && <p className="text-xs text-mex-gold font-bold">🧀 CON QUESO EXTRA</p>}
                         {item.notes && <p className="text-xs text-mex-red italic">{item.notes}</p>}
                       </div>
                     </div>

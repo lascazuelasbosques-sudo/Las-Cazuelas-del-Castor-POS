@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Search, Plus, Minus, ShoppingCart, Utensils as UtensilsIcon, History, X } from "lucide-react";
 import { Button } from "./Button";
-import { Card, CardContent } from "./Card";
+import { Card, CardContent, CardHeader, CardFooter } from "./Card";
 import { formatCurrency, cn, customRound } from "@/src/lib/utils";
 import { Product, Category, OrderItem, Order, OrderStatus } from "@/src/types";
 import { db, auth } from "../firebase";
@@ -76,6 +76,8 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
     };
   }, []);
 
+  const [productToCustomize, setProductToCustomize] = useState<Product | null>(null);
+
   useEffect(() => {
     if (orderToEdit) {
       // If coming from Cashier to edit a specific order (e.g. to fix a mistake)
@@ -93,6 +95,14 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
       }
     }
   }, [orderToEdit]);
+
+  const handleProductClick = (product: Product) => {
+    if (product.allowsExtraCheese) {
+      setProductToCustomize(product);
+    } else {
+      addToCart(product, false);
+    }
+  };
 
   const addToCart = (product: Product, hasExtraCheese: boolean = false) => {
     setCart(prev => {
@@ -112,7 +122,7 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
       }
       return [...prev, { 
         productId: product.id, 
-        name: product.name, 
+        name: product.name + (hasExtraCheese ? ' (Queso Extra)' : ''), 
         price: product.price + (hasExtraCheese ? 8 : 0), 
         quantity: 1,
         status: 'pending',
@@ -285,7 +295,7 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
             <Card 
               key={product.id} 
               className="cursor-pointer hover:border-mex-green transition-colors group active:scale-[0.98]"
-              onClick={() => addToCart(product)}
+              onClick={() => handleProductClick(product)}
             >
               <CardContent className="p-3 flex items-center gap-3">
                 <div className="w-14 h-14 bg-stone-100 rounded-lg flex items-center justify-center text-stone-400 shrink-0">
@@ -301,18 +311,6 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
                   <p className="font-bold text-mex-terracotta mt-0.5">{formatCurrency(product.price)}</p>
                 </div>
                 <div className="shrink-0 flex items-center gap-2">
-                  {product.allowsExtraCheese && (
-                    <button 
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        addToCart(product, true);
-                      }}
-                      className="px-2 py-1 rounded text-[10px] font-bold bg-mex-gold/20 text-mex-gold border border-mex-gold flex items-center hover:bg-mex-gold/30 transition-colors"
-                      title="Agregar con queso extra (+$8)"
-                    >
-                      🧀 Extra
-                    </button>
-                  )}
                   <div className="w-8 h-8 rounded-full bg-mex-green/10 text-mex-green flex items-center justify-center">
                     <Plus size={18} />
                   </div>
@@ -440,9 +438,6 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
                   </div>
                   <div className="flex flex-col gap-0.5">
                     <p className="text-xs text-stone-500">{formatCurrency(item.price)} c/u</p>
-                    {item.hasExtraCheese && (
-                      <p className="text-[10px] text-mex-gold font-bold">🧀 + Queso Extra</p>
-                    )}
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
@@ -507,6 +502,45 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
           </div>
         </div>
       </div>
+
+      {/* Extra Cheese Customization Modal */}
+      {productToCustomize && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[150] p-4">
+          <Card className="w-full max-w-sm">
+            <CardHeader className="bg-mex-gold text-white">
+              <h3 className="text-xl font-serif">Opciones para {productToCustomize.name}</h3>
+            </CardHeader>
+            <CardContent className="p-6 space-y-4 text-center">
+              <div className="mx-auto w-16 h-16 bg-yellow-50 text-mex-gold rounded-full flex items-center justify-center mb-2">
+                <span className="text-3xl">🧀</span>
+              </div>
+              <p className="text-stone-700 font-medium">¿Deseas agregar queso extra a este platillo?</p>
+            </CardContent>
+            <CardFooter className="flex gap-3">
+              <Button 
+                variant="outline" 
+                className="flex-1" 
+                onClick={() => {
+                  addToCart(productToCustomize, false);
+                  setProductToCustomize(null);
+                }}
+              >
+                Normal
+              </Button>
+              <Button 
+                variant="primary" 
+                className="flex-1 gap-2 bg-mex-gold hover:bg-yellow-600 border-mex-gold text-white" 
+                onClick={() => {
+                  addToCart(productToCustomize, true);
+                  setProductToCustomize(null);
+                }}
+              >
+                + Extra ($8)
+              </Button>
+            </CardFooter>
+          </Card>
+        </div>
+      )}
     </div>
   );
 };
