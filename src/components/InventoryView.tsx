@@ -233,11 +233,11 @@ export const InventoryView = ({ userRole = 'waiter' }: InventoryViewProps) => {
 
       <div className="flex-1 overflow-y-auto pr-1 pb-24 md:pb-8 no-scrollbar">
         {/* Mobile Card Layout */}
-        <div className="grid grid-cols-1 sm:hidden gap-4">
+        <div className="grid grid-cols-1 sm:hidden gap-4 pb-32">
           {filteredProducts.map(product => (
-            <Card key={product.id} className="border-none shadow-md overflow-hidden transform active:scale-[0.98] transition-all">
+            <Card key={product.id} className="border-none shadow-md overflow-hidden transform active:scale-[0.98] transition-all bg-white rounded-2xl">
               <div className="flex">
-                <div className="w-24 h-24 sm:w-32 sm:h-32 bg-stone-100 shrink-0 relative overflow-hidden">
+                <div className="w-28 h-28 sm:w-32 sm:h-32 bg-stone-50 shrink-0 relative overflow-hidden border-r border-stone-100">
                   {product.imageUrl ? (
                     <img 
                       src={product.imageUrl} 
@@ -246,67 +246,66 @@ export const InventoryView = ({ userRole = 'waiter' }: InventoryViewProps) => {
                       referrerPolicy="no-referrer"
                     />
                   ) : (
-                    <div className="w-full h-full flex items-center justify-center text-stone-300">
-                      <ImageIcon size={32} />
+                    <div className="w-full h-full flex items-center justify-center text-stone-200">
+                      <ImageIcon size={40} />
                     </div>
                   )}
                   {product.stock <= 5 && (
-                    <div className="absolute top-0 left-0 bg-mex-red text-white p-1 rounded-br-lg shadow-md">
-                      <AlertTriangle size={14} />
+                    <div className="absolute top-0 left-0 bg-mex-red text-white p-1.5 rounded-br-xl shadow-lg animate-pulse">
+                      <AlertTriangle size={16} />
                     </div>
                   )}
                 </div>
                 <div className="flex-1 p-4 flex flex-col justify-between min-w-0">
                   <div>
                     <div className="flex justify-between items-start gap-2">
-                      <h3 className="font-black text-stone-800 text-base leading-tight truncate">{product.name}</h3>
+                      <h3 className="font-black text-stone-800 text-sm leading-tight truncate uppercase tracking-tighter">{product.name}</h3>
                       <p className="font-black text-mex-terracotta text-sm whitespace-nowrap">{formatCurrency(product.price)}</p>
                     </div>
-                    <p className="text-[10px] text-stone-400 line-clamp-1 mt-0.5">{product.description}</p>
-                    <div className="flex flex-wrap gap-1.5 mt-2">
+                    <p className="text-[9px] text-stone-400 line-clamp-2 mt-1 italic leading-tight">
+                      {product.description || 'Sin descripción detallada'}
+                    </p>
+                    <div className="flex flex-wrap gap-1.5 mt-2.5">
                       <span className={cn(
-                        "text-[8px] px-1.5 py-0.5 rounded-md font-black uppercase tracking-tighter",
+                        "text-[8px] px-2 py-0.5 rounded-lg font-black uppercase tracking-widest",
                         product.station === 'plancha' ? "bg-orange-50 text-orange-600 border border-orange-100" : "bg-blue-50 text-blue-600 border border-blue-100"
                       )}>
                         {product.station === 'plancha' ? 'Parrilla' : 'Cocina'}
                       </span>
-                      <span className="text-[8px] px-1.5 py-0.5 rounded-md font-black uppercase tracking-tighter bg-stone-50 text-stone-400 border border-stone-100">
+                      <span className="text-[8px] px-2 py-0.5 rounded-lg font-black uppercase tracking-widest bg-stone-50 text-stone-400 border border-stone-100">
                         {categories.find(c => c.id === product.categoryId)?.name || 'General'}
                       </span>
+                      {!product.available && (
+                        <span className="text-[8px] px-2 py-0.5 rounded-lg font-black uppercase tracking-widest bg-red-50 text-mex-red border border-red-100">
+                          Inactivo
+                        </span>
+                      )}
                     </div>
                   </div>
                   
-                  <div className="flex items-center justify-between mt-3 pt-2 border-t border-stone-50">
-                    <div className="flex items-center gap-2">
-                      <span className="text-[9px] font-black text-stone-400 uppercase tracking-widest">Stock:</span>
+                  <div className="flex items-center justify-between mt-3 pt-3 border-t border-stone-50">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[8px] font-black text-stone-300 uppercase tracking-widest">Existencia:</span>
                       <span className={cn(
-                        "font-black text-xs px-2 py-0.5 rounded-lg",
-                        product.stock <= 10 ? "bg-red-50 text-mex-red" : "bg-green-50 text-mex-green"
+                        "font-black text-[11px] px-2.5 py-1 rounded-full shadow-sm",
+                        product.stock <= 10 ? "bg-red-50 text-mex-red border border-red-100" : "bg-stone-50 text-mex-green border border-stone-100"
                       )}>
                         {product.stock}
                       </span>
                     </div>
-                    <div className="flex gap-1">
+                    <div className="flex gap-0.5">
                       <button 
                         onClick={() => openEditModal(product)}
-                        className="p-2 text-stone-400 hover:text-mex-green transition-colors"
+                        className="p-2.5 text-stone-400 hover:text-mex-green active:bg-stone-50 rounded-xl transition-all"
                       >
-                        <Edit2 size={16} />
+                        <Edit2 size={18} />
                       </button>
                       <button 
                         onClick={() => handleDuplicateProduct(product)}
-                        className="p-2 text-stone-400 hover:text-mex-gold transition-colors"
+                        className="p-2.5 text-stone-400 hover:text-mex-gold active:bg-stone-50 rounded-xl transition-all"
                       >
-                        <Copy size={16} />
+                        <Copy size={18} />
                       </button>
-                      {userRole === 'admin' && (
-                        <button 
-                          onClick={() => handleDeleteProduct(product.id)}
-                          className="p-2 text-stone-400 hover:text-red-600 transition-colors"
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      )}
                     </div>
                   </div>
                 </div>

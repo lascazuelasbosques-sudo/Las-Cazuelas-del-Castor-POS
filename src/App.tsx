@@ -180,7 +180,7 @@ export default function App() {
   };
 
   return (
-    <div className="flex flex-col md:flex-row h-screen bg-mex-cream overflow-hidden">
+    <div className="flex flex-col md:flex-row h-[100dvh] w-screen bg-mex-cream overflow-hidden">
       <Navbar 
         activeTab={activeTab} 
         setActiveTab={setActiveTab} 
@@ -189,8 +189,10 @@ export default function App() {
         onLogout={handleLogout}
       />
       
-      <main className="flex-1 overflow-hidden pb-20 md:pb-0">
-        {renderView()}
+      <main className="flex-1 overflow-hidden relative">
+        <div className="absolute inset-0 overflow-hidden">
+          {renderView()}
+        </div>
       </main>
 
       <Toaster position="top-right" />

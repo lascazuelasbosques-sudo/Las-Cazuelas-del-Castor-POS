@@ -163,12 +163,12 @@ export const KitchenView = ({ onEditOrder }: KitchenViewProps) => {
           </div>
         </div>
 
-        <div className="flex bg-white p-1 rounded-2xl shadow-sm border border-stone-100 self-start sm:self-auto overflow-x-auto no-scrollbar max-w-full">
+        <div className="flex bg-white p-1.5 rounded-2xl shadow-sm border border-stone-100 self-start sm:self-auto overflow-x-auto no-scrollbar max-w-full">
           <button 
             onClick={() => setActiveStation('all')}
             className={cn(
-              "px-4 py-2 rounded-xl text-xs font-bold uppercase transition-all whitespace-nowrap",
-              activeStation === 'all' ? "bg-mex-brown text-white shadow-md" : "text-stone-400 hover:text-stone-600"
+              "px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap",
+              activeStation === 'all' ? "bg-mex-brown text-white shadow-md scale-100" : "text-stone-400 hover:text-stone-600 active:scale-95"
             )}
           >
             Todas
@@ -176,8 +176,8 @@ export const KitchenView = ({ onEditOrder }: KitchenViewProps) => {
           <button 
             onClick={() => setActiveStation('cocina')}
             className={cn(
-              "px-4 py-2 rounded-xl text-xs font-bold uppercase transition-all whitespace-nowrap",
-              activeStation === 'cocina' ? "bg-blue-600 text-white shadow-md" : "text-stone-400 hover:text-stone-600"
+              "px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap border border-transparent",
+              activeStation === 'cocina' ? "bg-blue-600 text-white shadow-md border-blue-500 scale-100" : "text-stone-400 hover:text-stone-600 active:scale-95"
             )}
           >
             Cocina
@@ -185,8 +185,8 @@ export const KitchenView = ({ onEditOrder }: KitchenViewProps) => {
           <button 
             onClick={() => setActiveStation('plancha')}
             className={cn(
-              "px-4 py-2 rounded-xl text-xs font-bold uppercase transition-all whitespace-nowrap",
-              activeStation === 'plancha' ? "bg-orange-600 text-white shadow-md" : "text-stone-400 hover:text-stone-600"
+              "px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap border border-transparent",
+              activeStation === 'plancha' ? "bg-orange-600 text-white shadow-md border-orange-500 scale-100" : "text-stone-400 hover:text-stone-600 active:scale-95"
             )}
           >
             Parrilla

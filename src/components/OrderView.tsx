@@ -262,10 +262,10 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
               placeholder="Buscar antojito..." 
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-3 md:py-2 rounded-xl border border-stone-200 focus:outline-none focus:ring-2 focus:ring-mex-green/20 text-base shadow-sm"
+              className="w-full pl-10 pr-4 py-3 md:py-2 rounded-xl border border-stone-200 focus:outline-none focus:ring-2 focus:ring-mex-green/20 text-sm md:text-base shadow-sm"
             />
           </div>
-          <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar -mx-1 px-1">
+          <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar -mx-3 px-3 sm:mx-0 sm:px-0 scroll-smooth">
             {categories.map(cat => (
               <Button
                 key={cat.id}
@@ -275,7 +275,10 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
                   setSelectedCategory(cat.id);
                   setSearchQuery(''); // Clear search when selecting category
                 }}
-                className="whitespace-nowrap px-4 py-2 h-9 rounded-full shadow-sm"
+                className={cn(
+                  "whitespace-nowrap px-4 py-2 h-9 rounded-full shadow-sm text-xs font-bold uppercase tracking-wider",
+                  selectedCategory === cat.id ? "bg-mex-green text-white" : "bg-white text-stone-500 border border-stone-100"
+                )}
               >
                 {cat.name}
               </Button>
@@ -283,7 +286,7 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
           </div>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-2 md:gap-4 overflow-y-auto pr-1 pb-24 md:pb-6">
+        <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-3 md:gap-4 overflow-y-auto pr-1 pb-24 md:pb-6 no-scrollbar">
           {products.filter(p => {
             if (!p.available) return false;
             if (searchQuery) {
@@ -294,24 +297,24 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
           }).map(product => (
             <Card 
               key={product.id} 
-              className="cursor-pointer hover:border-mex-green transition-colors group active:scale-[0.98]"
+              className="cursor-pointer hover:border-mex-green transition-all group active:scale-[0.98] border border-stone-100 shadow-sm"
               onClick={() => handleProductClick(product)}
             >
               <CardContent className="p-3 flex items-center gap-3">
-                <div className="w-14 h-14 bg-stone-100 rounded-lg flex items-center justify-center text-stone-400 shrink-0">
+                <div className="w-16 h-16 bg-stone-50 rounded-xl flex items-center justify-center text-stone-300 shrink-0 overflow-hidden border border-stone-100">
                   {product.imageUrl ? (
-                    <img src={product.imageUrl} alt={product.name} className="w-full h-full object-cover rounded-lg" referrerPolicy="no-referrer" />
+                    <img src={product.imageUrl} alt={product.name} className="w-full h-full object-cover transition-transform group-hover:scale-110" referrerPolicy="no-referrer" />
                   ) : (
-                    <Utensils size={24} />
+                    <Utensils size={28} />
                   )}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <h3 className="font-bold text-stone-800 group-hover:text-mex-green truncate">{product.name}</h3>
-                  <p className="text-[11px] text-stone-500 line-clamp-1">{product.description}</p>
-                  <p className="font-bold text-mex-terracotta mt-0.5">{formatCurrency(product.price)}</p>
+                  <h3 className="font-bold text-stone-800 group-hover:text-mex-green truncate text-sm md:text-base">{product.name}</h3>
+                  <p className="text-[10px] md:text-xs text-stone-400 line-clamp-1 leading-tight">{product.description || 'Delicioso platillo tradicional'}</p>
+                  <p className="font-black text-mex-terracotta mt-1 text-sm md:text-base">{formatCurrency(product.price)}</p>
                 </div>
-                <div className="shrink-0 flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-full bg-mex-green/10 text-mex-green flex items-center justify-center">
+                <div className="shrink-0">
+                  <div className="w-8 h-8 rounded-full bg-mex-green/10 text-mex-green flex items-center justify-center group-hover:bg-mex-green group-hover:text-white transition-colors">
                     <Plus size={18} />
                   </div>
                 </div>
