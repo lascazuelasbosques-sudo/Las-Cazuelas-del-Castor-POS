@@ -27,6 +27,14 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
     function isEmailAdmin() {
       return isAuthenticated() && 
              request.auth.token.email == "lascazuelasbosques@gmail.com" && 
@@ -40,11 +48,12 @@ service cloud.firestore {
     }
 
     // Staff can be identified by being authenticated (even anonymously)
-    // For more security, we could check a 'role' in their document, 
-    // but since we use a custom POS login, we'll allow authenticated users to perform staff duties
-    // while strictly restricting deletions to admins.
     function isStaff() {
       return isAuthenticated();
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
     }
 
     function isValidUser(data) {
@@ -54,7 +63,27 @@ service cloud.firestore {
     }
 
     match /users/{userId} {
-      allow read, write: if isAuthenticated();
+      // allow get: users can see their own profile, admins can see everyone
+      allow get: if isAuthenticated() && (isOwner(userId) || isAdmin());
+      
+      // allow list: admins can list all. 
+      // Staff (even anonymous) can search for a user document by username for login verification
+      allow list: if isAdmin() || (isStaff() && resource.data.username != "");
+
+      allow create: if isStaff() && isValidUser(request.resource.data) && (
+        request.auth.uid == userId || isAdmin()
+      );
+      
+      allow update: if (isOwner(userId) || isAdmin()) && isValidUser(request.resource.data) && (
+        // Prevent changing your own role if not admin
+        (isAdmin()) || (incoming().role == existing().role)
+      );
+      
+      allow delete: if isAdmin() && userId != request.auth.uid; // Prevent self-deletion
+    }
+
+    match /test/connection {
+      allow read: if true;
     }
 
     match /categories/{catId} {

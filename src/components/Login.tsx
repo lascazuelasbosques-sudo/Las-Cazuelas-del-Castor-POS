@@ -107,12 +107,9 @@ export const Login = ({ onLogin }: LoginProps) => {
   const handleGoogleLogin = async () => {
     setLoading(true);
     try {
-      // If we are currently anonymous (from a previous failed/partial login), sign out first
-      if (auth.currentUser?.isAnonymous) {
-        await auth.signOut();
-      }
-      
       const provider = new GoogleAuthProvider();
+      // CRITICAL: signInWithPopup must be called as soon as possible after user interaction.
+      // Any 'await' before this call (like signing out an anonymous user) may cause the browser to block the popup.
       const result = await signInWithPopup(auth, provider);
       const user = result.user;
 
@@ -157,8 +154,10 @@ export const Login = ({ onLogin }: LoginProps) => {
       console.error("Login error:", error);
       if (error.code === 'auth/popup-closed-by-user') {
         toast.error("Inicio de sesión cancelado");
+      } else if (error.code === 'auth/popup-blocked') {
+        toast.error("Ventana emergente bloqueada por el navegador. Por favor permite las ventanas emergentes o intenta abrir la app en una pestaña nueva.", { duration: 6000 });
       } else if (error.code === 'auth/unauthorized-domain') {
-        toast.error("Dominio no autorizado. Debes agregar tu URL de Netlify en la consola de Firebase (Authentication > Settings > Authorized domains).", { duration: 8000 });
+        toast.error("Dominio no autorizado. Debes agregar esta URL en la consola de Firebase (Authentication > Settings > Authorized domains).", { duration: 8000 });
       } else {
         toast.error("Error al iniciar sesión con Google: " + (error.message || "Error desconocido"));
       }
