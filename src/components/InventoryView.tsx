@@ -1,5 +1,5 @@
 import { useState, useEffect, FormEvent, ChangeEvent } from "react";
-import { Package, Plus, Search, Edit2, Trash2, AlertTriangle, X, Save, Image as ImageIcon, CheckCircle2, Copy, Upload } from "lucide-react";
+import { Package, Plus, Search, Edit2, Trash2, AlertTriangle, X, Save, Image as ImageIcon, CheckCircle2, Copy, Upload, DollarSign } from "lucide-react";
 import { Button } from "./Button";
 import { Card, CardContent, CardHeader, CardFooter } from "./Card";
 import { formatCurrency, cn } from "@/src/lib/utils";
@@ -196,109 +196,130 @@ export const InventoryView = ({ userRole = 'waiter' }: InventoryViewProps) => {
   }
 
   return (
-    <div className="p-3 md:p-6 h-full overflow-hidden flex flex-col gap-4 md:gap-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <h1 className="text-xl md:text-2xl font-serif text-mex-terracotta">Inventario</h1>
-        <Button variant="primary" className="gap-2 h-11" onClick={openAddModal}>
-          <Plus size={18} />
-          Nuevo Producto
+    <div className="p-4 md:p-8 h-full overflow-hidden flex flex-col bg-mex-cream">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 md:mb-8 shrink-0">
+        <div>
+          <h1 className="text-2xl md:text-3xl font-serif text-mex-brown">Inventario</h1>
+          <p className="text-[10px] text-stone-400 font-bold uppercase tracking-widest mt-1">Gestión de Productos y Stock</p>
+        </div>
+        <Button 
+          variant="primary" 
+          className="gap-2 h-12 shadow-lg shadow-mex-green/20 bg-mex-green hover:bg-mex-green/90 rounded-xl" 
+          onClick={openAddModal}
+        >
+          <Plus size={20} />
+          <span className="font-bold uppercase tracking-widest text-xs">Nuevo Producto</span>
         </Button>
       </div>
 
-      <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" size={20} />
+      <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center mb-6 shrink-0">
+        <div className="relative flex-1 group">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-stone-400 transition-colors group-focus-within:text-mex-green" size={20} />
           <input 
             type="text" 
-            placeholder="Buscar..." 
+            placeholder="Buscar por nombre..." 
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-3 md:py-2 rounded-xl border border-stone-200 focus:outline-none focus:ring-2 focus:ring-mex-green/20 text-base"
+            className="w-full pl-12 pr-4 py-4 rounded-2xl border-none bg-white shadow-sm focus:ring-2 focus:ring-mex-green/20 text-base font-medium placeholder:text-stone-300 transition-all shadow-stone-200/50"
           />
         </div>
-        <Button variant="outline" className="gap-2 h-11">
-          Categorías
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" className="flex-1 sm:flex-none gap-2 h-14 rounded-2xl bg-white border-none shadow-sm whitespace-nowrap px-6">
+            <Package size={18} className="text-mex-gold" />
+            Categorías
+          </Button>
+        </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto pr-1 pb-24 md:pb-6">
+      <div className="flex-1 overflow-y-auto pr-1 pb-24 md:pb-8 no-scrollbar">
         {/* Mobile Card Layout */}
-        <div className="grid grid-cols-1 sm:hidden gap-3">
+        <div className="grid grid-cols-1 sm:hidden gap-4">
           {filteredProducts.map(product => (
-            <Card key={product.id} className="overflow-hidden">
-              <CardContent className="p-4">
-                <div className="flex justify-between items-start mb-2">
+            <Card key={product.id} className="border-none shadow-md overflow-hidden transform active:scale-[0.98] transition-all">
+              <div className="flex">
+                <div className="w-24 h-24 sm:w-32 sm:h-32 bg-stone-100 shrink-0 relative overflow-hidden">
+                  {product.imageUrl ? (
+                    <img 
+                      src={product.imageUrl} 
+                      alt={product.name} 
+                      className="w-full h-full object-cover"
+                      referrerPolicy="no-referrer"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-stone-300">
+                      <ImageIcon size={32} />
+                    </div>
+                  )}
+                  {product.stock <= 5 && (
+                    <div className="absolute top-0 left-0 bg-mex-red text-white p-1 rounded-br-lg shadow-md">
+                      <AlertTriangle size={14} />
+                    </div>
+                  )}
+                </div>
+                <div className="flex-1 p-4 flex flex-col justify-between min-w-0">
                   <div>
-                    <h3 className="font-bold text-stone-800">{product.name}</h3>
-                    <p className="text-xs text-stone-500 line-clamp-1">{product.description}</p>
+                    <div className="flex justify-between items-start gap-2">
+                      <h3 className="font-black text-stone-800 text-base leading-tight truncate">{product.name}</h3>
+                      <p className="font-black text-mex-terracotta text-sm whitespace-nowrap">{formatCurrency(product.price)}</p>
+                    </div>
+                    <p className="text-[10px] text-stone-400 line-clamp-1 mt-0.5">{product.description}</p>
+                    <div className="flex flex-wrap gap-1.5 mt-2">
+                      <span className={cn(
+                        "text-[8px] px-1.5 py-0.5 rounded-md font-black uppercase tracking-tighter",
+                        product.station === 'plancha' ? "bg-orange-50 text-orange-600 border border-orange-100" : "bg-blue-50 text-blue-600 border border-blue-100"
+                      )}>
+                        {product.station === 'plancha' ? 'Parrilla' : 'Cocina'}
+                      </span>
+                      <span className="text-[8px] px-1.5 py-0.5 rounded-md font-black uppercase tracking-tighter bg-stone-50 text-stone-400 border border-stone-100">
+                        {categories.find(c => c.id === product.categoryId)?.name || 'General'}
+                      </span>
+                    </div>
                   </div>
-                  <p className="font-bold text-mex-terracotta">{formatCurrency(product.price)}</p>
-                </div>
-                <div className="flex flex-wrap gap-2 mb-3">
-                  <span className={cn(
-                    "text-[10px] px-2 py-0.5 rounded-full font-bold uppercase",
-                    product.station === 'plancha' ? "bg-orange-100 text-orange-700" : "bg-blue-100 text-blue-700"
-                  )}>
-                    {product.station === 'plancha' ? 'Plancha' : 'Cocina'}
-                  </span>
-                  <span className="text-[10px] px-2 py-0.5 rounded-full font-bold uppercase bg-stone-100 text-stone-600">
-                    {categories.find(c => c.id === product.categoryId)?.name || 'Sin categoría'}
-                  </span>
-                  <span className={cn(
-                    "text-[10px] px-2 py-0.5 rounded-full font-bold uppercase border",
-                    product.available 
-                      ? "bg-mex-green/10 text-mex-green border-mex-green/20" 
-                      : "bg-stone-100 text-stone-400 border-stone-200"
-                  )}>
-                    {product.available ? 'Activo' : 'Inactivo'}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between pt-3 border-t border-stone-100">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-stone-500">Stock:</span>
-                    <span className={cn(
-                      "font-bold text-sm",
-                      product.stock <= 10 ? "text-mex-red" : "text-stone-800"
-                    )}>
-                      {product.stock}
-                    </span>
-                    {product.stock <= 10 && <AlertTriangle size={14} className="text-mex-red" />}
-                  </div>
-                  <div className="flex gap-2">
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
-                      className="h-9 w-9 p-0 text-stone-400 hover:text-mex-green"
-                      onClick={() => openEditModal(product)}
-                      title="Editar"
-                    >
-                      <Edit2 size={18} />
-                    </Button>
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
-                      className="h-9 w-9 p-0 text-stone-400 hover:text-mex-gold"
-                      onClick={() => handleDuplicateProduct(product)}
-                      title="Duplicar"
-                    >
-                      <Copy size={18} />
-                    </Button>
-                    {userRole === 'admin' && (
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
-                        className="h-9 w-9 p-0 text-stone-400 hover:text-mex-red"
-                        onClick={() => handleDeleteProduct(product.id)}
-                        title="Eliminar"
+                  
+                  <div className="flex items-center justify-between mt-3 pt-2 border-t border-stone-50">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[9px] font-black text-stone-400 uppercase tracking-widest">Stock:</span>
+                      <span className={cn(
+                        "font-black text-xs px-2 py-0.5 rounded-lg",
+                        product.stock <= 10 ? "bg-red-50 text-mex-red" : "bg-green-50 text-mex-green"
+                      )}>
+                        {product.stock}
+                      </span>
+                    </div>
+                    <div className="flex gap-1">
+                      <button 
+                        onClick={() => openEditModal(product)}
+                        className="p-2 text-stone-400 hover:text-mex-green transition-colors"
                       >
-                        <Trash2 size={18} />
-                      </Button>
-                    )}
+                        <Edit2 size={16} />
+                      </button>
+                      <button 
+                        onClick={() => handleDuplicateProduct(product)}
+                        className="p-2 text-stone-400 hover:text-mex-gold transition-colors"
+                      >
+                        <Copy size={16} />
+                      </button>
+                      {userRole === 'admin' && (
+                        <button 
+                          onClick={() => handleDeleteProduct(product.id)}
+                          className="p-2 text-stone-400 hover:text-red-600 transition-colors"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
-              </CardContent>
+              </div>
             </Card>
           ))}
+          {filteredProducts.length === 0 && (
+            <div className="flex flex-col items-center justify-center py-20 opacity-20">
+              <Package size={64} className="mb-4" />
+              <p className="text-xl font-serif uppercase tracking-tighter">Sin resultados</p>
+              <p className="text-xs mt-1">No se encontraron productos con ese nombre</p>
+            </div>
+          )}
         </div>
 
         {/* Desktop Table Layout */}
@@ -396,59 +417,66 @@ export const InventoryView = ({ userRole = 'waiter' }: InventoryViewProps) => {
 
       {/* Product Modal */}
       {showModal && editingProduct && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] p-4 overflow-y-auto">
-          <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden my-auto">
-            <div className="bg-mex-brown p-4 flex items-center justify-between text-white">
-              <h2 className="text-xl font-serif">
-                {editingProduct.id ? 'Editar Producto' : 'Nuevo Producto'}
-              </h2>
-              <button onClick={() => setShowModal(false)} className="hover:bg-white/10 p-1 rounded-full">
-                <X size={24} />
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[150] p-4 backdrop-blur-sm overflow-y-auto">
+          <Card className="w-full max-w-lg rounded-[2rem] shadow-2xl animate-in zoom-in-95 duration-200 my-auto">
+            <CardHeader className="bg-mex-brown text-white rounded-t-[2rem] p-6 flex flex-row items-center justify-between">
+              <div>
+                <h2 className="text-xl font-serif leading-tight">
+                  {editingProduct.id ? 'Editar Producto' : 'Nuevo Producto'}
+                </h2>
+                <p className="text-[10px] text-mex-gold font-bold uppercase tracking-widest mt-1">Información de Platillo</p>
+              </div>
+              <button onClick={() => setShowModal(false)} className="bg-white/10 hover:bg-white/20 p-2 rounded-xl transition-colors">
+                <X size={20} />
               </button>
-            </div>
+            </CardHeader>
             
-            <form onSubmit={handleSaveProduct} className="p-6 space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-1 md:col-span-2">
-                  <label className="text-sm font-bold text-stone-700">Nombre del Producto *</label>
+            <form onSubmit={handleSaveProduct} className="p-6 space-y-5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                <div className="space-y-1.5 sm:col-span-2">
+                  <label className="text-[10px] font-black text-stone-400 uppercase tracking-widest px-1">Nombre del Platillo *</label>
                   <input 
                     type="text" 
                     required
                     value={editingProduct.name || ''}
                     onChange={e => setEditingProduct({...editingProduct, name: e.target.value})}
-                    className="w-full px-4 py-2 rounded-xl border border-stone-200 focus:outline-none focus:ring-2 focus:ring-mex-green/20"
+                    className="w-full px-5 py-3 rounded-2xl border border-stone-100 bg-stone-50 focus:bg-white focus:border-mex-brown focus:ring-0 outline-none transition-all font-bold"
                   />
                 </div>
 
-                <div className="space-y-1 md:col-span-2">
-                  <label className="text-sm font-bold text-stone-700">Descripción</label>
+                <div className="space-y-1.5 sm:col-span-2">
+                  <label className="text-[10px] font-black text-stone-400 uppercase tracking-widest px-1">Descripción</label>
                   <textarea 
                     value={editingProduct.description || ''}
                     onChange={e => setEditingProduct({...editingProduct, description: e.target.value})}
-                    className="w-full px-4 py-2 rounded-xl border border-stone-200 focus:outline-none focus:ring-2 focus:ring-mex-green/20 min-h-[80px]"
+                    className="w-full px-5 py-3 rounded-2xl border border-stone-100 bg-stone-50 focus:bg-white focus:border-mex-brown focus:ring-0 outline-none transition-all min-h-[80px] no-scrollbar text-sm"
+                    placeholder="Describe el platillo..."
                   />
                 </div>
 
-                <div className="space-y-1">
-                  <label className="text-sm font-bold text-stone-700">Precio ($) *</label>
-                  <input 
-                    type="number" 
-                    required
-                    min="0"
-                    step="0.01"
-                    value={editingProduct.price || 0}
-                    onChange={e => setEditingProduct({...editingProduct, price: parseFloat(e.target.value)})}
-                    className="w-full px-4 py-2 rounded-xl border border-stone-200 focus:outline-none focus:ring-2 focus:ring-mex-green/20"
-                  />
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black text-stone-400 uppercase tracking-widest px-1">Precio ($) *</label>
+                  <div className="relative">
+                    <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 text-stone-400" size={18} />
+                    <input 
+                      type="number" 
+                      required
+                      min="0"
+                      step="0.01"
+                      value={editingProduct.price || 0}
+                      onChange={e => setEditingProduct({...editingProduct, price: parseFloat(e.target.value)})}
+                      className="w-full pl-10 pr-4 py-3 rounded-2xl border border-stone-100 bg-stone-50 focus:bg-white focus:border-mex-brown focus:ring-0 outline-none transition-all font-bold"
+                    />
+                  </div>
                 </div>
 
-                <div className="space-y-1">
-                  <label className="text-sm font-bold text-stone-700">Categoría *</label>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black text-stone-400 uppercase tracking-widest px-1">Categoría *</label>
                   <select 
                     required
                     value={editingProduct.categoryId || ''}
                     onChange={e => setEditingProduct({...editingProduct, categoryId: e.target.value})}
-                    className="w-full px-4 py-2 rounded-xl border border-stone-200 focus:outline-none focus:ring-2 focus:ring-mex-green/20 bg-white"
+                    className="w-full px-5 py-3 rounded-2xl border border-stone-100 bg-stone-50 focus:bg-white focus:border-mex-brown focus:ring-0 outline-none transition-all font-bold appearance-none cursor-pointer"
                   >
                     {categories.map(cat => (
                       <option key={cat.id} value={cat.id}>{cat.name}</option>
@@ -456,100 +484,112 @@ export const InventoryView = ({ userRole = 'waiter' }: InventoryViewProps) => {
                   </select>
                 </div>
 
-                <div className="space-y-1">
-                  <label className="text-sm font-bold text-stone-700">Stock Inicial</label>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black text-stone-400 uppercase tracking-widest px-1">Stock</label>
                   <input 
                     type="number" 
                     min="0"
                     value={editingProduct.stock || 0}
                     onChange={e => setEditingProduct({...editingProduct, stock: parseInt(e.target.value)})}
-                    className="w-full px-4 py-2 rounded-xl border border-stone-200 focus:outline-none focus:ring-2 focus:ring-mex-green/20"
+                    className="w-full px-5 py-3 rounded-2xl border border-stone-100 bg-stone-50 focus:bg-white focus:border-mex-brown focus:ring-0 outline-none transition-all font-bold"
                   />
                 </div>
 
-                <div className="space-y-1">
-                  <label className="text-sm font-bold text-stone-700">Estación de Preparación</label>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black text-stone-400 uppercase tracking-widest px-1">Estación</label>
                   <select 
                     value={editingProduct.station || 'cocina'}
                     onChange={e => setEditingProduct({...editingProduct, station: e.target.value as 'plancha' | 'cocina'})}
-                    className="w-full px-4 py-2 rounded-xl border border-stone-200 focus:outline-none focus:ring-2 focus:ring-mex-green/20 bg-white"
+                    className="w-full px-5 py-3 rounded-2xl border border-stone-100 bg-stone-50 focus:bg-white focus:border-mex-brown focus:ring-0 outline-none transition-all font-bold appearance-none cursor-pointer"
                   >
                     <option value="cocina">Cocina</option>
-                    <option value="plancha">Plancha</option>
+                    <option value="plancha">Parrilla / Plancha</option>
                   </select>
                 </div>
 
-                <div className="flex items-end pb-2">
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input 
-                      type="checkbox" 
-                      checked={editingProduct.available !== false}
-                      onChange={e => setEditingProduct({...editingProduct, available: e.target.checked})}
-                      className="w-5 h-5 rounded border-stone-300 text-mex-green focus:ring-mex-green"
-                    />
-                    <span className="text-sm font-bold text-stone-700">Disponible</span>
-                  </label>
-                </div>
-
-                <div className="flex items-end pb-2">
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input 
-                      type="checkbox" 
-                      checked={editingProduct.allowsExtraCheese === true}
-                      onChange={e => setEditingProduct({...editingProduct, allowsExtraCheese: e.target.checked})}
-                      className="w-5 h-5 rounded border-stone-300 text-mex-gold focus:ring-mex-gold"
-                    />
-                    <span className="text-sm font-bold text-stone-700">Permite Queso Extra</span>
-                  </label>
-                </div>
-
-                <div className="space-y-1 md:col-span-2">
-                  <label className="text-sm font-bold text-stone-700 flex items-center justify-between">
-                    <span className="flex items-center gap-2">
-                      <ImageIcon size={16} />
-                      Imagen del Platillo (Archivo o URL)
-                    </span>
-                  </label>
-                  <div className="flex gap-2">
-                    <input 
-                      type="url" 
-                      placeholder="URL (https://ejemplo.com/foto.jpg)"
-                      value={editingProduct.imageUrl?.startsWith('data:image') ? '' : (editingProduct.imageUrl || '')}
-                      onChange={e => setEditingProduct({...editingProduct, imageUrl: e.target.value})}
-                      className="flex-1 px-4 py-2 rounded-xl border border-stone-200 focus:outline-none focus:ring-2 focus:ring-mex-green/20"
-                    />
-                    <label className="cursor-pointer bg-stone-100 hover:bg-stone-200 text-stone-700 px-4 py-2 rounded-xl border border-stone-200 flex items-center gap-2 transition-colors">
-                      <Upload size={18} />
-                      <span className="hidden sm:inline">Subir Foto</span>
+                <div className="flex items-center gap-4 py-2 sm:col-span-2">
+                  <label className="flex items-center gap-2 cursor-pointer group">
+                    <div className={cn(
+                      "w-10 h-6 rounded-full relative transition-colors",
+                      editingProduct.available !== false ? "bg-mex-green" : "bg-stone-200"
+                    )}>
                       <input 
-                        type="file" 
-                        accept="image/*" 
-                        className="hidden" 
-                        onChange={handleImageUpload}
+                        type="checkbox" 
+                        checked={editingProduct.available !== false}
+                        onChange={e => setEditingProduct({...editingProduct, available: e.target.checked})}
+                        className="sr-only"
                       />
-                    </label>
-                  </div>
-                  {editingProduct.imageUrl && (
-                    <div className="mt-3 relative w-32 h-32 rounded-xl overflow-hidden border-2 border-stone-100 shadow-sm">
-                      <img 
-                        src={editingProduct.imageUrl} 
-                        alt="Preview" 
-                        className="w-full h-full object-cover"
-                        referrerPolicy="no-referrer"
-                        onError={(e) => {
-                          (e.target as HTMLImageElement).src = 'https://via.placeholder.com/150?text=Error';
-                        }}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setEditingProduct({...editingProduct, imageUrl: ''})}
-                        className="absolute top-1 right-1 bg-black/50 hover:bg-black text-white rounded-full p-1 transition-colors"
-                        title="Quitar imagen"
-                      >
-                        <X size={14} />
-                      </button>
+                      <div className={cn(
+                        "absolute top-1 w-4 h-4 rounded-full bg-white transition-all shadow-sm",
+                        editingProduct.available !== false ? "left-5" : "left-1"
+                      )} />
                     </div>
-                  )}
+                    <span className="text-xs font-bold text-stone-600 uppercase tracking-tighter">Disponible</span>
+                  </label>
+
+                  <label className="flex items-center gap-2 cursor-pointer group">
+                    <div className={cn(
+                      "w-10 h-6 rounded-full relative transition-colors",
+                      editingProduct.allowsExtraCheese === true ? "bg-mex-gold" : "bg-stone-200"
+                    )}>
+                      <input 
+                        type="checkbox" 
+                        checked={editingProduct.allowsExtraCheese === true}
+                        onChange={e => setEditingProduct({...editingProduct, allowsExtraCheese: e.target.checked})}
+                        className="sr-only"
+                      />
+                      <div className={cn(
+                        "absolute top-1 w-4 h-4 rounded-full bg-white transition-all shadow-sm",
+                        editingProduct.allowsExtraCheese === true ? "left-5" : "left-1"
+                      )} />
+                    </div>
+                    <span className="text-xs font-bold text-stone-600 uppercase tracking-tighter">Queso Extra</span>
+                  </label>
+                </div>
+
+                <div className="space-y-1.5 sm:col-span-2">
+                  <label className="text-[10px] font-black text-stone-400 uppercase tracking-widest px-1">Imagen del Platillo</label>
+                  <div className="flex flex-col sm:flex-row gap-3">
+                    <div className="relative flex-1">
+                      <ImageIcon className="absolute left-4 top-1/2 -translate-y-1/2 text-stone-400" size={18} />
+                      <input 
+                        type="url" 
+                        placeholder="URL de la imagen..."
+                        value={editingProduct.imageUrl?.startsWith('data:image') ? '' : (editingProduct.imageUrl || '')}
+                        onChange={e => setEditingProduct({...editingProduct, imageUrl: e.target.value})}
+                        className="w-full pl-11 pr-4 py-3 rounded-2xl border border-stone-100 bg-stone-50 focus:bg-white focus:border-mex-brown focus:ring-0 outline-none transition-all text-sm"
+                      />
+                    </div>
+                    <div className="flex gap-2">
+                      <label className="flex-1 sm:flex-none cursor-pointer bg-stone-100 hover:bg-stone-200 text-stone-600 px-5 py-3 rounded-2xl border border-stone-200 flex items-center justify-center gap-2 transition-colors">
+                        <Upload size={18} />
+                        <span className="text-[10px] font-black uppercase">Subir</span>
+                        <input 
+                          type="file" 
+                          accept="image/*" 
+                          className="hidden" 
+                          onChange={handleImageUpload}
+                        />
+                      </label>
+                      {editingProduct.imageUrl && (
+                        <div className="w-12 h-12 rounded-xl overflow-hidden border-2 border-white shadow-md relative group/img">
+                          <img 
+                            src={editingProduct.imageUrl} 
+                            alt="Min" 
+                            className="w-full h-full object-cover"
+                            referrerPolicy="no-referrer"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setEditingProduct({...editingProduct, imageUrl: ''})}
+                            className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 group-hover/img:opacity-100 transition-opacity"
+                          >
+                            <X size={12} className="text-white" />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -557,7 +597,7 @@ export const InventoryView = ({ userRole = 'waiter' }: InventoryViewProps) => {
                 <Button 
                   type="button"
                   variant="ghost" 
-                  className="flex-1" 
+                  className="flex-1 h-12 rounded-2xl font-bold uppercase tracking-widest text-[10px]" 
                   onClick={() => setShowModal(false)}
                 >
                   Cancelar
@@ -565,14 +605,13 @@ export const InventoryView = ({ userRole = 'waiter' }: InventoryViewProps) => {
                 <Button 
                   type="submit"
                   variant="primary" 
-                  className="flex-1 gap-2"
+                  className="flex-[2] h-12 rounded-2xl bg-mex-green hover:bg-mex-green/90 shadow-lg shadow-mex-green/20 font-bold uppercase tracking-widest text-[10px]"
                 >
-                  <Save size={18} />
-                  Guardar
+                  Guardar Cambios
                 </Button>
               </div>
             </form>
-          </div>
+          </Card>
         </div>
       )}
 

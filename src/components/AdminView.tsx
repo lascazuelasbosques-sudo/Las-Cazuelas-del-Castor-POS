@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Trash2, AlertTriangle, Database, RefreshCw, ShieldAlert, X, CheckCircle2, Users, Key, Edit2, Save } from "lucide-react";
+import { Trash2, AlertTriangle, Database, RefreshCw, ShieldAlert, X, CheckCircle2, Users, Key, Edit2, Save, Plus } from "lucide-react";
 import { Button } from "./Button";
 import { Card, CardContent, CardHeader, CardFooter } from "./Card";
 import { db } from "../firebase";
@@ -254,92 +254,138 @@ export const AdminView = () => {
   };
 
   return (
-    <div className="p-6 h-full overflow-y-auto flex flex-col gap-8 bg-mex-cream">
-      <div className="flex items-center gap-3">
-        <div className="p-3 bg-mex-brown text-white rounded-2xl shadow-lg">
+    <div className="p-4 md:p-8 h-full overflow-y-auto flex flex-col gap-6 md:gap-8 bg-mex-cream no-scrollbar">
+      <div className="flex items-center gap-4 shrink-0">
+        <div className="p-4 bg-mex-brown text-white rounded-[1.5rem] shadow-xl shadow-mex-brown/20 flex flex-col items-center">
           <Database size={32} />
         </div>
         <div>
-          <h1 className="text-3xl font-serif text-mex-brown">Panel de Administración</h1>
-          <p className="text-stone-500">Mantenimiento y configuración del sistema</p>
+          <h1 className="text-2xl md:text-3xl font-serif text-mex-brown">Administración</h1>
+          <p className="text-[10px] text-stone-400 font-bold uppercase tracking-widest mt-1">Configuración y Seguridad</p>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <Card className="md:col-span-2 border-mex-green/20">
-          <CardHeader className="bg-mex-green/5 border-b border-mex-green/10 flex flex-row items-center justify-between">
-            <div className="flex items-center gap-2 text-mex-green">
-              <Users size={20} />
-              <h2 className="font-bold uppercase tracking-wider">Gestión de Usuarios</h2>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <Card className="md:col-span-2 lg:col-span-2 border-none shadow-xl shadow-stone-200/50 rounded-[2rem] overflow-hidden">
+          <CardHeader className="bg-white border-b border-stone-50 p-6 flex flex-row items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-mex-green/10 text-mex-green rounded-xl">
+                <Users size={20} />
+              </div>
+              <h2 className="font-black text-stone-800 uppercase tracking-tighter">Usuarios</h2>
             </div>
             <Button 
               variant="primary" 
               size="sm" 
-              className="bg-mex-green hover:bg-mex-green/90 gap-2"
+              className="bg-mex-green hover:bg-mex-green/90 gap-2 h-10 px-4 rounded-xl shadow-lg shadow-mex-green/10"
               onClick={handleOpenAddModal}
             >
-              <Users size={16} />
-              Nuevo Usuario
+              <Plus size={16} />
+              <span className="hidden sm:inline">Nuevo Usuario</span>
             </Button>
           </CardHeader>
-          <CardContent className="p-6">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left">
+          <CardContent className="p-0">
+            {/* Mobile Cards for Users */}
+            <div className="sm:hidden divide-y divide-stone-50">
+              {users.map(u => (
+                <div key={u.id} className="p-4 flex items-center justify-between group active:bg-stone-50 transition-colors">
+                  <div className="flex items-center gap-3">
+                    <div className={cn(
+                      "w-10 h-10 rounded-full flex items-center justify-center font-black text-white shadow-sm",
+                      u.role === 'admin' ? "bg-mex-brown" : "bg-stone-200"
+                    )}>
+                      {u.name.charAt(0).toUpperCase()}
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-stone-800 text-sm">{u.name}</h3>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span className="text-[9px] text-stone-400 font-bold uppercase">@{u.username}</span>
+                        <span className={cn(
+                          "text-[8px] px-1.5 py-0.5 rounded-md font-black uppercase tracking-tighter",
+                          u.role === 'admin' ? "bg-stone-800 text-white" : "bg-stone-50 text-stone-400"
+                        )}>
+                          {getRoleLabel(u.role)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <button 
+                      onClick={() => toggleUserStatus(u)}
+                      className={cn(
+                        "w-3 h-3 rounded-full shadow-sm",
+                        u.active ? "bg-mex-green shadow-mex-green/20" : "bg-stone-200"
+                      )}
+                    />
+                    <button 
+                      onClick={() => handleOpenEditModal(u)}
+                      className="p-2 text-stone-300 hover:text-mex-green"
+                    >
+                      <Edit2 size={18} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Desktop Table */}
+            <div className="hidden sm:block overflow-x-auto">
+              <table className="w-full text-left border-collapse">
                 <thead>
-                  <tr className="border-b border-stone-100 text-xs text-stone-400 uppercase tracking-widest">
-                    <th className="pb-3 font-bold">Nombre / Usuario</th>
-                    <th className="pb-3 font-bold">Rol</th>
-                    <th className="pb-3 font-bold">Estado</th>
-                    <th className="pb-3 font-bold">PIN</th>
-                    <th className="pb-3 font-bold text-right">Acciones</th>
+                  <tr className="text-[10px] text-stone-400 font-bold uppercase tracking-widest border-b border-stone-50">
+                    <th className="px-6 py-4">Nombre / Usuario</th>
+                    <th className="px-6 py-4">Rol</th>
+                    <th className="px-6 py-4">Estado</th>
+                    <th className="px-6 py-4">PIN</th>
+                    <th className="px-6 py-4 text-right">Acciones</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-stone-50">
                   {users.map(u => (
                     <tr key={u.id} className="group hover:bg-stone-50/50 transition-colors">
-                      <td className="py-4">
+                      <td className="px-6 py-4">
                         <p className="font-bold text-stone-800">{u.name}</p>
                         <p className="text-xs text-stone-400">@{u.username || 'sin_usuario'}</p>
                       </td>
-                      <td className="py-4">
+                      <td className="px-6 py-4">
                         <span className={cn(
-                          "text-[10px] px-2 py-0.5 rounded-full font-bold uppercase",
-                          u.role === 'admin' ? "bg-mex-brown text-white" : "bg-stone-100 text-stone-600"
+                          "text-[10px] px-2 py-0.5 rounded-md font-black uppercase tracking-tighter shadow-sm",
+                          u.role === 'admin' ? "bg-mex-brown text-white" : "bg-white text-stone-500 border border-stone-100"
                         )}>
                           {getRoleLabel(u.role)}
                         </span>
                       </td>
-                      <td className="py-4">
+                      <td className="px-6 py-4">
                         <button 
                           onClick={() => toggleUserStatus(u)}
                           className={cn(
-                            "flex items-center gap-1.5 text-[10px] font-bold uppercase px-2 py-1 rounded-lg transition-all",
-                            u.active ? "bg-green-100 text-green-700 hover:bg-green-200" : "bg-red-100 text-red-700 hover:bg-red-200"
+                            "flex items-center gap-2 text-[10px] font-black uppercase px-3 py-1.5 rounded-xl transition-all",
+                            u.active ? "bg-mex-green/10 text-mex-green" : "bg-red-50 text-mex-red"
                           )}
                         >
-                          <div className={cn("w-1.5 h-1.5 rounded-full", u.active ? "bg-green-600" : "bg-red-600")} />
+                          <div className={cn("w-1.5 h-1.5 rounded-full", u.active ? "bg-mex-green animate-pulse" : "bg-mex-red")} />
                           {u.active ? 'Activo' : 'Inactivo'}
                         </button>
                       </td>
-                      <td className="py-4">
-                        <span className="font-mono text-sm text-stone-500 bg-stone-100 px-2 py-1 rounded">
+                      <td className="px-6 py-4">
+                        <span className="font-mono text-sm font-bold text-stone-500 bg-stone-50 px-3 py-1 rounded-lg border border-stone-100">
                           {u.pin || '0000'}
                         </span>
                       </td>
-                      <td className="py-4 text-right">
-                        <div className="flex justify-end gap-2">
+                      <td className="px-6 py-4 text-right">
+                        <div className="flex justify-end gap-1">
                           <Button 
                             variant="ghost" 
-                            size="sm" 
+                            size="icon" 
                             onClick={() => handleOpenEditModal(u)}
-                            className="text-stone-400 hover:text-mex-green"
+                            className="text-stone-300 hover:text-mex-green h-9 w-9 rounded-xl transition-colors"
                           >
                             <Edit2 size={16} />
                           </Button>
                           {u.role !== 'admin' && (
                             <Button 
                               variant="ghost" 
-                              size="sm" 
+                              size="icon" 
                               onClick={() => {
                                 setConfirmAction({
                                   title: "Eliminar Usuario",
@@ -353,7 +399,7 @@ export const AdminView = () => {
                                 });
                                 setShowConfirmModal(true);
                               }}
-                              className="text-stone-400 hover:text-mex-red"
+                              className="text-stone-300 hover:text-mex-red h-9 w-9 rounded-xl transition-colors"
                             >
                               <Trash2 size={16} />
                             </Button>
@@ -368,211 +414,132 @@ export const AdminView = () => {
           </CardContent>
         </Card>
 
-        <Card className="border-mex-terracotta/20">
-          <CardHeader className="bg-mex-terracotta/5 border-b border-mex-terracotta/10">
-            <div className="flex items-center gap-2 text-mex-terracotta">
-              <Trash2 size={20} />
-              <h2 className="font-bold uppercase tracking-wider">Limpieza de Datos</h2>
-            </div>
-          </CardHeader>
-          <CardContent className="p-6 space-y-4">
-            <p className="text-sm text-stone-600">
-              Utiliza estas opciones para limpiar el historial de ventas al finalizar el día o para corregir errores masivos.
-            </p>
-            
-            <div className="space-y-3">
-              <Button 
-                variant="outline" 
-                className="w-full justify-start gap-3 border-stone-200 hover:bg-mex-red/5 hover:text-mex-red hover:border-mex-red/30"
-                onClick={handleClearTransactions}
-                disabled={loading}
-              >
-                <RefreshCw size={18} className={loading ? "animate-spin" : ""} />
-                Limpiar Caja y Pedidos (Cierre de Día)
-              </Button>
-
-              <Button 
-                variant="outline" 
-                className="w-full justify-start gap-3 border-stone-200 hover:bg-mex-red/5 hover:text-mex-red hover:border-mex-red/30"
-                onClick={() => clearCollection("cashLogs")}
-                disabled={loading}
-              >
-                <Trash2 size={18} />
-                Solo Borrar Historial de Caja
-              </Button>
-
-              <Button 
-                variant="outline" 
-                className="w-full justify-start gap-3 border-stone-200 hover:bg-mex-red/5 hover:text-mex-red hover:border-mex-red/30"
-                onClick={() => clearCollection("orders")}
-                disabled={loading}
-              >
-                <Trash2 size={18} />
-                Solo Borrar Pedidos
-              </Button>
-              
-              <p className="text-[10px] text-stone-400 italic">
-                * Esto borrará todas las comandas y el historial de ingresos/egresos de hoy.
+        <div className="space-y-6">
+          <Card className="border-none shadow-xl shadow-stone-200/50 rounded-[2rem] overflow-hidden">
+            <CardHeader className="bg-white border-b border-stone-50 p-6">
+              <div className="flex items-center gap-3 text-mex-terracotta">
+                <div className="p-2 bg-mex-terracotta/10 rounded-xl">
+                  <Trash2 size={20} />
+                </div>
+                <h2 className="font-black text-stone-800 uppercase tracking-tighter">Limpieza</h2>
+              </div>
+            </CardHeader>
+            <CardContent className="p-6 space-y-4">
+              <p className="text-[10px] font-bold text-stone-400 uppercase tracking-widest leading-relaxed">
+                Utiliza estas opciones para limpiar el historial al finalizar el día.
               </p>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-stone-200">
-          <CardHeader className="bg-stone-50 border-b border-stone-100">
-            <div className="flex items-center gap-2 text-stone-700">
-              <ShieldAlert size={20} />
-              <h2 className="font-bold uppercase tracking-wider">Mantenimiento de Sistema</h2>
-            </div>
-          </CardHeader>
-          <CardContent className="p-6 space-y-4">
-            <div className="space-y-4">
-              <div className="p-3 bg-amber-50 rounded-lg border border-amber-100">
-                <p className="text-xs font-bold text-amber-800 uppercase mb-1">Permisos de Admin</p>
-                <p className="text-[10px] text-amber-600 mb-2">Restaura tu rol de administrador si pierdes acceso.</p>
+              
+              <div className="space-y-3">
                 <Button 
                   variant="outline" 
-                  className="w-full h-9 text-xs gap-2 border-amber-200 text-amber-700 hover:bg-amber-100"
-                  onClick={handleRepairPermissions}
-                  disabled={loading}
-                >
-                  <RefreshCw size={14} />
-                  Reparar Mis Permisos
-                </Button>
-              </div>
-
-              <div className="p-3 bg-blue-50 rounded-lg border border-blue-100">
-                <p className="text-xs font-bold text-blue-800 uppercase mb-1">Sincronizar Usuarios</p>
-                <p className="text-[10px] text-blue-600 mb-2">Asegura que todos tengan usuario y contraseña (defecto: 1234).</p>
-                <Button 
-                  variant="outline" 
-                  className="w-full h-9 text-xs gap-2 border-blue-200 text-blue-700 hover:bg-blue-100"
-                  onClick={async () => {
-                    const toastId = toast.loading("Sincronizando...");
-                    try {
-                      const snap = await getDocs(collection(db, "users"));
-                      const batch = writeBatch(db);
-                      let count = 0;
-                      snap.forEach(uDoc => {
-                        const data = uDoc.data();
-                        const updates: any = {};
-                        let changed = false;
-                        if (!data.username) { updates.username = data.name.toLowerCase().replace(/\s/g, ''); changed = true; }
-                        if (!data.password) { updates.password = "1234"; changed = true; }
-                        if (data.active === undefined) { updates.active = true; changed = true; }
-                        if (changed) { batch.update(uDoc.ref, updates); count++; }
-                      });
-                      await batch.commit();
-                      toast.success(`${count} usuarios actualizados`, { id: toastId });
-                      fetchUsers();
-                    } catch (e) { toast.error("Error al sincronizar", { id: toastId }); }
-                  }}
-                  disabled={loading}
-                >
-                  <Users size={14} />
-                  Sincronizar Credenciales
-                </Button>
-              </div>
-
-              <div className="p-3 bg-red-50 rounded-lg border border-red-100">
-                <p className="text-xs font-bold text-red-800 uppercase mb-1">Historial de Caja</p>
-                <p className="text-[10px] text-red-600 mb-2">Borra únicamente los registros de ingresos, egresos y cierres.</p>
-                <Button 
-                  variant="outline" 
-                  className="w-full h-9 text-xs gap-2 border-red-200 text-red-700 hover:bg-red-100"
-                  onClick={async () => {
-                    if (!confirm("¿Borrar TODO el historial de ventas, pedidos y caja? Se reiniciarán los folios a 001.")) return;
-                    const toastId = toast.loading("Borrando historial completo...");
-                    try {
-                      const collections = ["cashLogs", "orders", "counters"];
-                      for (const name of collections) {
-                        const snap = await getDocsFromServer(collection(db, name));
-                        if (snap.empty) continue;
-                        const docs = snap.docs;
-                        for (let i = 0; i < docs.length; i += 500) {
-                          const batch = writeBatch(db);
-                          docs.slice(i, i + 500).forEach(d => batch.delete(d.ref));
-                          await batch.commit();
-                        }
-                      }
-                      toast.success("Historial y folios reiniciados", { id: toastId });
-                    } catch (e: any) {
-                      console.error("Error al borrar historial:", e);
-                      toast.error("Error: " + e.message, { id: toastId });
-                    }
-                  }}
-                  disabled={loading}
-                >
-                  <Trash2 size={14} />
-                  Limpiar Historial de Ventas y Caja
-                </Button>
-              </div>
-
-              <div className="pt-2 space-y-2">
-                <Button 
-                  variant="outline" 
-                  className="w-full h-9 text-xs gap-2 text-stone-600 hover:bg-stone-50 border-stone-200"
+                  className="w-full h-14 justify-start gap-3 rounded-2xl border-none bg-stone-50 hover:bg-mex-red/5 hover:text-mex-red transition-all group font-bold text-xs"
                   onClick={handleClearTransactions}
                   disabled={loading}
                 >
-                  <RefreshCw size={14} className="text-blue-500" />
-                  Reinicio Operacional (Caja, Cocina, Pedidos)
+                  <RefreshCw size={18} className={cn("text-stone-400 group-hover:text-mex-red", loading ? "animate-spin" : "")} />
+                  <span>Cierre de Día Completo</span>
                 </Button>
 
                 <Button 
+                  variant="outline" 
+                  className="w-full h-14 justify-start gap-3 rounded-2xl border-none bg-stone-50 hover:bg-mex-red/5 transition-all group font-bold text-xs"
+                  onClick={() => clearCollection("cashLogs")}
+                  disabled={loading}
+                >
+                  <Key size={18} className="text-stone-400 group-hover:text-mex-red" />
+                  <span>Borrar Historial de Caja</span>
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-none shadow-xl shadow-stone-200/50 rounded-[2rem] overflow-hidden">
+            <CardHeader className="bg-white border-b border-stone-50 p-6">
+              <div className="flex items-center gap-3 text-stone-700">
+                <div className="p-2 bg-stone-100 rounded-xl">
+                  <ShieldAlert size={20} />
+                </div>
+                <h2 className="font-black text-stone-800 uppercase tracking-tighter">Sistema</h2>
+              </div>
+            </CardHeader>
+            <CardContent className="p-6 space-y-4">
+              <div className="space-y-4">
+                <div className="p-4 bg-orange-50 rounded-2xl border border-orange-100">
+                  <p className="text-[8px] font-black text-orange-400 uppercase tracking-widest mb-2">Seguridad</p>
+                  <Button 
+                    variant="primary" 
+                    className="w-full h-10 rounded-xl text-[10px] font-black uppercase bg-orange-500 hover:bg-orange-600 shadow-lg shadow-orange-500/20"
+                    onClick={handleRepairPermissions}
+                    disabled={loading}
+                  >
+                    Reparar Permisos
+                  </Button>
+                </div>
+
+                <Button 
                   variant="ghost" 
-                  className="w-full h-9 text-xs gap-2 text-mex-red hover:bg-red-50"
+                  className="w-full h-12 rounded-2xl text-[10px] font-black uppercase tracking-widest text-mex-red hover:bg-red-50 hover:text-red-700 transition-all border border-transparent hover:border-red-100"
                   onClick={handleResetSystem}
                   disabled={loading}
                 >
-                  <AlertTriangle size={14} />
-                  Reinicio de Fábrica (Borrar Todo)
+                  <AlertTriangle size={18} className="mr-2" />
+                  Reinicio de Fábrica
                 </Button>
               </div>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        </div>
       </div>
 
-      <Card className="bg-white/50 border-dashed border-2 border-stone-200">
-        <CardContent className="p-12 flex flex-col items-center justify-center text-center opacity-40">
-          <div className="w-16 h-16 bg-stone-100 rounded-full flex items-center justify-center mb-4">
-            <Database size={32} />
-          </div>
-          <h3 className="text-xl font-serif mb-2">Más funciones próximamente</h3>
-          <p className="max-w-md">
-            Reportes de ventas por mesero, gráficas de rendimiento, gestión de usuarios y roles, y configuración de tickets.
-          </p>
-        </CardContent>
-      </Card>
+      {/* Info Card */}
+      <div className="bg-white/40 border border-stone-100 rounded-[2.5rem] p-8 md:p-12 flex flex-col items-center text-center backdrop-blur-sm shrink-0">
+        <div className="w-16 h-16 bg-white rounded-2xl shadow-xl shadow-stone-200/30 flex items-center justify-center mb-6 text-stone-300">
+          <Database size={32} />
+        </div>
+        <h3 className="text-xl font-serif text-stone-800 mb-2">Módulo de Reportes Avanzados</h3>
+        <p className="max-w-md text-stone-500 text-sm leading-relaxed">
+          Las gráficas de rendimiento y estadísticas detalladas por mesero estarán disponibles en la próxima actualización.
+        </p>
+      </div>
 
       {/* Confirmation Modal */}
       {showConfirmModal && confirmAction && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[150] p-4">
-          <Card className="w-full max-w-md border-mex-red/30 shadow-2xl">
-            <CardHeader className="bg-mex-red text-white flex flex-row items-center justify-between">
-              <h3 className="text-xl font-serif flex items-center gap-2">
-                <AlertTriangle size={20} />
-                {confirmAction.title}
-              </h3>
-              <button onClick={() => setShowConfirmModal(false)}><X size={24}/></button>
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[150] p-4 backdrop-blur-sm">
+          <Card className="w-full max-w-sm rounded-[2rem] shadow-2xl border-none overflow-hidden animate-in fade-in zoom-in-95">
+            <CardHeader className="bg-mex-red text-white p-6 flex flex-row items-center justify-between">
+              <div className="flex items-center gap-3">
+                <AlertTriangle size={24} />
+                <h3 className="text-xl font-serif">Confirmar</h3>
+              </div>
+              <button 
+                onClick={() => setShowConfirmModal(false)}
+                className="bg-white/10 hover:bg-white/20 p-2 rounded-xl transition-colors"
+              >
+                <X size={20} />
+              </button>
             </CardHeader>
-            <CardContent className="p-6">
-              <p className="text-stone-700 font-medium">{confirmAction.message}</p>
-              <p className="text-xs text-mex-red mt-4 font-bold uppercase tracking-widest">Esta acción es irreversible</p>
+            <CardContent className="p-8">
+              <p className="text-stone-700 font-bold leading-relaxed">{confirmAction.message}</p>
+              <div className="mt-6 flex items-center gap-2 p-3 bg-red-50 text-mex-red rounded-xl border border-red-100">
+                <ShieldAlert size={16} />
+                <span className="text-[10px] font-black uppercase tracking-widest">Atención: Irreversible</span>
+              </div>
             </CardContent>
-            <CardFooter className="flex gap-2 p-4 bg-stone-50">
-              <Button variant="ghost" className="flex-1" onClick={() => setShowConfirmModal(false)}>
+            <CardFooter className="flex gap-3 p-6 bg-stone-50">
+              <Button 
+                variant="ghost" 
+                className="flex-1 h-12 rounded-2xl font-black uppercase tracking-widest text-[10px]" 
+                onClick={() => setShowConfirmModal(false)}
+              >
                 Cancelar
               </Button>
               <Button 
                 variant="primary" 
-                className="flex-1 gap-2 bg-mex-red hover:bg-red-700" 
+                className="flex-1 h-12 rounded-2xl bg-mex-red hover:bg-red-700 shadow-xl shadow-mex-red/20 font-black uppercase tracking-widest text-[10px]" 
                 onClick={confirmAction.action}
                 disabled={loading}
               >
-                {loading ? <RefreshCw className="animate-spin" size={18} /> : <CheckCircle2 size={18} />}
-                Confirmar
+                {loading ? <RefreshCw className="animate-spin" size={18} /> : <span>Confirmar</span>}
               </Button>
             </CardFooter>
           </Card>
@@ -581,43 +548,50 @@ export const AdminView = () => {
 
       {/* User Modal (Add/Edit) */}
       {showUserModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[150] p-4">
-          <Card className="w-full max-w-md shadow-2xl">
-            <CardHeader className="bg-mex-green text-white flex flex-row items-center justify-between">
-              <h3 className="text-xl font-serif flex items-center gap-2">
-                <Users size={20} />
-                {isEditing ? 'Editar Usuario' : 'Nuevo Usuario'}
-              </h3>
-              <button onClick={() => setShowUserModal(false)}><X size={24}/></button>
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[150] p-4 backdrop-blur-sm overflow-y-auto">
+          <Card className="w-full max-w-md rounded-[2.5rem] shadow-2xl border-none overflow-hidden my-auto animate-in fade-in zoom-in-95">
+            <CardHeader className="bg-mex-green text-white p-8 flex flex-row items-center justify-between">
+              <div>
+                <h3 className="text-2xl font-serif leading-tight">
+                  {isEditing ? 'Editar Usuario' : 'Nuevo Usuario'}
+                </h3>
+                <p className="text-[10px] text-mex-gold font-bold uppercase tracking-widest mt-1">Acceso al Sistema</p>
+              </div>
+              <button 
+                onClick={() => setShowUserModal(false)}
+                className="bg-white/10 hover:bg-white/20 p-2 rounded-xl transition-colors"
+              >
+                <X size={20} />
+              </button>
             </CardHeader>
-            <CardContent className="p-6 space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1 col-span-2">
-                  <label className="text-xs font-bold text-stone-500 uppercase">Nombre Completo</label>
+            <CardContent className="p-8 space-y-6">
+              <div className="grid grid-cols-2 gap-6">
+                <div className="space-y-1.5 col-span-2">
+                  <label className="text-[10px] font-black text-stone-400 uppercase tracking-widest px-1">Nombre Completo</label>
                   <input 
                     type="text" 
                     value={userForm.name}
                     onChange={e => setUserForm({...userForm, name: e.target.value})}
-                    className="w-full px-3 py-2 rounded border border-stone-200 focus:ring-2 focus:ring-mex-green/20 outline-none"
+                    className="w-full px-5 py-3 rounded-2xl border border-stone-100 bg-stone-50 focus:bg-white focus:border-mex-green focus:ring-0 outline-none transition-all font-bold"
                     placeholder="Ej. Juan Pérez"
                   />
                 </div>
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-stone-500 uppercase">Usuario</label>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black text-stone-400 uppercase tracking-widest px-1">Usuario</label>
                   <input 
                     type="text" 
                     value={userForm.username}
                     onChange={e => setUserForm({...userForm, username: e.target.value.toLowerCase().replace(/\s/g, '')})}
-                    className="w-full px-3 py-2 rounded border border-stone-200 focus:ring-2 focus:ring-mex-green/20 outline-none"
-                    placeholder="Ej. juanp"
+                    className="w-full px-5 py-3 rounded-2xl border border-stone-100 bg-stone-50 focus:bg-white focus:border-mex-green focus:ring-0 outline-none transition-all font-bold"
+                    placeholder="juanp"
                   />
                 </div>
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-stone-500 uppercase">Rol</label>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black text-stone-400 uppercase tracking-widest px-1">Rol</label>
                   <select 
                     value={userForm.role}
                     onChange={e => setUserForm({...userForm, role: e.target.value as UserRole})}
-                    className="w-full px-3 py-2 rounded border border-stone-200 focus:ring-2 focus:ring-mex-green/20 outline-none bg-white"
+                    className="w-full px-5 py-3 rounded-2xl border border-stone-100 bg-stone-50 focus:bg-white focus:border-mex-green focus:ring-0 outline-none transition-all font-bold cursor-pointer appearance-none"
                   >
                     <option value="waiter">Mesero</option>
                     <option value="kitchen">Cocina</option>
@@ -625,53 +599,65 @@ export const AdminView = () => {
                     <option value="admin">Administrador</option>
                   </select>
                 </div>
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-stone-500 uppercase">Contraseña</label>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black text-stone-400 uppercase tracking-widest px-1">Contraseña</label>
                   <input 
-                    type="text" 
+                    type="password" 
                     value={userForm.password}
                     onChange={e => setUserForm({...userForm, password: e.target.value})}
-                    className="w-full px-3 py-2 rounded border border-stone-200 focus:ring-2 focus:ring-mex-green/20 outline-none"
-                    placeholder={isEditing ? "Dejar vacío para no cambiar" : "Mínimo 4 caracteres"}
+                    className="w-full px-5 py-3 rounded-2xl border border-stone-100 bg-stone-50 focus:bg-white focus:border-mex-green focus:ring-0 outline-none transition-all font-bold"
+                    placeholder={isEditing ? "****" : "****"}
                   />
                 </div>
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-stone-500 uppercase">PIN de Acceso</label>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black text-stone-400 uppercase tracking-widest px-1">PIN (4 Dígitos)</label>
                   <input 
                     type="text" 
                     maxLength={4}
                     value={userForm.pin}
                     onChange={e => setUserForm({...userForm, pin: e.target.value.replace(/\D/g, '')})}
-                    className="w-full px-3 py-2 rounded border border-stone-200 focus:ring-2 focus:ring-mex-green/20 outline-none font-mono"
+                    className="w-full px-5 py-3 rounded-2xl border border-stone-100 bg-stone-50 focus:bg-white focus:border-mex-green focus:ring-0 outline-none font-mono font-bold text-center text-lg tracking-widest"
                     placeholder="0000"
                   />
                 </div>
               </div>
 
-              <div className="flex items-center gap-2 pt-2">
-                <input 
-                  type="checkbox" 
-                  id="user-active"
-                  checked={userForm.active}
-                  onChange={e => setUserForm({...userForm, active: e.target.checked})}
-                  className="w-4 h-4 text-mex-green rounded border-stone-300 focus:ring-mex-green"
-                />
-                <label htmlFor="user-active" className="text-sm font-medium text-stone-700 cursor-pointer">
-                  Usuario Activo (Permitir acceso)
+              <div className="p-4 bg-stone-50 rounded-2xl border border-stone-100">
+                <label className="flex items-center gap-3 cursor-pointer group">
+                  <div className={cn(
+                    "w-10 h-6 rounded-full relative transition-all shadow-inner",
+                    userForm.active ? "bg-mex-green" : "bg-stone-200"
+                  )}>
+                    <input 
+                      type="checkbox" 
+                      className="sr-only"
+                      checked={userForm.active}
+                      onChange={e => setUserForm({...userForm, active: e.target.checked})}
+                    />
+                    <div className={cn(
+                      "absolute top-1 w-4 h-4 rounded-full bg-white shadow-md transition-all",
+                      userForm.active ? "translate-x-5" : "translate-x-1"
+                    )} />
+                  </div>
+                  <span className="text-xs font-black text-stone-600 uppercase tracking-tighter">Usuario Activo</span>
                 </label>
               </div>
             </CardContent>
-            <CardFooter className="flex gap-2 p-4 bg-stone-50">
-              <Button variant="ghost" className="flex-1" onClick={() => setShowUserModal(false)}>
+            <CardFooter className="flex gap-3 p-8 bg-stone-50">
+              <Button 
+                variant="ghost" 
+                className="flex-1 h-12 rounded-2xl font-black uppercase tracking-widest text-[10px]" 
+                onClick={() => setShowUserModal(false)}
+              >
                 Cancelar
               </Button>
               <Button 
                 variant="primary" 
-                className="flex-1 bg-mex-green hover:bg-mex-green/90" 
+                className="flex-[2] h-12 rounded-2xl bg-mex-green hover:bg-mex-green/90 shadow-xl shadow-mex-green/20 font-black uppercase tracking-widest text-[10px]" 
                 onClick={handleSaveUser}
                 disabled={loading}
               >
-                {loading ? <RefreshCw className="animate-spin" size={18} /> : (isEditing ? "Guardar Cambios" : "Crear Usuario")}
+                {loading ? <RefreshCw className="animate-spin" size={18} /> : <span>{isEditing ? "Guardar Cambios" : "Crear Usuario"}</span>}
               </Button>
             </CardFooter>
           </Card>

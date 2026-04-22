@@ -251,21 +251,21 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
   }
 
   return (
-    <div className="flex flex-col h-full md:flex-row overflow-hidden relative">
+    <div className="flex flex-col h-full md:flex-row overflow-hidden relative bg-mex-cream">
       {/* Products Section */}
-      <div className="flex-1 flex flex-col p-3 md:p-4 overflow-hidden">
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 mb-4 md:mb-6">
+      <div className="flex-1 flex flex-col p-3 md:p-6 overflow-hidden">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 mb-4 md:mb-6 shrink-0">
           <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" size={20} />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" size={18} />
             <input 
               type="text" 
               placeholder="Buscar antojito..." 
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-3 md:py-2 rounded-xl border border-stone-200 focus:outline-none focus:ring-2 focus:ring-mex-green/20 text-base"
+              className="w-full pl-10 pr-4 py-3 md:py-2 rounded-xl border border-stone-200 focus:outline-none focus:ring-2 focus:ring-mex-green/20 text-base shadow-sm"
             />
           </div>
-          <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
+          <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar -mx-1 px-1">
             {categories.map(cat => (
               <Button
                 key={cat.id}
@@ -275,7 +275,7 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
                   setSelectedCategory(cat.id);
                   setSearchQuery(''); // Clear search when selecting category
                 }}
-                className="whitespace-nowrap px-4 py-2 h-auto"
+                className="whitespace-nowrap px-4 py-2 h-9 rounded-full shadow-sm"
               >
                 {cat.name}
               </Button>
@@ -283,7 +283,7 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
           </div>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-2 md:gap-3 overflow-y-auto pr-1">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-2 md:gap-4 overflow-y-auto pr-1 pb-24 md:pb-6">
           {products.filter(p => {
             if (!p.available) return false;
             if (searchQuery) {
@@ -342,10 +342,10 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
 
       {/* Cart Section */}
       <div className={cn(
-        "fixed inset-0 z-50 bg-white flex flex-col transition-transform duration-300 md:relative md:inset-auto md:translate-x-0 md:w-80 lg:w-96 md:border-l md:border-stone-200 md:shadow-xl",
+        "fixed inset-0 z-[60] bg-white flex flex-col transition-transform duration-300 md:relative md:inset-auto md:translate-x-0 md:w-80 lg:w-96 md:border-l md:border-stone-200 md:shadow-xl",
         showCartMobile ? "translate-x-0" : "translate-x-full md:translate-x-0"
       )}>
-        <div className="p-4 border-b border-stone-100 flex flex-col gap-3 bg-stone-50">
+        <div className="p-4 border-b border-stone-100 flex flex-col gap-3 bg-stone-50 shrink-0">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-bold flex items-center gap-2">
               <ShoppingCart size={20} className="text-mex-green" />
@@ -355,62 +355,68 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
               <Button 
                 variant="ghost" 
                 size="sm" 
-                className="text-mex-brown gap-1 h-9 px-3"
+                className="text-mex-brown gap-1 h-9 px-3 bg-white border border-stone-200 shadow-sm"
                 onClick={() => setShowActiveOrders(!showActiveOrders)}
               >
                 <History size={16} />
                 Activos
               </Button>
               <button 
-                className="md:hidden p-2 text-stone-400 hover:text-stone-600"
+                className="md:hidden p-2 text-stone-400 hover:text-stone-600 bg-white rounded-full border border-stone-200 shadow-sm"
                 onClick={() => setShowCartMobile(false)}
               >
-                <X size={24} />
+                <X size={20} />
               </button>
             </div>
           </div>
           
-          <div className="flex items-center gap-2">
-            <label className="flex items-center gap-1 cursor-pointer bg-white px-2 py-1 rounded-lg border border-stone-200 text-xs font-bold text-stone-600">
+          <div className="flex items-center gap-3">
+            <label className="flex items-center gap-2 cursor-pointer bg-white px-3 py-2 rounded-xl border border-stone-200 text-xs font-bold text-stone-600 shadow-sm">
               <input 
                 type="checkbox" 
                 checked={isTakeaway}
                 onChange={(e) => setIsTakeaway(e.target.checked)}
-                className="w-4 h-4 rounded border-stone-300 text-mex-green focus:ring-mex-green"
+                className="w-5 h-5 rounded border-stone-300 text-mex-green focus:ring-mex-green"
               />
               Para Llevar
             </label>
             {!isTakeaway && (
-              <input 
-                type="text" 
-                placeholder="Mesa #" 
-                value={tableNumber}
-                onChange={(e) => setTableNumber(e.target.value)}
-                className="w-16 px-2 py-1 text-center border border-stone-200 rounded-lg font-bold text-mex-green"
-              />
+              <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-xl border border-stone-200 shadow-sm">
+                <span className="text-[10px] font-bold text-stone-400 uppercase">Mesa</span>
+                <input 
+                  type="text" 
+                  placeholder="#" 
+                  value={tableNumber}
+                  onChange={(e) => setTableNumber(e.target.value)}
+                  className="w-10 text-center focus:outline-none font-bold text-mex-green"
+                />
+              </div>
             )}
           </div>
         </div>
 
         {showActiveOrders && (
-          <div className="absolute inset-0 bg-white z-20 flex flex-col">
-            <div className="p-4 border-b border-stone-200 flex items-center justify-between bg-mex-brown text-white">
+          <div className="absolute inset-0 bg-white z-[70] flex flex-col">
+            <div className="p-4 border-b border-stone-200 flex items-center justify-between bg-mex-brown text-white shrink-0">
               <h3 className="font-serif">Pedidos Activos</h3>
-              <button onClick={() => setShowActiveOrders(false)}><X size={24}/></button>
+              <button onClick={() => setShowActiveOrders(false)} className="p-1 hover:bg-white/10 rounded-full"><X size={24}/></button>
             </div>
             <div className="flex-1 overflow-y-auto p-2 space-y-2">
               {activeOrders.length === 0 ? (
-                <p className="text-center text-stone-400 mt-10">No hay pedidos activos</p>
+                <div className="flex flex-col items-center justify-center py-20 opacity-30">
+                  <History size={48} className="mb-2" />
+                  <p className="text-center text-stone-400">No hay pedidos activos</p>
+                </div>
               ) : (
                 activeOrders.map(order => (
                   <button 
                     key={order.id}
                     onClick={() => loadOrder(order)}
-                    className="w-full text-left p-3 rounded-xl border border-stone-100 hover:border-mex-green hover:bg-mex-green/5 transition-all flex justify-between items-center"
+                    className="w-full text-left p-4 rounded-xl border border-stone-100 hover:border-mex-green hover:bg-mex-green/5 transition-all flex justify-between items-center bg-stone-50/50"
                   >
                     <div>
-                      <p className="font-bold text-stone-800">{order.tableNumber}</p>
-                      <p className="text-xs text-stone-500">{order.items.length} productos • {formatCurrency(order.total)}</p>
+                      <p className="font-bold text-stone-800">{order.isTakeaway ? 'PARA LLEVAR' : `MESA ${order.tableNumber}`}</p>
+                      <p className="text-[10px] text-stone-500 font-medium uppercase tracking-wider">{order.items.length} productos • {formatCurrency(order.total)}</p>
                     </div>
                     <Plus size={18} className="text-mex-green" />
                   </button>
@@ -420,55 +426,58 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
           </div>
         )}
 
-        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        <div className="flex-1 overflow-y-auto p-3 space-y-3">
           {cart.length === 0 ? (
-            <div className="h-full flex flex-col items-center justify-center text-stone-400 opacity-50">
-              <ShoppingCart size={48} className="mb-2" />
-              <p>El carrito está vacío</p>
+            <div className="h-full flex flex-col items-center justify-center text-stone-300 py-10">
+              <ShoppingCart size={48} className="mb-2 opacity-20" />
+              <p className="font-medium">El carrito está vacío</p>
             </div>
           ) : (
             cart.map((item, index) => (
-              <div key={`${item.productId}-${index}`} className={cn("flex items-center gap-3 p-2 rounded-lg", item.status === 'completed' ? "bg-stone-100 opacity-70" : "")}>
-                <div className="flex-1">
-                  <div className="flex items-center gap-2">
-                    <p className={cn("font-medium", item.status === 'completed' ? "text-stone-500 line-through" : "text-stone-800")}>{item.name}</p>
+              <div key={`${item.productId}-${index}`} className={cn("flex flex-col gap-2 p-3 rounded-xl border border-stone-100", item.status === 'completed' ? "bg-stone-50/50 opacity-60" : "bg-white shadow-sm")}>
+                <div className="flex justify-between items-start">
+                  <div className="flex-1 min-w-0 pr-2">
+                    <p className={cn("font-bold text-sm leading-tight", item.status === 'completed' ? "text-stone-500 line-through" : "text-stone-800")}>{item.name}</p>
+                    <p className="text-[10px] text-stone-400 font-medium mt-0.5">{formatCurrency(item.price)} c/u</p>
                     {item.status === 'completed' && (
-                      <span className="text-[10px] bg-stone-200 text-stone-600 px-1.5 py-0.5 rounded font-bold uppercase">Entregado</span>
+                      <span className="text-[8px] bg-stone-200 text-stone-600 px-1 py-0.5 rounded font-bold uppercase mt-1 inline-block">Entregado</span>
                     )}
                   </div>
-                  <div className="flex flex-col gap-0.5">
-                    <p className="text-xs text-stone-500">{formatCurrency(item.price)} c/u</p>
+                  <p className="text-sm font-bold text-stone-800 whitespace-nowrap">
+                    {formatCurrency(item.price * item.quantity)}
+                  </p>
+                </div>
+                
+                <div className="flex items-center justify-between pt-2 border-t border-stone-50">
+                  <div className="flex items-center gap-1">
+                    <button 
+                      onClick={() => removeFromCart(item)}
+                      disabled={item.status === 'completed'}
+                      className="w-8 h-8 flex items-center justify-center rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-600 disabled:opacity-30 transition-colors"
+                    >
+                      <Minus size={14} />
+                    </button>
+                    <span className="w-8 text-center font-bold text-sm">{item.quantity}</span>
+                    <button 
+                      onClick={() => {
+                        const product = products.find(p => p.id === item.productId);
+                        if (product) addToCart(product, item.hasExtraCheese);
+                      }}
+                      disabled={item.status === 'completed'}
+                      className="w-8 h-8 flex items-center justify-center rounded-lg bg-mex-green/10 hover:bg-mex-green/20 text-mex-green disabled:opacity-30 transition-colors"
+                    >
+                      <Plus size={14} />
+                    </button>
                   </div>
+                  
+                  {item.notes && <p className="text-[10px] text-mex-red italic truncate max-w-[150px]">"{item.notes}"</p>}
                 </div>
-                <div className="flex items-center gap-2">
-                  <button 
-                    onClick={() => removeFromCart(item)}
-                    disabled={item.status === 'completed'}
-                    className="p-1 rounded-md hover:bg-stone-200 text-stone-500 disabled:opacity-30 disabled:cursor-not-allowed"
-                  >
-                    <Minus size={16} />
-                  </button>
-                  <span className="w-6 text-center font-bold">{item.quantity}</span>
-                  <button 
-                    onClick={() => {
-                      const product = products.find(p => p.id === item.productId);
-                      if (product) addToCart(product, item.hasExtraCheese);
-                    }}
-                    disabled={item.status === 'completed'}
-                    className="p-1 rounded-md hover:bg-stone-200 text-mex-green disabled:opacity-30 disabled:cursor-not-allowed"
-                  >
-                    <Plus size={16} />
-                  </button>
-                </div>
-                <p className="w-20 text-right font-bold text-stone-800">
-                  {formatCurrency(item.price * item.quantity)}
-                </p>
               </div>
             ))
           )}
         </div>
 
-        <div className="p-4 bg-stone-50 border-t border-stone-200 space-y-3">
+        <div className="p-4 bg-stone-50 border-t border-stone-200 space-y-3 shrink-0 mb-20 md:mb-0">
           {isTakeaway && (
             <div className="flex justify-between items-center text-sm text-stone-600">
               <span>Desechables (5%)</span>
