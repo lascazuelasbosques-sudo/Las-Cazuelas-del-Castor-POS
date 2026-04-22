@@ -41,9 +41,7 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
     const unsubCat = onSnapshot(qCat, (snapshot) => {
       const cats = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Category));
       setCategories(cats);
-      if (cats.length > 0 && !selectedCategory) {
-        setSelectedCategory(cats[0].id);
-      }
+      setSelectedCategory(prev => prev ? prev : (cats.length > 0 ? cats[0].id : ''));
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, "categories");
     });
@@ -253,7 +251,7 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
   return (
     <div className="flex flex-col h-full md:flex-row overflow-hidden relative bg-mex-cream">
       {/* Products Section */}
-      <div className="flex-1 flex flex-col p-3 md:p-6 overflow-hidden">
+      <div className="flex-1 flex flex-col p-3 md:p-6 min-h-0 overflow-hidden">
         <div className="flex flex-col gap-3 mb-4 md:mb-6 shrink-0">
           <div className="relative w-full">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" size={18} />
@@ -286,7 +284,7 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
           </div>
         </div>
 
-        <div className="flex flex-col gap-2 md:gap-3 overflow-y-auto pr-1 pb-24 md:pb-6 no-scrollbar">
+        <div className="flex-1 flex flex-col gap-2 md:gap-3 overflow-y-auto pr-1 pb-24 md:pb-6 no-scrollbar relative">
           {products.filter(p => {
             if (!p.available) return false;
             if (searchQuery) {
