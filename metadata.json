@@ -1,0 +1,6 @@
+{
+  "name": "Cazuelas Para Llevar WhatsApp",
+  "description": "Sistema de punto de venta para antojitos mexicanos con gestión de pedidos, WhatsApp para llevar, inventario, comandas y arqueo de caja.",
+  "requestFramePermissions": ["microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

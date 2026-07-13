@@ -1,0 +1,16 @@
+{
+  "name": "Radio Las Cazuelas",
+  "short_name": "Radio",
+  "description": "Sistema de comunicación interna para Las Cazuelas del Castor",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#1c1917",
+  "theme_color": "#f59e0b",
+  "icons": [
+    {
+      "src": "/logo_las_cazuelas_del_castor.jpg",
+      "sizes": "512x512",
+      "type": "image/jpeg"
+    }
+  ]
+}

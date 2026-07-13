@@ -1,0 +1,192 @@
+{
+  "entities": {
+    "Category": {
+      "title": "Category",
+      "description": "Categorías de productos (ej. Antojitos, Bebidas, Postres)",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "Nombre de la categoría" },
+        "order": { "type": "number", "description": "Orden de visualización" }
+      },
+      "required": ["name"]
+    },
+    "Product": {
+      "title": "Product",
+      "description": "Productos del menú",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "price": { "type": "number" },
+        "categoryId": { "type": "string" },
+        "stock": { "type": "number" },
+        "available": { "type": "boolean" },
+        "imageUrl": { "type": "string" }
+      },
+      "required": ["name", "price", "categoryId"]
+    },
+    "Order": {
+      "title": "Order",
+      "description": "Pedidos/Comandas",
+      "type": "object",
+      "properties": {
+        "folio": { "type": "string" },
+        "tableNumber": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "preparing", "ready", "served", "paid", "cancelled"] },
+        "items": { 
+          "type": "array",
+          "description": "Lista de productos en el pedido"
+        },
+        "total": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "waiterId": { "type": "string" },
+        "waiterName": { "type": "string" },
+        "notes": { "type": "string" }
+      },
+      "required": ["status", "items", "total", "createdAt"]
+    },
+    "User": {
+      "title": "User",
+      "description": "Usuarios del sistema",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "role": { "type": "string", "enum": ["admin", "waiter", "kitchen", "cashier", "parrilla"] },
+        "active": { "type": "boolean" }
+      },
+      "required": ["name", "email", "role"]
+    },
+    "CashLog": {
+      "title": "CashLog",
+      "description": "Registros de caja (apertura, cierre, gastos)",
+      "type": "object",
+      "properties": {
+        "type": { "type": "string", "enum": ["opening", "closing", "expense", "income"] },
+        "amount": { "type": "number" },
+        "reason": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "userId": { "type": "string" },
+        "userName": { "type": "string" }
+      },
+      "required": ["type", "amount", "timestamp", "userId"]
+    },
+    "Setting": {
+      "title": "Setting",
+      "description": "Configuraciones globales del sistema",
+      "type": "object",
+      "properties": {
+        "logoUrl": { "type": "string", "description": "URL o Base64 del logo del sistema" },
+        "appName": { "type": "string", "description": "Nombre de la aplicación" }
+      }
+    },
+    "CashAudit": {
+      "title": "CashAudit",
+      "description": "Arqueos de caja (aperturas y cierres verificados físicamente)",
+      "type": "object",
+      "properties": {
+        "type": { "type": "string", "enum": ["opening", "closing"] },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "counts": { "type": "object" },
+        "totalSystem": { "type": "number" },
+        "totalPhysical": { "type": "number" },
+        "difference": { "type": "number" },
+        "notes": { "type": "string" },
+        "status": { "type": "string", "enum": ["balanced", "shortage", "surplus"] }
+      },
+      "required": ["type", "timestamp", "userId", "totalSystem", "totalPhysical", "difference", "status"]
+    },
+    "TipLoan": {
+      "title": "TipLoan",
+      "description": "Préstamos tomados de la caja de propinas",
+      "type": "object",
+      "properties": {
+        "amount": { "type": "number" },
+        "reason": { "type": "string" },
+        "borrowerName": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "returned"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "returnedAt": { "type": "string", "format": "date-time" },
+        "userId": { "type": "string" },
+        "userName": { "type": "string" }
+      },
+      "required": ["amount", "reason", "status", "createdAt", "userId"]
+    },
+    "Client": {
+      "title": "Client",
+      "description": "Clientes registrados para pedidos para llevar o entregas",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "phone": { "type": "string" },
+        "email": { "type": "string" },
+        "address": { "type": "string" },
+        "notes": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "orderCount": { "type": "number" },
+        "totalPaid": { "type": "number" }
+      },
+      "required": ["name", "phone", "createdAt"]
+    },
+    "ChatChannel": {
+      "title": "ChatChannel",
+      "description": "Canales de chat con clientes (simulador WhatsApp)",
+      "type": "object",
+      "properties": {
+        "clientName": { "type": "string" },
+        "clientPhone": { "type": "string" },
+        "lastMessage": { "type": "string" },
+        "lastMessageAt": { "type": "string", "format": "date-time" },
+        "unreadCount": { "type": "number" },
+        "status": { "type": "string", "enum": ["open", "archived"] },
+        "activeOrderId": { "type": "string" }
+      },
+      "required": ["clientName", "clientPhone", "lastMessage", "lastMessageAt", "unreadCount", "status"]
+    },
+    "ChatMessage": {
+      "title": "ChatMessage",
+      "description": "Mensajes individuales de un canal de chat",
+      "type": "object",
+      "properties": {
+        "sender": { "type": "string", "enum": ["client", "staff"] },
+        "text": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "status": { "type": "string", "enum": ["sent", "delivered", "read"] },
+        "orderId": { "type": "string" }
+      },
+      "required": ["sender", "text", "timestamp", "status"]
+    },
+    "WalkieMessage": {
+      "title": "WalkieMessage",
+      "description": "Mensajes instantáneos de voz o preestablecidos del walkie talkie",
+      "type": "object",
+      "properties": {
+        "senderName": { "type": "string" },
+        "senderRole": { "type": "string" },
+        "channel": { "type": "string", "enum": ["general", "cocina", "parrilla", "admin"] },
+        "type": { "type": "string", "enum": ["audio", "preset"] },
+        "audioData": { "type": "string" },
+        "text": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["senderName", "senderRole", "channel", "type", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/categories": { "schema": "Category", "description": "Colección de categorías" },
+    "/products": { "schema": "Product", "description": "Colección de productos" },
+    "/orders": { "schema": "Order", "description": "Colección de pedidos" },
+    "/users": { "schema": "User", "description": "Colección de usuarios" },
+    "/cashLogs": { "schema": "CashLog", "description": "Colección de registros de caja" },
+    "/cashAudits": { "schema": "CashAudit", "description": "Colección de arqueos de caja" },
+    "/settings": { "schema": "Setting", "description": "Configuraciones del sistema" },
+    "/tipLoans": { "schema": "TipLoan", "description": "Colección de préstamos de propinas" },
+    "/clients": { "schema": "Client", "description": "Colección de clientes registrados" },
+    "/chats": { "schema": "ChatChannel", "description": "Canales de chat de clientes" },
+    "/chats/{chatId}/messages": { "schema": "ChatMessage", "description": "Mensajes individuales de un canal" },
+    "/walkieMessages": { "schema": "WalkieMessage", "description": "Mensajes de audio y preestablecidos de Walkie-Talkie" }
+  }
+}
