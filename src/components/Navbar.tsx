@@ -134,7 +134,10 @@ export const Navbar = ({
         }
 
         // Increment count of active unpaid orders (excluding those marked as paid/cancelled)
-        unpaidCount++;
+        const isPaid = order.isPaid || order.status === 'paid';
+        if (!isPaid) {
+          unpaidCount++;
+        }
 
         // Only show kitchen alerts for pending or preparing orders
         if (order.status === 'pending' || order.status === 'preparing') {

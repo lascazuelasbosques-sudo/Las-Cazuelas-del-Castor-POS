@@ -668,7 +668,7 @@ export default function WhatsAppInternoView({ userRole, mode = 'staff' }: WhatsA
       });
       
       const trackingUrl = `${window.location.origin}/?portal&id=${orderRef.id}`;
-      const whatsappFormattedText = `*🔔 NUEVO PEDIDO PARA LLEVAR*\n━━━━━━━━━━━━━━━━━━━━\n👤 *Cliente:* ${portalClientName}\n📞 *WhatsApp:* ${cleanPhone}\n📍 *Ubicación:* ${portalClientAddress || 'No especificada'}\n🧾 *Folio:* ${folio}\n━━━━━━━━━━━━━━━━━━━━\n📋 *Detalle del Pedido:*\n${menuSummaryString}\n💰 *TOTAL:* $${totalPortalCartPrice} pesos\n📌 *Notas:* ${portalNotes || 'Ninguna'}\n\n*🏦 DATOS PARA TRANSFERENCIA :*\n🏦 *Banco:* BBVA\n👤 *Nombre:* Antonieta Abigail Villagómez\n💳 *CTA:* 4152 3135 1505 5627\n\n*🔍 RASTREA TU PEDIDO AQUÍ:*\n${trackingUrl}\n\n*¡Listo! Por favor confírmanos que ya lo están preparando.* 🙏`;
+      const whatsappFormattedText = `*🔔 NUEVO PEDIDO PARA LLEVAR*\n━━━━━━━━━━━━━━━━━━━━\n👤 *Cliente:* ${portalClientName}\n📞 *WhatsApp:* ${cleanPhone}\n📍 *Ubicación:* ${portalClientAddress || 'No especificada'}\n🧾 *Folio:* ${folio}\n━━━━━━━━━━━━━━━━━━━━\n📋 *Detalle del Pedido:*\n${menuSummaryString}\n💰 *TOTAL:* $${totalPortalCartPrice} pesos\n📌 *Notas:* ${portalNotes || 'Ninguna'}\n\n*🔍 RASTREA TU PEDIDO AQUÍ:*\n${trackingUrl}\n\n*¡Listo! Tu pedido ha sido enviado a cocina. Te enviaremos los datos para pago por transferencia en cuanto esté listo.* 🙏`;
 
       // 4. Create chat record
       await setDoc(doc(db, "chats", cleanPhone), {
@@ -750,7 +750,7 @@ export default function WhatsAppInternoView({ userRole, mode = 'staff' }: WhatsA
       if (nextStatus === 'preparing') {
         notificationTxt = `🍳 *CONSIGNACIÓN:* Tu pedido de ${branding.appName} ya se encuentra en cocina y ya lo están preparando.`;
       } else if (nextStatus === 'ready') {
-        notificationTxt = `🔔 *AVISO:* ¡Felicidades! Tu pedido de ${branding.appName} ya se encuentra listo para retirar en local.`;
+        notificationTxt = `🔔 *AVISO:* ¡Felicidades! Tu pedido de ${branding.appName} ya se encuentra listo para retirar en local.\n\n*🏦 DATOS PARA TRANSFERENCIA :*\n🏦 *Banco:* BBVA\n👤 *Nombre:* Antonieta Abigail Villagómez\n💳 *CTA:* 4152 3135 1505 5627\n\n*¡Listo! Por favor envíanos tu comprobante de pago.* 🙏`;
       } else if (nextStatus === 'served') {
         notificationTxt = "🚗 *ENTREGADO:* Tu pedido ha sido entregado oficialmente. ¡Muchisimas gracias!";
       } else if (nextStatus === 'paid') {

@@ -4,7 +4,7 @@ import { Button } from "./Button";
 import { Order, OrderStatus, OrderItem } from "@/src/types";
 import { Clock, CheckCircle2, PlayCircle, ClipboardList, PlusCircle, Trash2, Ban, X, XCircle, Bell, BellOff, Volume2, VolumeX, Smartphone } from "lucide-react";
 import { db } from "../firebase";
-import { collection, onSnapshot, query, where, orderBy, doc, updateDoc } from "firebase/firestore";
+import { collection, onSnapshot, query, where, orderBy, doc, updateDoc, addDoc } from "firebase/firestore";
 import { cn, customRound } from "@/src/lib/utils";
 import toast from "react-hot-toast";
 import { handleFirestoreError, OperationType } from "@/src/lib/firestoreErrorHandler";
@@ -313,6 +313,28 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
     }, 4000);
   };
 
+  const notifyWhatsAppReady = async (orderId: string, order: Order) => {
+    if (order.isTakeaway && order.waiterId && order.waiterId.startsWith("whatsapp-")) {
+      const cleanPhone = order.waiterId.replace("whatsapp-", "");
+      const transferMsg = `🔔 *AVISO:* ¡Felicidades! Tu pedido ya se encuentra listo para retirar en local.\n\n*🏦 DATOS PARA TRANSFERENCIA :*\n🏦 *Banco:* BBVA\n👤 *Nombre:* Antonieta Abigail Villagómez\n💳 *CTA:* 4152 3135 1505 5627\n\n*¡Listo! Por favor envíanos tu comprobante de pago.* 🙏`;
+      try {
+        await addDoc(collection(db, "chats", cleanPhone, "messages"), {
+          sender: "staff",
+          text: transferMsg,
+          timestamp: new Date().toISOString(),
+          status: "sent"
+        });
+        await updateDoc(doc(db, "chats", cleanPhone), {
+          lastMessage: transferMsg,
+          lastMessageAt: new Date().toISOString(),
+          unreadCount: 0
+        });
+      } catch (e) {
+        console.error("Error sending ready whatsapp message from kitchen:", e);
+      }
+    }
+  };
+
   const updateOrderStatus = async (orderId: string, action: 'start_station' | 'finish_station', station: 'plancha' | 'cocina') => {
     try {
       const order = orders.find(o => o.id === orderId);
@@ -364,6 +386,9 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
         }
 
         await updateDoc(doc(db, "orders", orderId), updateData);
+        if (updateData.status === 'ready') {
+          await notifyWhatsAppReady(orderId, order);
+        }
         toast.success(`Comanda de ${station === 'plancha' ? 'Parrilla' : 'Cocina'} lista`);
       }
     } catch (error) {
@@ -399,6 +424,9 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
       }
 
       await updateDoc(doc(db, "orders", orderId), updateData);
+      if (updateData.status === 'ready') {
+        await notifyWhatsAppReady(orderId, order);
+      }
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, "orders");
     }
@@ -445,6 +473,9 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
       }
 
       await updateDoc(doc(db, "orders", orderId), updateData);
+      if (updateData.status === 'ready') {
+        await notifyWhatsAppReady(orderId, order);
+      }
       toast.success(`${itemToCancel.name} cancelado de la comanda`);
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, "orders");
