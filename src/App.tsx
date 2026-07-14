@@ -25,6 +25,7 @@ import { useBranding } from './lib/useBranding';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('orders');
+  const [isWalkieOpen, setIsWalkieOpen] = useState(false);
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
   const [posUser, setPosUser] = useState<POSUser | null>(null);
   const [userRole, setUserRole] = useState<string>('waiter');
@@ -407,6 +408,8 @@ export default function App() {
           onLogout={handleLogout}
           isFullscreen={isFullscreen || isSimulatedFullscreen}
           toggleFullscreen={toggleFullscreen}
+          isWalkieOpen={isWalkieOpen}
+          setIsWalkieOpen={setIsWalkieOpen}
         />
       
       <main className="flex-1 overflow-hidden relative pb-16 md:pb-0">
@@ -417,7 +420,7 @@ export default function App() {
 
       <PendingOrdersNotifier />
 
-      <WalkieTalkie posUser={posUser} />
+      <WalkieTalkie posUser={posUser} isOpen={isWalkieOpen} setIsOpen={setIsWalkieOpen} />
 
       <Toaster position="top-right" />
       </div>

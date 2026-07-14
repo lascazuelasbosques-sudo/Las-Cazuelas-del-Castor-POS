@@ -64,6 +64,8 @@ interface WalkieTalkieProps {
     name: string;
     role: string;
   } | null;
+  isOpen: boolean;
+  setIsOpen: (open: boolean) => void;
 }
 
 // Walkie Talkie Preset Messages
@@ -191,8 +193,7 @@ const playRadioBeep = (type: 'activate' | 'receive' | 'deactivate') => {
   }
 };
 
-export function WalkieTalkie({ posUser }: WalkieTalkieProps) {
-  const [isOpen, setIsOpen] = useState(false);
+export function WalkieTalkie({ posUser, isOpen, setIsOpen }: WalkieTalkieProps) {
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [targetId, setTargetId] = useState<string>('all');
   const [targetType, setTargetType] = useState<'group' | 'individual'>('group');
@@ -255,6 +256,21 @@ export function WalkieTalkie({ posUser }: WalkieTalkieProps) {
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, [wakeLock, isOpen]);
+
+  // Sync Wake Lock with isOpen prop
+  useEffect(() => {
+    if (isOpen) {
+      requestWakeLock();
+    } else {
+      if (wakeLock) {
+        wakeLock.release();
+        setWakeLock(null);
+      }
+      if (silentAudioRef.current) {
+        silentAudioRef.current.pause();
+      }
+    }
+  }, [isOpen]);
 
   // Request Notification Permissions on mount
   useEffect(() => {
@@ -799,10 +815,9 @@ export function WalkieTalkie({ posUser }: WalkieTalkieProps) {
 
   return (
     <>
-      {/* Floating Walkie Talkie Badge Trigger */}
-      <div className="fixed bottom-20 md:bottom-6 left-5 z-[80] flex flex-col items-start gap-2">
-        {/* Active speaker subtitle overlay if incoming transmission */}
-        {activeSpeaker && (
+      {/* Floating Walkie Talkie Active Speaker Overlay */}
+      {activeSpeaker && (
+        <div className="fixed bottom-20 md:bottom-6 left-5 z-[80] flex flex-col items-start gap-2">
           <div className="bg-stone-900 border-2 border-amber-400 text-white p-3 rounded-2xl shadow-2xl max-w-xs md:max-w-md flex flex-col gap-1 items-start text-xs animate-bounce animate-pulse">
             <div className="flex items-center gap-1.5 font-black uppercase text-[10px] text-amber-400">
               <span className="w-2 h-2 rounded-full bg-red-600 animate-ping"></span>
@@ -810,52 +825,12 @@ export function WalkieTalkie({ posUser }: WalkieTalkieProps) {
             </div>
             <p className="font-extrabold italic text-[11px] text-amber-100">"{activeSpeaker.text}"</p>
           </div>
-        )}
-
-        <button
-          onClick={() => {
-            const nextOpen = !isOpen;
-            setIsOpen(nextOpen);
-            if (nextOpen) {
-              requestWakeLock();
-            } else {
-              if (wakeLock) {
-                wakeLock.release();
-                setWakeLock(null);
-              }
-              if (silentAudioRef.current) {
-                silentAudioRef.current.pause();
-              }
-            }
-          }}
-          className={`h-14 w-14 rounded-full flex items-center justify-center shadow-xl border-2 transition-all active:scale-95 cursor-pointer relative ${
-            incomingActive 
-              ? "bg-red-600 border-red-300 text-white animate-pulse" 
-              : isOpen 
-                ? "bg-stone-900 border-orange-500 text-orange-500" 
-                : "bg-stone-850 border-orange-500 text-orange-500 hover:bg-stone-900 shadow-lg"
-          }`}
-          id="btn-walkie-talkie-trigger"
-          title="Walkie-Talkie Interno"
-        >
-          {incomingActive ? (
-            <Radio className="animate-spin" size={24} />
-          ) : (
-            <Mic size={24} strokeWidth={2.8} className={isRecording ? "text-red-500 animate-pulse" : "text-orange-500"} />
-          )}
-
-          {/* Unread dot indicator */}
-          <span className={`absolute top-0 right-0 w-4.5 h-4.5 rounded-full border border-white text-[8px] font-black flex items-center justify-center ${
-            soundEnabled ? "bg-emerald-500" : "bg-amber-500"
-          }`}>
-            {soundEnabled ? "ON" : "MUT"}
-          </span>
-        </button>
-      </div>
+        </div>
+      )}
 
       {/* Rugged Physical Walkie Talkie Simulator Panel */}
       {isOpen && (
-        <div className="fixed bottom-36 md:bottom-24 left-4 right-4 md:right-auto md:left-5 z-[90] md:w-72 bg-stone-900 border-4 border-stone-800 rounded-3xl shadow-2xl overflow-hidden flex flex-col border-b-[8px] transform transition-all duration-300 scale-100">
+        <div className="fixed bottom-[74px] md:bottom-24 left-4 right-4 md:right-auto md:left-5 z-[90] md:w-72 bg-stone-900 border-4 border-stone-800 rounded-3xl shadow-2xl overflow-hidden flex flex-col border-b-[8px] transform transition-all duration-300 scale-100">
           
           {/* Top Antenna / Volume Knob Representation */}
           <div className="bg-stone-950 px-3 py-1.5 flex items-center justify-between border-b border-stone-800 text-[9px] text-stone-500 font-bold tracking-wider">

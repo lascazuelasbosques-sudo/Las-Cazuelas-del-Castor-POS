@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Utensils, ClipboardList, Package, CreditCard, Settings, LogOut, Menu, ChefHat, MessageSquare, Bell, Maximize2, Minimize2 } from "lucide-react";
+import { Utensils, ClipboardList, Package, CreditCard, Settings, LogOut, Menu, ChefHat, MessageSquare, Bell, Maximize2, Minimize2, Radio } from "lucide-react";
 import { Button } from "./Button";
 import { cn, getRoleLabel } from "@/src/lib/utils";
 import { auth, db } from "../firebase";
@@ -16,6 +16,8 @@ interface NavbarProps {
   onLogout: () => void;
   isFullscreen?: boolean;
   toggleFullscreen?: () => void;
+  isWalkieOpen: boolean;
+  setIsWalkieOpen: (open: boolean) => void;
 }
 
 export const Navbar = ({ 
@@ -25,7 +27,9 @@ export const Navbar = ({
   userName = 'Usuario', 
   onLogout,
   isFullscreen: propIsFullscreen,
-  toggleFullscreen: propToggleFullscreen
+  toggleFullscreen: propToggleFullscreen,
+  isWalkieOpen,
+  setIsWalkieOpen
 }: NavbarProps) => {
   const [pendingStations, setPendingStations] = useState<{plancha: boolean, cocina: boolean}>({ plancha: false, cocina: false });
   const [totalUnreadChats, setTotalUnreadChats] = useState(0);
@@ -288,6 +292,18 @@ export const Navbar = ({
         {/* Dynamic scroll indicators / Actions on mobile */}
         <div className="flex md:hidden items-center gap-1 pl-2 border-l border-stone-200 shrink-0">
           <button
+            onClick={() => setIsWalkieOpen(!isWalkieOpen)}
+            className={cn(
+              "flex flex-col items-center gap-1 p-2 rounded-xl shrink-0 transition-all",
+              isWalkieOpen ? "text-orange-500 bg-orange-50" : "text-stone-600 hover:bg-stone-50"
+            )}
+            title="Walkie-Talkie Interno"
+          >
+            <Radio size={21} className={isWalkieOpen ? "animate-pulse text-orange-600" : "text-orange-500"} />
+            <span className="text-[9px] font-extrabold whitespace-nowrap">Walkie</span>
+          </button>
+
+          <button
             onClick={toggleFullscreen}
             className="flex flex-col items-center gap-1 p-2 rounded-xl text-stone-600 hover:bg-stone-50 shrink-0"
             title={isFullscreen ? "Salir de Pantalla Completa" : "Pantalla Completa"}
@@ -317,6 +333,22 @@ export const Navbar = ({
             <img src={logoUrl} className="w-full h-full object-cover" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
           </div>
         </div>
+
+        {/* Walkie-Talkie Button for Desktop */}
+        <Button 
+          variant={isWalkieOpen ? "default" : "outline"}
+          className={cn(
+            "justify-center lg:justify-start gap-3 w-full px-0 lg:px-4 h-[40px] rounded-xl text-xs font-bold transition-all",
+            isWalkieOpen 
+              ? "bg-orange-500 hover:bg-orange-600 text-stone-950 border-orange-500" 
+              : "border-stone-200 bg-white text-stone-600 hover:bg-stone-50"
+          )}
+          title="Walkie-Talkie Interno"
+          onClick={() => setIsWalkieOpen(!isWalkieOpen)}
+        >
+          <Radio size={18} className={cn(isWalkieOpen ? "animate-pulse" : "text-orange-500")} />
+          <span className="hidden lg:inline">Walkie-Talkie</span>
+        </Button>
 
         {/* Fullscreen Button for Desktop */}
         <Button 
