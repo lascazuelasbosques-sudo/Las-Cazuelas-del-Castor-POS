@@ -6,7 +6,7 @@ import { Bell, BellOff, Volume2, VolumeX, AlertTriangle, Clock, ChevronDown, Che
 import { formatCurrency } from "@/src/lib/utils";
 import toast from "react-hot-toast";
 
-export function PendingOrdersNotifier() {
+export function PendingOrdersNotifier({ userRole = 'waiter' }: { userRole?: string }) {
   const [pendingOrders, setPendingOrders] = useState<Order[]>([]);
   const [soundEnabled, setSoundEnabled] = useState<boolean>(() => {
     const saved = localStorage.getItem("pending_orders_sound_enabled");
@@ -165,52 +165,70 @@ export function PendingOrdersNotifier() {
       prevOrdersRef.current = orders;
       setPendingOrders(orders);
 
-      // Play sound and speak immediately on NEW order arrival if sound is enabled
+      // Play sound and speak immediately on NEW order arrival if sound is enabled and the user is the preparer
       if (orders.length > prevOrdersCountRef.current) {
         const newest = orders[0];
-        const info = newest.isTakeaway ? "para llevar" : `de la Mesa ${newest.tableNumber || ""}`;
 
-        if (soundEnabled) {
-          // Play chime sound
-          audioRef.current?.play().catch(err => {
-            console.log("Audio blocked by browser, needs user interaction first.", err);
-          });
-          
-          const isTakeaway = newest.isTakeaway;
-          const speakMsg = isTakeaway 
-            ? "Nuevo pedido recibido para llevar." 
-            : `Nuevo pedido recibido de la mesa ${newest.tableNumber || ""}.`;
-          
-          // Speak with a slight delay so it doesn't overlap with the chime chime
-          setTimeout(() => {
-            speakText(speakMsg);
-          }, 800);
+        // Filter items based on the user's preparation station
+        const cocinaItems = newest.items.filter(item => (item.station === 'cocina' || !item.station) && item.status !== 'cancelled');
+        const planchaItems = newest.items.filter(item => item.station === 'plancha' && item.status !== 'cancelled');
 
-          const toastInfo = newest.folio || newest.tableNumber ? `Mesa ${newest.tableNumber}` : newest.clientName || "Llevar";
-          toast(`🔔 Nuevo pedido recibido: ${toastInfo}`, {
-            icon: "🍳",
-            duration: 4000,
-            style: {
-              background: "#1e293b",
-              color: "#fff",
-              fontWeight: "bold",
-            }
-          });
-          
-          // Reset the timer since we just spoke, preventing immediate repetition
-          lastPlayTimeRef.current = Date.now();
+        let shouldAlert = false;
+        let itemsToSpeak: typeof newest.items = [];
+
+        if (userRole === 'kitchen') {
+          shouldAlert = cocinaItems.length > 0;
+          itemsToSpeak = cocinaItems;
+        } else if (userRole === 'parrilla') {
+          shouldAlert = planchaItems.length > 0;
+          itemsToSpeak = planchaItems;
         }
 
-        // Trigger system background Notification for operator/cashier
-        if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted") {
-          try {
-            new Notification("🍳 ¡NUEVO PEDIDO RECIBIDO!", {
-              body: `Pedido ${info}. Revisa la orden en el panel de control.`,
-              requireInteraction: true,
-              tag: `new-order-notifier-${newest.id}`
+        if (shouldAlert) {
+          const destiny = newest.isTakeaway 
+            ? "para llevar" 
+            : `para la mesa ${newest.tableNumber || ""}`;
+          
+          const itemsListText = itemsToSpeak.map(item => `${item.quantity} ${item.name}`).join(", ");
+          const speakMsg = `Nuevo pedido ${destiny}. Preparar: ${itemsListText}.`;
+
+          if (soundEnabled) {
+            // Play chime sound
+            audioRef.current?.play().catch(err => {
+              console.log("Audio blocked by browser, needs user interaction first.", err);
             });
-          } catch (e) {
-            console.error("Web Notification error on new order:", e);
+            
+            // Speak with a slight delay so it doesn't overlap with the chime
+            setTimeout(() => {
+              speakText(speakMsg);
+            }, 800);
+
+            const toastInfo = newest.folio || newest.tableNumber ? `Mesa ${newest.tableNumber}` : newest.clientName || "Llevar";
+            toast(`🔔 Nuevo pedido recibido: ${toastInfo}`, {
+              icon: "🍳",
+              duration: 4000,
+              style: {
+                background: "#1e293b",
+                color: "#fff",
+                fontWeight: "bold",
+              }
+            });
+            
+            // Reset the timer since we just spoke, preventing immediate repetition
+            lastPlayTimeRef.current = Date.now();
+          }
+
+          // Trigger system background Notification for the preparer
+          if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted") {
+            try {
+              new Notification("🍳 ¡NUEVO PEDIDO RECIBIDO!", {
+                body: `Pedido ${destiny}. Preparar: ${itemsListText}.`,
+                requireInteraction: true,
+                tag: `new-order-notifier-${newest.id}`
+              });
+            } catch (e) {
+              console.error("Web Notification error on new order:", e);
+            }
           }
         }
       }
@@ -221,12 +239,32 @@ export function PendingOrdersNotifier() {
     });
 
     return () => unsubscribe();
-  }, [soundEnabled]);
+  }, [soundEnabled, userRole]);
 
   // Periodic Reminder Sound Loop (Every 3 minutes if there are unattended orders)
   useEffect(() => {
     const interval = setInterval(() => {
-      if (pendingOrders.length > 0 && soundEnabled) {
+      // Only preparers get alerts
+      const isPreparer = userRole === 'kitchen' || userRole === 'parrilla';
+      if (!isPreparer) return;
+
+      // Filter orders that have pending items for this specific station
+      const relevantOrders = pendingOrders.filter(order => {
+        const hasStationItems = order.items.some(item => {
+          const isCancelled = item.status === 'cancelled';
+          const isCompleted = item.status === 'completed';
+          if (isCancelled || isCompleted) return false;
+
+          if (userRole === 'kitchen') {
+            return item.station === 'cocina' || !item.station;
+          } else {
+            return item.station === 'plancha';
+          }
+        });
+        return hasStationItems;
+      });
+
+      if (relevantOrders.length > 0 && soundEnabled) {
         const now = Date.now();
         // Prevent playing too rapidly (3 minutes = 180,000 ms, safeguard at 170,000 ms)
         if (now - lastPlayTimeRef.current >= 170000) {
@@ -234,8 +272,8 @@ export function PendingOrdersNotifier() {
           audioRef.current?.play().catch(e => console.log("Sound loop play blocked:", e));
           
           // Prepare friendly Spanish reminder
-          const criticalCount = pendingOrders.filter(o => getWaitTime(o.createdAt) >= 10).length;
-          let speakMsg = `Recordatorio: tienes ${pendingOrders.length} ${pendingOrders.length === 1 ? 'pedido pendiente' : 'pedidos pendientes'} de atender.`;
+          const criticalCount = relevantOrders.filter(o => getWaitTime(o.createdAt) >= 10).length;
+          let speakMsg = `Recordatorio: tienes ${relevantOrders.length} ${relevantOrders.length === 1 ? 'pedido pendiente' : 'pedidos pendientes'} de atender.`;
           if (criticalCount > 0) {
             speakMsg += ` ¡Atención! ${criticalCount} de ellos ya llevan más de diez minutos de espera.`;
           }
@@ -251,7 +289,7 @@ export function PendingOrdersNotifier() {
     }, 180000); // 3 minutes in ms
 
     return () => clearInterval(interval);
-  }, [pendingOrders, soundEnabled]);
+  }, [pendingOrders, soundEnabled, userRole]);
 
   if (pendingOrders.length === 0) {
     return null;

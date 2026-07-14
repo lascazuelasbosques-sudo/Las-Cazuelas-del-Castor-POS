@@ -418,7 +418,7 @@ export default function App() {
         </div>
       </main>
 
-      <PendingOrdersNotifier />
+      <PendingOrdersNotifier userRole={userRole} />
 
       <WalkieTalkie posUser={posUser} isOpen={isWalkieOpen} setIsOpen={setIsWalkieOpen} />
 

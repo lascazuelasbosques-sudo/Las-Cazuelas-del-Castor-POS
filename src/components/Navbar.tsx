@@ -32,6 +32,7 @@ export const Navbar = ({
   setIsWalkieOpen
 }: NavbarProps) => {
   const [pendingStations, setPendingStations] = useState<{plancha: boolean, cocina: boolean}>({ plancha: false, cocina: false });
+  const [unpaidPaymentsCount, setUnpaidPaymentsCount] = useState(0);
   const [totalUnreadChats, setTotalUnreadChats] = useState(0);
   const prevUnreadRef = useRef(0);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -112,11 +113,11 @@ export const Navbar = ({
     audioRef.current = new Audio("https://assets.mixkit.co/active_storage/sfx/2857/2857-preview.mp3");
   }, []);
 
-  // Monitor Kitchen Orders
+  // Monitor Kitchen Orders and Unprocessed Payments
   useEffect(() => {
     const q = query(
       collection(db, "orders"),
-      where("status", "in", ["pending", "preparing"])
+      where("status", "in", ["pending", "preparing", "ready", "served"])
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -124,6 +125,7 @@ export const Navbar = ({
       
       let hasPlancha = false;
       let hasCocina = false;
+      let unpaidCount = 0;
 
       orders.forEach(order => {
         // Ignore unconfirmed WhatsApp orders so they don't light up the kitchen badges before being accepted
@@ -131,15 +133,22 @@ export const Navbar = ({
           return;
         }
 
-        order.items.forEach(item => {
-          if (item.status !== 'completed') {
-            if (item.station === 'plancha') hasPlancha = true;
-            if (item.station === 'cocina' || !item.station) hasCocina = true;
-          }
-        });
+        // Increment count of active unpaid orders (excluding those marked as paid/cancelled)
+        unpaidCount++;
+
+        // Only show kitchen alerts for pending or preparing orders
+        if (order.status === 'pending' || order.status === 'preparing') {
+          order.items.forEach(item => {
+            if (item.status !== 'completed') {
+              if (item.station === 'plancha') hasPlancha = true;
+              if (item.station === 'cocina' || !item.station) hasCocina = true;
+            }
+          });
+        }
       });
 
       setPendingStations({ plancha: hasPlancha, cocina: hasCocina });
+      setUnpaidPaymentsCount(unpaidCount);
     });
 
     return () => unsubscribe();
@@ -276,6 +285,13 @@ export const Navbar = ({
                 {item.id === 'whatsapp' && totalUnreadChats > 0 && (
                   <div className="absolute -top-1.5 -right-1.5 bg-emerald-500 text-white text-[8px] md:text-[9px] font-black w-3.5 h-3.5 md:w-4 md:h-4 rounded-full flex items-center justify-center border border-white shadow-sm scale-110">
                     {totalUnreadChats > 9 ? '+9' : totalUnreadChats}
+                  </div>
+                )}
+
+                {/* Cash Badge (Unprocessed Payments) */}
+                {item.id === 'cash' && unpaidPaymentsCount > 0 && (
+                  <div className="absolute -top-1.5 -right-1.5 bg-rose-500 text-white text-[8px] md:text-[9px] font-black w-3.5 h-3.5 md:w-4 md:h-4 rounded-full flex items-center justify-center border border-white shadow-sm scale-110 animate-pulse" title="Pagos sin procesar">
+                    {unpaidPaymentsCount}
                   </div>
                 )}
               </div>
