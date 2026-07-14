@@ -399,7 +399,7 @@ export default function App() {
 
   return (
     <div className={`flex items-center justify-center min-h-[100dvh] w-screen bg-stone-900 transition-colors duration-500`}>
-      <div className={`flex flex-col md:flex-row h-[100dvh] w-full max-w-[1400px] bg-mex-cream overflow-hidden shadow-2xl relative ${isSimulatedFullscreen ? "simulated-fullscreen !max-w-none" : ""}`}>
+      <div className={`flex flex-col md:flex-row h-[100dvh] w-full bg-mex-cream overflow-hidden shadow-2xl relative ${(isFullscreen || isSimulatedFullscreen) ? "simulated-fullscreen !max-w-none w-screen" : "max-w-[1400px]"}`}>
         <Navbar 
           activeTab={activeTab} 
           setActiveTab={setActiveTab} 
