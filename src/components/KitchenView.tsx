@@ -53,6 +53,8 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
   const [fullscreenStrobe, setFullscreenStrobe] = useState<boolean>(false);
   const [testAlertActive, setTestAlertActive] = useState<boolean>(false);
   const [showSettingsPopover, setShowSettingsPopover] = useState<boolean>(false);
+  const [showMusicSettings, setShowMusicSettings] = useState<boolean>(false);
+  const [isTestingMusic, setIsTestingMusic] = useState<boolean>(false);
   const [notificationPermission, setNotificationPermission] = useState<string>(() => {
     if (typeof window !== "undefined" && "Notification" in window) {
       return Notification.permission;
@@ -669,11 +671,12 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
 
   // Manage reactive preparation music playback
   const isPreparing = tickets.some(t => t.stationStatus === 'preparing');
+  const shouldPlayMusic = isPreparing || isTestingMusic;
 
   useEffect(() => {
     const audioUrl = getPrepAudioUrl();
     
-    if (isPreparing && audioUrl && kitchenSoundEnabled) {
+    if (shouldPlayMusic && audioUrl && kitchenSoundEnabled) {
       if (!preparationAudioRef.current || preparationAudioRef.current.src !== audioUrl) {
         if (preparationAudioRef.current) {
           try {
@@ -697,7 +700,7 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
         } catch (e) {}
       }
     }
-  }, [isPreparing, prepSongType, prepSongPreset, prepSongUrl, prepSongLocalUrl, kitchenSoundEnabled]);
+  }, [shouldPlayMusic, prepSongType, prepSongPreset, prepSongUrl, prepSongLocalUrl, kitchenSoundEnabled]);
 
   useEffect(() => {
     return () => {
@@ -909,6 +912,20 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
           )}
 
           <button
+            onClick={() => setShowMusicSettings(!showMusicSettings)}
+            className={cn(
+              "p-2.5 px-3.5 rounded-2xl border transition-all flex items-center gap-2 cursor-pointer shadow-sm text-[10px] font-black uppercase tracking-wider h-[46px]",
+              showMusicSettings 
+                ? "bg-amber-600 text-white border-amber-700" 
+                : "bg-white text-amber-700 border-amber-200 hover:bg-amber-50"
+            )}
+            title="Música de Preparación"
+          >
+            <Music size={15} className={cn(isPreparing && "animate-spin duration-3000")} />
+            <span>🎵 Música</span>
+          </button>
+
+          <button
             onClick={() => setShowSettingsPopover(!showSettingsPopover)}
             className={cn(
               "p-2.5 px-3.5 rounded-2xl border transition-all flex items-center gap-2 cursor-pointer shadow-sm text-[10px] font-black uppercase tracking-wider h-[46px]",
@@ -1050,120 +1067,6 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
                       : "🔵 SOLICITAR"}
                 </button>
               </div>
-
-              {/* 5. PREPARATION MUSIC CONFIGURATION */}
-              <div className="p-4 rounded-2xl bg-amber-50/55 border border-amber-100 space-y-3">
-                <div className="flex items-center gap-2">
-                  <Music className="text-amber-600" size={16} />
-                  <p className="text-xs font-black text-stone-850 uppercase tracking-wide">Música de Preparación</p>
-                </div>
-                <p className="text-[9px] text-stone-600 font-medium leading-relaxed">
-                  Reproduce música automáticamente en tu dispositivo mientras haya platillos en preparación para {userRole === 'parrilla' ? 'parrilla' : userRole === 'kitchen' ? 'cocina' : 'cocina/parrilla'}. Al terminar la preparación, la música se detendrá.
-                </p>
-
-                {/* Song source selector */}
-                <div className="grid grid-cols-3 gap-1.5 p-1 bg-stone-100 rounded-xl">
-                  <button
-                    type="button"
-                    onClick={() => setPrepSongType('preset')}
-                    className={cn(
-                      "py-1.5 text-[8px] font-bold uppercase rounded-lg transition-all border-none cursor-pointer",
-                      prepSongType === 'preset' ? "bg-white text-stone-900 shadow-sm font-black" : "text-stone-500 hover:text-stone-800 bg-transparent"
-                    )}
-                  >
-                    🎵 De Lista
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setPrepSongType('file')}
-                    className={cn(
-                      "py-1.5 text-[8px] font-bold uppercase rounded-lg transition-all border-none cursor-pointer",
-                      prepSongType === 'file' ? "bg-white text-stone-900 shadow-sm font-black" : "text-stone-500 hover:text-stone-800 bg-transparent"
-                    )}
-                  >
-                    📱 Del Celular
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setPrepSongType('url')}
-                    className={cn(
-                      "py-1.5 text-[8px] font-bold uppercase rounded-lg transition-all border-none cursor-pointer",
-                      prepSongType === 'url' ? "bg-white text-stone-900 shadow-sm font-black" : "text-stone-500 hover:text-stone-800 bg-transparent"
-                    )}
-                  >
-                    🔗 Enlace Web
-                  </button>
-                </div>
-
-                {/* Conditional fields based on type */}
-                {prepSongType === 'preset' && (
-                  <div className="space-y-1">
-                    <label className="text-[8px] font-black text-stone-500 uppercase tracking-wider block">Seleccionar Estilo:</label>
-                    <select
-                      value={prepSongPreset}
-                      onChange={(e) => setPrepSongPreset(e.target.value)}
-                      className="w-full text-xs p-2 rounded-xl border border-stone-200 bg-white text-stone-800 focus:outline-none focus:border-amber-400 font-bold"
-                    >
-                      {PRESET_SONGS.map(song => (
-                        <option key={song.id} value={song.id}>{song.name}</option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-
-                {prepSongType === 'file' && (
-                  <div className="space-y-2">
-                    <label className="text-[8px] font-black text-stone-500 uppercase tracking-wider block">Cargar de tu Celular:</label>
-                    <div className="flex items-center gap-2">
-                      <label className="flex items-center justify-center gap-2 px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-[9px] font-black tracking-wider cursor-pointer uppercase transition-all shadow-md shadow-amber-600/10 border-none">
-                        <FileAudio size={13} />
-                        Buscar Música
-                        <input
-                          type="file"
-                          accept="audio/*"
-                          onChange={handlePrepFileChange}
-                          className="hidden"
-                        />
-                      </label>
-                    </div>
-                    {prepSongFileName ? (
-                      <div className="p-2 bg-white border border-stone-200 rounded-lg text-[9px] text-stone-700 flex items-center justify-between gap-1">
-                        <span className="font-bold truncate max-w-[200px]">🟢 {prepSongFileName}</span>
-                      </div>
-                    ) : (
-                      <p className="text-[8px] text-amber-600 font-bold">⚠️ Toca "Buscar Música" para subir una canción de tu celular.</p>
-                    )}
-                  </div>
-                )}
-
-                {prepSongType === 'url' && (
-                  <div className="space-y-1">
-                    <label className="text-[8px] font-black text-stone-500 uppercase tracking-wider block">Enlace directo MP3:</label>
-                    <input
-                      type="url"
-                      value={prepSongUrl}
-                      onChange={(e) => setPrepSongUrl(e.target.value)}
-                      placeholder="https://ejemplo.com/musica.mp3"
-                      className="w-full text-xs p-2 rounded-xl border border-stone-200 bg-white text-stone-800 focus:outline-none focus:border-amber-400 font-mono font-medium"
-                    />
-                  </div>
-                )}
-
-                {/* Playback status indicator */}
-                <div className="p-2 bg-amber-100/30 border border-amber-200/40 rounded-xl flex items-center justify-between text-[9px]">
-                  <span className="font-extrabold text-stone-700 uppercase tracking-wider">Estado Actual:</span>
-                  <div className="flex items-center gap-1.5">
-                    <span className={cn(
-                      "inline-block w-1.5 h-1.5 rounded-full",
-                      isPreparing ? "bg-emerald-500 animate-pulse" : "bg-stone-400"
-                    )} />
-                    <span className="font-black uppercase text-stone-800">
-                      {isPreparing ? "Sonando..." : "En pausa (sin preparación)"}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
             </div>
 
             <div className="mt-5 pt-3 border-t border-stone-100 flex justify-end gap-2 shrink-0">
@@ -1183,6 +1086,222 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
                 className="px-4 py-2 bg-stone-150 hover:bg-stone-200 text-stone-700 font-extrabold text-[10px] uppercase tracking-wider rounded-xl transition-all border-none cursor-pointer"
               >
                 Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* --- FLOATING MUSIC CONFIG MODAL --- */}
+      {showMusicSettings && (
+        <div className="fixed inset-0 bg-stone-900/50 backdrop-blur-sm z-[450] flex items-center justify-center p-4">
+          <div className="bg-white rounded-[2rem] shadow-2xl border border-stone-200 p-6 w-full max-w-md max-h-[90vh] flex flex-col animate-in fade-in duration-250">
+            <div className="flex items-center justify-between mb-4 pb-3 border-b border-stone-100 shrink-0">
+              <div className="flex items-center gap-2.5">
+                <Music className="text-amber-600 animate-pulse" size={20} />
+                <h3 className="font-serif font-black text-stone-800 text-base leading-tight">Música de Preparación</h3>
+              </div>
+              <button
+                onClick={() => {
+                  setIsTestingMusic(false);
+                  setShowMusicSettings(false);
+                }}
+                className="text-stone-400 hover:text-stone-700 p-1.5 rounded-full hover:bg-stone-50 transition-all border-none bg-transparent cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="space-y-4 overflow-y-auto flex-1 pr-1.5 scrollbar-thin pb-4">
+              <p className="text-[10px] text-stone-500 font-bold uppercase tracking-widest leading-relaxed">
+                Selecciona la música de fondo que se reproducirá automáticamente cuando haya comandas en estado de preparación para la {userRole === 'parrilla' ? 'Parrilla' : 'Cocina'}.
+              </p>
+
+              {/* 1. SELECCIONAR ORIGEN DE MÚSICA */}
+              <div className="space-y-1.5">
+                <label className="text-[9px] font-black text-stone-400 uppercase tracking-wider block">Origen del Audio</label>
+                <div className="grid grid-cols-3 gap-1.5 p-1 bg-stone-100 rounded-xl">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPrepSongType('preset');
+                      setIsTestingMusic(false);
+                    }}
+                    className={cn(
+                      "py-2 text-[9px] font-bold uppercase rounded-lg transition-all border-none cursor-pointer",
+                      prepSongType === 'preset' ? "bg-white text-stone-900 shadow-sm font-black" : "text-stone-500 hover:text-stone-800 bg-transparent"
+                    )}
+                  >
+                    🎵 De Lista
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPrepSongType('file');
+                      setIsTestingMusic(false);
+                    }}
+                    className={cn(
+                      "py-2 text-[9px] font-bold uppercase rounded-lg transition-all border-none cursor-pointer",
+                      prepSongType === 'file' ? "bg-white text-stone-900 shadow-sm font-black" : "text-stone-500 hover:text-stone-800 bg-transparent"
+                    )}
+                  >
+                    📱 Del Celular
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPrepSongType('url');
+                      setIsTestingMusic(false);
+                    }}
+                    className={cn(
+                      "py-2 text-[9px] font-bold uppercase rounded-lg transition-all border-none cursor-pointer",
+                      prepSongType === 'url' ? "bg-white text-stone-900 shadow-sm font-black" : "text-stone-500 hover:text-stone-800 bg-transparent"
+                    )}
+                  >
+                    🔗 Enlace Web
+                  </button>
+                </div>
+              </div>
+
+              {/* 2. CONFIGURACIÓN DINÁMICA SEGÚN ORIGEN */}
+              {prepSongType === 'preset' && (
+                <div className="p-4 rounded-2xl bg-stone-50 border border-stone-200 space-y-2">
+                  <span className="text-[9px] font-black text-stone-400 uppercase tracking-wider block">Selecciona un estilo de nuestra lista:</span>
+                  <div className="space-y-1.5">
+                    {PRESET_SONGS.map(song => (
+                      <button
+                        key={song.id}
+                        onClick={() => {
+                          setPrepSongPreset(song.id);
+                          setIsTestingMusic(false);
+                        }}
+                        className={cn(
+                          "w-full text-left p-2.5 rounded-xl border text-xs font-bold transition-all flex items-center justify-between cursor-pointer",
+                          prepSongPreset === song.id 
+                            ? "bg-amber-50 border-amber-300 text-amber-800" 
+                            : "bg-white border-stone-250 text-stone-700 hover:border-stone-300"
+                        )}
+                      >
+                        <span>{song.name}</span>
+                        {prepSongPreset === song.id && <span className="text-[9px] font-black uppercase text-amber-600 bg-amber-100/50 px-2 py-0.5 rounded-md">Activado</span>}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {prepSongType === 'file' && (
+                <div className="p-4 rounded-2xl bg-amber-50/40 border border-amber-100 space-y-3">
+                  <span className="text-[9px] font-black text-amber-700 uppercase tracking-wider block">Cargar archivo de audio de tu dispositivo:</span>
+                  <div className="flex flex-col gap-2">
+                    <p className="text-[10px] text-stone-500 leading-relaxed">
+                      Selecciona cualquier canción o audio que tengas guardado en tu teléfono móvil o computadora (formatos soportados: MP3, WAV, M4A).
+                    </p>
+                    <label className="flex items-center justify-center gap-2 px-4 py-3 bg-amber-600 hover:bg-amber-700 text-white rounded-2xl text-[10px] font-black tracking-wider cursor-pointer uppercase transition-all shadow-md shadow-amber-600/15 border-none w-full text-center">
+                      <FileAudio size={15} />
+                      Toca para Buscar Canción
+                      <input
+                        type="file"
+                        accept="audio/*"
+                        onChange={handlePrepFileChange}
+                        className="hidden"
+                      />
+                    </label>
+                  </div>
+                  {prepSongFileName ? (
+                    <div className="p-3 bg-white border border-amber-200 rounded-xl text-[10px] text-stone-700 flex items-center justify-between gap-1.5">
+                      <span className="font-bold truncate max-w-[240px]">🟢 {prepSongFileName}</span>
+                    </div>
+                  ) : (
+                    <div className="p-2.5 rounded-xl bg-amber-100/30 text-center text-[9px] text-amber-700 font-bold border border-dashed border-amber-200">
+                      ⚠️ No se ha seleccionado canción aún. Toca arriba para seleccionar una.
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {prepSongType === 'url' && (
+                <div className="p-4 rounded-2xl bg-stone-50 border border-stone-200 space-y-2">
+                  <span className="text-[9px] font-black text-stone-400 uppercase tracking-wider block">Ingresar Enlace Directo (URL):</span>
+                  <input
+                    type="url"
+                    value={prepSongUrl}
+                    onChange={(e) => {
+                      setPrepSongUrl(e.target.value);
+                      setIsTestingMusic(false);
+                    }}
+                    placeholder="https://ejemplo.com/musica.mp3"
+                    className="w-full text-xs p-3 rounded-xl border border-stone-200 bg-white text-stone-800 focus:outline-none focus:border-amber-400 font-mono font-medium shadow-inner"
+                  />
+                  <p className="text-[8px] text-stone-500">
+                    Asegúrate de que sea un enlace público directo que termine en .mp3 o similar.
+                  </p>
+                </div>
+              )}
+
+              {/* 3. CONTROL DE PRUEBA DE SONIDO */}
+              <div className="p-4 rounded-2xl bg-stone-50 border border-stone-200 space-y-2.5">
+                <span className="text-[9px] font-black text-stone-400 uppercase tracking-wider block">Probar Reproducción</span>
+                <p className="text-[10px] text-stone-500 leading-relaxed">
+                  ¿Quieres asegurarte de que se escuche correctamente? Toca el botón de abajo para reproducir o detener la canción seleccionada en este momento.
+                </p>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsTestingMusic(!isTestingMusic);
+                    }}
+                    className={cn(
+                      "flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-wider border-none cursor-pointer transition-all flex items-center justify-center gap-2 shadow-md",
+                      isTestingMusic 
+                        ? "bg-red-600 hover:bg-red-700 text-white shadow-red-600/10" 
+                        : "bg-amber-600 hover:bg-amber-700 text-white shadow-amber-600/10"
+                    )}
+                  >
+                    {isTestingMusic ? (
+                      <>
+                        <VolumeX size={14} />
+                        Detener Prueba
+                      </>
+                    ) : (
+                      <>
+                        <Volume2 size={14} />
+                        Iniciar Prueba de Sonido
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              {/* 4. PLAYBACK STATUS INDICATOR */}
+              <div className="p-3 bg-amber-50/55 border border-amber-100 rounded-xl flex items-center justify-between text-[10px]">
+                <span className="font-extrabold text-stone-700 uppercase tracking-wider">Estado de Reproducción:</span>
+                <div className="flex items-center gap-1.5">
+                  <span className={cn(
+                    "inline-block w-2 h-2 rounded-full",
+                    shouldPlayMusic ? "bg-emerald-500 animate-pulse" : "bg-stone-400"
+                  )} />
+                  <span className="font-black uppercase text-stone-850">
+                    {isTestingMusic 
+                      ? "Escuchando Prueba" 
+                      : isPreparing 
+                        ? "Música Activa (Comanda en Preparación)" 
+                        : "Detenido (Sin Comandas Activas)"}
+                  </span>
+                </div>
+              </div>
+
+            </div>
+
+            <div className="mt-5 pt-3 border-t border-stone-100 flex justify-end gap-2 shrink-0">
+              <button
+                onClick={() => {
+                  setIsTestingMusic(false);
+                  setShowMusicSettings(false);
+                }}
+                className="px-5 py-2 bg-stone-900 hover:bg-stone-950 text-white font-black text-[10px] uppercase tracking-wider rounded-xl transition-all border-none cursor-pointer shadow-md"
+              >
+                Cerrar y Guardar
               </button>
             </div>
           </div>
