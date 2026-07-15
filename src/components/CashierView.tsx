@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { motion } from "motion/react";
-import { CreditCard, DollarSign, Receipt, TrendingUp, TrendingDown, Clock, CheckCircle2, Trash2, Edit2, Plus, X, AlertTriangle, History, Package, UploadCloud, DownloadCloud, Eye, Image as LucideImage, Calculator, ClipboardCheck, User, BarChart3, PieChart as PieChartIcon, Utensils, ArrowUpRight, Sparkles, Calendar, Share2, RefreshCw, Printer, BookOpen, Loader2 } from "lucide-react";
+import { CreditCard, DollarSign, Receipt, TrendingUp, TrendingDown, Clock, CheckCircle2, Trash2, Edit2, Plus, X, AlertTriangle, History, Package, UploadCloud, DownloadCloud, Eye, Image as LucideImage, Calculator, ClipboardCheck, User, BarChart3, PieChart as PieChartIcon, Utensils, ArrowUpRight, Sparkles, Calendar, Share2, RefreshCw, Printer, BookOpen, Loader2, ShieldAlert } from "lucide-react";
 import { Button } from "./Button";
 import { Card, CardContent, CardHeader, CardFooter } from "./Card";
 import { formatCurrency, cn, customRound } from "@/src/lib/utils";
@@ -254,6 +254,41 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
       console.error("Error adding order item:", error);
       toast.error("Error al agregar el artículo");
     }
+  };
+
+  // State for admin authentication for billing item CRUD
+  const [pendingAdminAction, setPendingAdminAction] = useState<{
+    type: 'delete' | 'update' | 'add';
+    params: any;
+  } | null>(null);
+  const [adminPinInput, setAdminPinInput] = useState<string>('');
+
+  const verifyAdminCredentials = async (input: string): Promise<boolean> => {
+    if (!input.trim()) return false;
+    try {
+      const q = query(collection(db, "users"), where("role", "==", "admin"));
+      const querySnapshot = await getDocs(q);
+      let isValid = false;
+      querySnapshot.forEach(doc => {
+        const data = doc.data();
+        if (
+          data.pin === input.trim() || 
+          data.password === input.trim() || 
+          (data.pin || '').toString() === input.trim()
+        ) {
+          isValid = true;
+        }
+      });
+      return isValid;
+    } catch (error) {
+      console.error("Error verifying admin credentials:", error);
+      return false;
+    }
+  };
+
+  const checkAdminAuthAndExecute = (actionType: 'delete' | 'update' | 'add', params: any) => {
+    setPendingAdminAction({ type: actionType, params });
+    setAdminPinInput('');
   };
 
   // Group log data by Day, Week, and Month for reporting
@@ -4146,7 +4181,7 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
                           type="button"
                           onClick={() => {
                             if (selectedGroup.orders.length > 0) {
-                              handleAddOrderItem(selectedGroup.orders[0].id, addPaymentItemForm.name, addPaymentItemForm.price, addPaymentItemForm.quantity);
+                              checkAdminAuthAndExecute('add', { orderId: selectedGroup.orders[0].id, name: addPaymentItemForm.name, price: addPaymentItemForm.price, quantity: addPaymentItemForm.quantity });
                             }
                           }}
                           className="px-3 py-1 text-[9px] font-black uppercase bg-mex-green text-white hover:bg-mex-green/90 rounded-lg"
@@ -4217,14 +4252,14 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
                                   </button>
                                   <button 
                                     type="button"
-                                    onClick={() => handleUpdateOrderItem(
-                                      editingPaymentItem.orderId,
-                                      editingPaymentItem.itemIndex,
-                                      editingPaymentItem.name,
-                                      editingPaymentItem.price,
-                                      editingPaymentItem.quantity,
-                                      editingPaymentItem.notes
-                                    )}
+                                    onClick={() => checkAdminAuthAndExecute('update', {
+                                      orderId: editingPaymentItem.orderId,
+                                      itemIndex: editingPaymentItem.itemIndex,
+                                      name: editingPaymentItem.name,
+                                      price: editingPaymentItem.price,
+                                      quantity: editingPaymentItem.quantity,
+                                      notes: editingPaymentItem.notes
+                                    })}
                                     className="px-2.5 py-0.5 text-[8px] font-black uppercase bg-amber-600 text-white hover:bg-amber-700 rounded"
                                   >
                                     Guardar
@@ -4253,9 +4288,9 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
                                     type="button"
                                     onClick={() => {
                                       if (item.quantity > 1) {
-                                        handleUpdateOrderItem(order.id, idx, item.name, item.price, item.quantity - 1, item.notes);
+                                        checkAdminAuthAndExecute('update', { orderId: order.id, itemIndex: idx, name: item.name, price: item.price, quantity: item.quantity - 1, notes: item.notes });
                                       } else {
-                                        handleDeleteOrderItem(order.id, idx);
+                                        checkAdminAuthAndExecute('delete', { orderId: order.id, itemIndex: idx });
                                       }
                                     }}
                                     className="w-6 h-6 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-600 flex items-center justify-center text-xs font-bold cursor-pointer"
@@ -4265,7 +4300,7 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
                                   </button>
                                   <button 
                                     type="button"
-                                    onClick={() => handleUpdateOrderItem(order.id, idx, item.name, item.price, item.quantity + 1, item.notes)}
+                                    onClick={() => checkAdminAuthAndExecute('update', { orderId: order.id, itemIndex: idx, name: item.name, price: item.price, quantity: item.quantity + 1, notes: item.notes })}
                                     className="w-6 h-6 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-600 flex items-center justify-center text-xs font-bold cursor-pointer"
                                     title="Sumar 1"
                                   >
@@ -4288,7 +4323,7 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
                                   </button>
                                   <button 
                                     type="button"
-                                    onClick={() => handleDeleteOrderItem(order.id, idx)}
+                                    onClick={() => checkAdminAuthAndExecute('delete', { orderId: order.id, itemIndex: idx })}
                                     className="p-1 rounded-lg hover:bg-red-150 text-red-600 transition-colors cursor-pointer"
                                     title="Eliminar artículo"
                                   >
@@ -4567,6 +4602,74 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
               </div>
 
             </div>
+          </Card>
+        </div>
+      )}
+
+      {/* Admin Authorization Modal */}
+      {pendingAdminAction && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[200] p-4 backdrop-blur-md">
+          <Card className="w-full max-w-sm rounded-[2rem] shadow-2xl bg-white p-6 border border-stone-200 text-center animate-in zoom-in-95 duration-200">
+            <div className="flex justify-center mb-4">
+              <div className="w-12 h-12 rounded-full bg-amber-50 text-amber-600 flex items-center justify-center">
+                <ShieldAlert size={24} />
+              </div>
+            </div>
+            <h3 className="text-lg font-black text-stone-900 uppercase tracking-wider mb-2">Autorización de Administrador</h3>
+            <p className="text-xs text-stone-500 mb-6 leading-relaxed">
+              Se requiere el PIN o contraseña de un Administrador para {
+                pendingAdminAction.type === 'delete' ? 'eliminar este artículo' :
+                pendingAdminAction.type === 'add' ? 'agregar este artículo' : 'modificar este artículo'
+              }.
+            </p>
+            
+            <form onSubmit={async (e) => {
+              e.preventDefault();
+              const verified = await verifyAdminCredentials(adminPinInput);
+              if (verified) {
+                const { type, params } = pendingAdminAction;
+                if (type === 'delete') {
+                  await handleDeleteOrderItem(params.orderId, params.itemIndex);
+                } else if (type === 'update') {
+                  await handleUpdateOrderItem(params.orderId, params.itemIndex, params.name, params.price, params.quantity, params.notes);
+                } else if (type === 'add') {
+                  await handleAddOrderItem(params.orderId, params.name, params.price, params.quantity);
+                }
+                setPendingAdminAction(null);
+                setAdminPinInput('');
+              } else {
+                toast.error("Contraseña o PIN incorrecto de Administrador");
+              }
+            }} className="space-y-4">
+              <input 
+                type="password"
+                className="w-full text-center py-3 bg-stone-50 border border-stone-200 rounded-xl font-bold text-lg focus:ring-2 focus:ring-amber-500/25 focus:border-amber-500 outline-none placeholder-stone-300"
+                placeholder="Escribe el PIN o contraseña..."
+                value={adminPinInput}
+                onChange={(e) => setAdminPinInput(e.target.value)}
+                autoFocus
+                required
+              />
+              
+              <div className="grid grid-cols-2 gap-3">
+                <button 
+                  type="button"
+                  onClick={() => {
+                    setPendingAdminAction(null);
+                    setAdminPinInput('');
+                  }}
+                  className="py-3 bg-stone-100 hover:bg-stone-200 text-stone-600 font-bold text-xs uppercase tracking-wider rounded-xl transition-all cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button 
+                  type="submit"
+                  className="py-3 bg-amber-600 hover:bg-amber-700 text-white font-black text-xs uppercase tracking-wider rounded-xl shadow-lg shadow-amber-600/15 transition-all cursor-pointer"
+                >
+                  Autorizar
+                </button>
+              </div>
+            </form>
           </Card>
         </div>
       )}
