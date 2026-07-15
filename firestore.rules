@@ -41,10 +41,17 @@ service cloud.firestore {
              request.auth.token.email_verified == true;
     }
 
+    function hasRole(role) {
+      return isAuthenticated() && (
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == role) ||
+        (exists(/databases/$(database)/documents/sessions/$(request.auth.uid)) && 
+         get(/databases/$(database)/documents/sessions/$(request.auth.uid)).data.role == role)
+      );
+    }
+
     function isAdmin() {
-      return isEmailAdmin() || (isAuthenticated() && 
-        exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin');
+      return isEmailAdmin() || hasRole('admin');
     }
 
     // Staff can be identified by being authenticated (even anonymously)
@@ -102,14 +109,20 @@ service cloud.firestore {
     match /cashLogs/{logId} {
       allow read: if isStaff();
       allow create: if isStaff();
-      allow update: if isAdmin() || (isAuthenticated() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'cashier');
+      allow update: if isAdmin() || hasRole('cashier');
       allow delete: if isAdmin();
     }
 
     match /cashAudits/{auditId} {
       allow read: if isStaff();
       allow create: if isStaff();
-      allow update: if isAdmin() || (isAuthenticated() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'cashier');
+      allow update: if isAdmin() || hasRole('cashier');
+      allow delete: if isAdmin();
+    }
+
+    match /sessions/{sessionId} {
+      allow read: if true;
+      allow create, update: if isAuthenticated() && (request.auth.uid == sessionId || isAdmin());
       allow delete: if isAdmin();
     }
 

@@ -305,6 +305,7 @@ export const AdminView = () => {
       // Cleanup: Delete Admins that are NOT Google Users (and not the Super Admin email)
       const invalidAdmins = fetchedUsers.filter(u => u.role === 'admin' && !u.isGoogleUser && u.email !== SUPER_ADMIN_EMAIL);
       
+      let baseUsers = fetchedUsers;
       if (invalidAdmins.length > 0) {
         toast.error(`Se detectaron y eliminaron ${invalidAdmins.length} administradores sin cuenta de Google vinculada.`);
         const batch = writeBatch(db);
@@ -312,9 +313,61 @@ export const AdminView = () => {
           batch.delete(doc(db, "users", u.id));
         });
         await batch.commit();
-        setUsers(fetchedUsers.filter(u => !invalidAdmins.some(ia => ia.id === u.id)));
+        baseUsers = fetchedUsers.filter(u => !invalidAdmins.some(ia => ia.id === u.id));
+      }
+
+      // De-duplicate users: group by username or email
+      const grouped: { [key: string]: User[] } = {};
+      baseUsers.forEach(u => {
+        const key = (u.username || u.email || u.name || "").trim().toLowerCase();
+        if (!key) return;
+        if (!grouped[key]) {
+          grouped[key] = [];
+        }
+        grouped[key].push(u);
+      });
+
+      const toDelete: User[] = [];
+      const toKeep: User[] = [];
+
+      Object.keys(grouped).forEach(key => {
+        const list = grouped[key];
+        if (list.length <= 1) {
+          toKeep.push(list[0]);
+          return;
+        }
+
+        // Find primary to keep (Google user or has createdAt or has a short ID)
+        let primary = list.find(u => u.isGoogleUser);
+        if (!primary) {
+          primary = list.find(u => (u as any).createdAt);
+        }
+        if (!primary) {
+          primary = list.find(u => u.id.length <= 20); // Firestore auto IDs are 20, session auth IDs are 28
+        }
+        if (!primary) {
+          primary = list[0];
+        }
+
+        toKeep.push(primary);
+        list.forEach(u => {
+          if (u.id !== primary.id) {
+            toDelete.push(u);
+          }
+        });
+      });
+
+      if (toDelete.length > 0) {
+        console.log("Detectados duplicados para eliminar:", toDelete.map(u => `${u.name} (${u.id})`));
+        const batch = writeBatch(db);
+        toDelete.forEach(u => {
+          batch.delete(doc(db, "users", u.id));
+        });
+        await batch.commit();
+        toast.success(`Se limpiaron ${toDelete.length} cuentas duplicadas automáticamente.`, { id: "dedup-toast" });
+        setUsers(baseUsers.filter(u => !toDelete.some(td => td.id === u.id)));
       } else {
-        setUsers(fetchedUsers);
+        setUsers(baseUsers);
       }
     } catch (error) {
       console.error("Error fetching users:", error);

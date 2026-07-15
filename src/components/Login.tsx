@@ -103,11 +103,12 @@ export const Login = ({ onLogin, onEnterPortal }: LoginProps) => {
         console.log("Ya existe una sesión Firebase:", firebaseUid, "Anónimo:", auth.currentUser.isAnonymous);
       }
 
-      // 5. Mirror the user document under their Firebase UID so security rules can verify their role
+      // 5. Mirror the user document under their Firebase UID in a dedicated 'sessions' collection so security rules can verify their role
       if (firebaseUid) {
         console.log("Asociando sesión con el documento de usuario en Firestore...");
-        const sessionUserRef = doc(db, "users", firebaseUid);
+        const sessionUserRef = doc(db, "sessions", firebaseUid);
         await setDoc(sessionUserRef, {
+          userId: userData.id,
           name: userData.name,
           username: userData.username || "",
           role: userData.role,

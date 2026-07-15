@@ -88,6 +88,12 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
     return "";
   });
   const [prepSongLocalUrl, setPrepSongLocalUrl] = useState<string>("");
+  const [prepMusicMuted, setPrepMusicMuted] = useState<boolean>(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("prep_music_muted") === "true";
+    }
+    return false;
+  });
 
   const preparationAudioRef = useRef<HTMLAudioElement | null>(null);
 
@@ -123,6 +129,65 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
   const torchStreamRef = useRef<any>(null);
   const ticketsRef = useRef<KitchenTicket[]>([]);
 
+  const getTimeElapsed = (createdAt: string) => {
+    const elapsed = Math.floor((Date.now() - new Date(createdAt).getTime()) / 60000);
+    return `${elapsed} min`;
+  };
+
+  // Compute tickets and pending alerts
+  const tickets: KitchenTicket[] = [];
+  orders.forEach(order => {
+    const itemsWithIndex = order.items.map((item, index) => ({ ...item, originalIndex: index }));
+    const planchaItems = itemsWithIndex.filter(i => i.station === 'plancha' && i.status !== 'cancelled');
+    const cocinaItems = itemsWithIndex.filter(i => (i.station === 'cocina' || !i.station) && i.status !== 'cancelled');
+
+    const hasPendingPlancha = planchaItems.some(i => i.status !== 'completed');
+    const hasPendingCocina = cocinaItems.some(i => i.status !== 'completed');
+
+    if (hasPendingPlancha && (activeStation === 'all' || activeStation === 'plancha')) {
+      tickets.push({
+        id: `${order.id}-plancha`,
+        orderId: order.id,
+        order: order,
+        station: 'plancha',
+        items: planchaItems,
+        stationStatus: planchaItems.some(i => i.status === 'preparing') ? 'preparing' : 'pending'
+      });
+    }
+    
+    if (hasPendingCocina && (activeStation === 'all' || activeStation === 'cocina')) {
+      tickets.push({
+        id: `${order.id}-cocina`,
+        orderId: order.id,
+        order: order,
+        station: 'cocina',
+        items: cocinaItems,
+        stationStatus: cocinaItems.some(i => i.status === 'preparing') ? 'preparing' : 'pending'
+      });
+    }
+  });
+
+  // Assign compiled tickets to our mutable ref for background context safety
+  ticketsRef.current = tickets;
+
+  const currentPendingTickets = tickets.filter(t => t.stationStatus === 'pending');
+  const currentPendingIds = currentPendingTickets.map(t => t.id);
+  const activeAlertTickets = currentPendingTickets.filter(t => !silencedTickets.includes(t.id));
+  const hasActiveAlerts = activeAlertTickets.length > 0 || testAlertActive;
+  const pendingIdsString = currentPendingIds.join(",");
+
+  const isPreparing = tickets.some(t => t.stationStatus === 'preparing');
+  const shouldPlayMusic = (isPreparing || isTestingMusic) && !prepMusicMuted;
+
+  // Synchronize alerting status
+  useEffect(() => {
+    if (hasActiveAlerts && kitchenSoundEnabled) {
+      setIsAlerting(true);
+    } else {
+      setIsAlerting(false);
+    }
+  }, [hasActiveAlerts, kitchenSoundEnabled]);
+
   // Persist song configuration values
   useEffect(() => {
     localStorage.setItem("prep_song_type", prepSongType);
@@ -135,6 +200,10 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
   useEffect(() => {
     localStorage.setItem("prep_song_url", prepSongUrl);
   }, [prepSongUrl]);
+
+  useEffect(() => {
+    localStorage.setItem("prep_music_muted", String(prepMusicMuted));
+  }, [prepMusicMuted]);
 
   useEffect(() => {
     if (userRole === 'parrilla') {
@@ -378,9 +447,9 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
     }
   };
 
-  // Synchronize physical torch with high-speed flashState
+  // Synchronize physical torch with high-speed flashState (turned off when preparation starts)
   useEffect(() => {
-    if (isAlerting && kitchenSoundEnabled) {
+    if (isAlerting && kitchenSoundEnabled && !isPreparing) {
       togglePhysicalTorch(flashState);
     } else {
       togglePhysicalTorch(false);
@@ -388,7 +457,7 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
     return () => {
       togglePhysicalTorch(false);
     };
-  }, [flashState, isAlerting, kitchenSoundEnabled]);
+  }, [flashState, isAlerting, kitchenSoundEnabled, isPreparing]);
 
   // Trigger test alerts
   const triggerTestAlert = () => {
@@ -613,65 +682,7 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
     }
   };
 
-  const getTimeElapsed = (createdAt: string) => {
-    const elapsed = Math.floor((Date.now() - new Date(createdAt).getTime()) / 60000);
-    return `${elapsed} min`;
-  };
-
-  // Compute tickets and pending alerts
-  const tickets: KitchenTicket[] = [];
-  orders.forEach(order => {
-    const itemsWithIndex = order.items.map((item, index) => ({ ...item, originalIndex: index }));
-    const planchaItems = itemsWithIndex.filter(i => i.station === 'plancha' && i.status !== 'cancelled');
-    const cocinaItems = itemsWithIndex.filter(i => (i.station === 'cocina' || !i.station) && i.status !== 'cancelled');
-
-    const hasPendingPlancha = planchaItems.some(i => i.status !== 'completed');
-    const hasPendingCocina = cocinaItems.some(i => i.status !== 'completed');
-
-    if (hasPendingPlancha && (activeStation === 'all' || activeStation === 'plancha')) {
-      tickets.push({
-        id: `${order.id}-plancha`,
-        orderId: order.id,
-        order: order,
-        station: 'plancha',
-        items: planchaItems,
-        stationStatus: planchaItems.some(i => i.status === 'preparing') ? 'preparing' : 'pending'
-      });
-    }
-    
-    if (hasPendingCocina && (activeStation === 'all' || activeStation === 'cocina')) {
-      tickets.push({
-        id: `${order.id}-cocina`,
-        orderId: order.id,
-        order: order,
-        station: 'cocina',
-        items: cocinaItems,
-        stationStatus: cocinaItems.some(i => i.status === 'preparing') ? 'preparing' : 'pending'
-      });
-    }
-  });
-
-  // Assign compiled tickets to our mutable ref for background context safety
-  ticketsRef.current = tickets;
-
-  const currentPendingTickets = tickets.filter(t => t.stationStatus === 'pending');
-  const currentPendingIds = currentPendingTickets.map(t => t.id);
-  const activeAlertTickets = currentPendingTickets.filter(t => !silencedTickets.includes(t.id));
-  const hasActiveAlerts = activeAlertTickets.length > 0 || testAlertActive;
-  const pendingIdsString = currentPendingIds.join(",");
-
-  // Synchronize alerting status
-  useEffect(() => {
-    if (hasActiveAlerts && kitchenSoundEnabled) {
-      setIsAlerting(true);
-    } else {
-      setIsAlerting(false);
-    }
-  }, [hasActiveAlerts, kitchenSoundEnabled]);
-
-  // Manage reactive preparation music playback
-  const isPreparing = tickets.some(t => t.stationStatus === 'preparing');
-  const shouldPlayMusic = isPreparing || isTestingMusic;
+  // Computed variables and alerting synched at the top of component
 
   useEffect(() => {
     const audioUrl = getPrepAudioUrl();
@@ -700,7 +711,7 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
         } catch (e) {}
       }
     }
-  }, [shouldPlayMusic, prepSongType, prepSongPreset, prepSongUrl, prepSongLocalUrl, kitchenSoundEnabled]);
+  }, [shouldPlayMusic, prepSongType, prepSongPreset, prepSongUrl, prepSongLocalUrl, kitchenSoundEnabled, prepMusicMuted]);
 
   useEffect(() => {
     return () => {
@@ -911,19 +922,34 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
             </div>
           )}
 
-          <button
-            onClick={() => setShowMusicSettings(!showMusicSettings)}
-            className={cn(
-              "p-2.5 px-3.5 rounded-2xl border transition-all flex items-center gap-2 cursor-pointer shadow-sm text-[10px] font-black uppercase tracking-wider h-[46px]",
-              showMusicSettings 
-                ? "bg-amber-600 text-white border-amber-700" 
-                : "bg-white text-amber-700 border-amber-200 hover:bg-amber-50"
-            )}
-            title="Música de Preparación"
-          >
-            <Music size={15} className={cn(isPreparing && "animate-spin duration-3000")} />
-            <span>🎵 Música</span>
-          </button>
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={() => setShowMusicSettings(!showMusicSettings)}
+              className={cn(
+                "p-2.5 px-3.5 rounded-2xl border transition-all flex items-center gap-2 cursor-pointer shadow-sm text-[10px] font-black uppercase tracking-wider h-[46px]",
+                showMusicSettings 
+                  ? "bg-amber-600 text-white border-amber-700" 
+                  : "bg-white text-amber-700 border-amber-200 hover:bg-amber-50"
+              )}
+              title="Configuración de Música"
+            >
+              <Music size={15} className={cn(isPreparing && !prepMusicMuted && "animate-spin duration-3000")} />
+              <span>🎵 Música</span>
+            </button>
+
+            <button
+              onClick={() => setPrepMusicMuted(!prepMusicMuted)}
+              className={cn(
+                "p-2.5 rounded-2xl border transition-all flex items-center justify-center cursor-pointer shadow-sm w-[46px] h-[46px]",
+                prepMusicMuted 
+                  ? "bg-red-50 text-red-600 border-red-200 hover:bg-red-100/65" 
+                  : "bg-emerald-50 text-emerald-600 border-emerald-200 hover:bg-emerald-100/65"
+              )}
+              title={prepMusicMuted ? "Música Silenciada - Toca para Activar" : "Música Activa - Toca para Silenciar"}
+            >
+              {prepMusicMuted ? <VolumeX size={17} /> : <Volume2 size={17} className={cn(isPreparing && "animate-pulse")} />}
+            </button>
+          </div>
 
           <button
             onClick={() => setShowSettingsPopover(!showSettingsPopover)}
@@ -1238,6 +1264,32 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
                   </p>
                 </div>
               )}
+
+              {/* 3. OPCIÓN SILENCIAR MÚSICA */}
+              <div className="p-4 rounded-2xl bg-stone-50 border border-stone-200">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <span className="text-[10px] font-black text-stone-800 uppercase tracking-wider block">Silenciar Música</span>
+                    <p className="text-[9px] text-stone-500 leading-tight">
+                      Mutea la música de preparación de forma rápida.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPrepMusicMuted(!prepMusicMuted);
+                    }}
+                    className={cn(
+                      "px-3.5 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider border transition-all cursor-pointer",
+                      prepMusicMuted 
+                        ? "bg-red-50 text-red-600 border-red-200 hover:bg-red-100" 
+                        : "bg-white text-stone-700 border-stone-250 hover:bg-stone-50"
+                    )}
+                  >
+                    {prepMusicMuted ? "🔇 Muteado" : "🔊 Activo"}
+                  </button>
+                </div>
+              </div>
 
               {/* 3. CONTROL DE PRUEBA DE SONIDO */}
               <div className="p-4 rounded-2xl bg-stone-50 border border-stone-200 space-y-2.5">
