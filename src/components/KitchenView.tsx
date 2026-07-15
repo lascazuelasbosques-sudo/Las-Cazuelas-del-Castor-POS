@@ -1,8 +1,8 @@
-import { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardHeader, CardFooter } from "./Card";
 import { Button } from "./Button";
 import { Order, OrderStatus, OrderItem } from "@/src/types";
-import { Clock, CheckCircle2, PlayCircle, ClipboardList, PlusCircle, Trash2, Ban, X, XCircle, Bell, BellOff, Volume2, VolumeX, Smartphone } from "lucide-react";
+import { Clock, CheckCircle2, PlayCircle, ClipboardList, PlusCircle, Trash2, Ban, X, XCircle, Bell, BellOff, Volume2, VolumeX, Smartphone, Music, FileAudio } from "lucide-react";
 import { db } from "../firebase";
 import { collection, onSnapshot, query, where, orderBy, doc, updateDoc, addDoc } from "firebase/firestore";
 import { cn, customRound } from "@/src/lib/utils";
@@ -21,6 +21,12 @@ interface KitchenTicket {
   items: KitchenTicketItem[];
   stationStatus: 'pending' | 'preparing';
 }
+
+const PRESET_SONGS = [
+  { id: "preset_1", name: "Salsa Cocina Alegre (Estilo 1)", url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3" },
+  { id: "preset_2", name: "Cumbia Ritmo Parrilla (Estilo 2)", url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3" },
+  { id: "preset_3", name: "Rock Cocinando Rápido (Estilo 3)", url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-8.mp3" }
+];
 
 interface KitchenViewProps {
   onEditOrder?: (order: Order) => void;
@@ -54,11 +60,79 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
     return "unsupported";
   });
 
+  // Preparation music configuration states
+  const [prepSongType, setPrepSongType] = useState<'preset' | 'file' | 'url'>(() => {
+    if (typeof window !== "undefined") {
+      return (localStorage.getItem("prep_song_type") as any) || "preset";
+    }
+    return "preset";
+  });
+  const [prepSongPreset, setPrepSongPreset] = useState<string>(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("prep_song_preset") || "preset_1";
+    }
+    return "preset_1";
+  });
+  const [prepSongUrl, setPrepSongUrl] = useState<string>(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("prep_song_url") || "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3";
+    }
+    return "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3";
+  });
+  const [prepSongFileName, setPrepSongFileName] = useState<string>(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("prep_song_file_name") || "";
+    }
+    return "";
+  });
+  const [prepSongLocalUrl, setPrepSongLocalUrl] = useState<string>("");
+
+  const preparationAudioRef = useRef<HTMLAudioElement | null>(null);
+
+  const handlePrepFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (prepSongLocalUrl) {
+        URL.revokeObjectURL(prepSongLocalUrl);
+      }
+      const fileUrl = URL.createObjectURL(file);
+      setPrepSongLocalUrl(fileUrl);
+      setPrepSongFileName(file.name);
+      localStorage.setItem("prep_song_file_name", file.name);
+      toast.success(`Canción seleccionada: ${file.name}`);
+    }
+  };
+
+  const getPrepAudioUrl = () => {
+    if (prepSongType === 'file') {
+      return prepSongLocalUrl || "";
+    }
+    if (prepSongType === 'url') {
+      return prepSongUrl;
+    }
+    const found = PRESET_SONGS.find(p => p.id === prepSongPreset);
+    return found ? found.url : PRESET_SONGS[0].url;
+  };
+
   const prevPendingTicketIdsRef = useRef<string[]>([]);
   const prevOrdersRef = useRef<Order[]>([]);
   const kitchenAudioRef = useRef<HTMLAudioElement | null>(null);
   const torchTrackRef = useRef<any>(null);
+  const torchStreamRef = useRef<any>(null);
   const ticketsRef = useRef<KitchenTicket[]>([]);
+
+  // Persist song configuration values
+  useEffect(() => {
+    localStorage.setItem("prep_song_type", prepSongType);
+  }, [prepSongType]);
+
+  useEffect(() => {
+    localStorage.setItem("prep_song_preset", prepSongPreset);
+  }, [prepSongPreset]);
+
+  useEffect(() => {
+    localStorage.setItem("prep_song_url", prepSongUrl);
+  }, [prepSongUrl]);
 
   useEffect(() => {
     if (userRole === 'parrilla') {
@@ -269,6 +343,7 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
               advanced: [{ torch: true } as any]
             });
             torchTrackRef.current = track;
+            torchStreamRef.current = stream;
           } else {
             stream.getTracks().forEach(t => t.stop());
           }
@@ -280,8 +355,20 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
               advanced: [{ torch: false } as any]
             });
           } catch (e) {}
-          torchTrackRef.current.stop();
+          try {
+            torchTrackRef.current.stop();
+          } catch (e) {}
           torchTrackRef.current = null;
+        }
+        if (torchStreamRef.current) {
+          try {
+            torchStreamRef.current.getTracks().forEach((t: any) => {
+              try {
+                t.stop();
+              } catch (err) {}
+            });
+          } catch (e) {}
+          torchStreamRef.current = null;
         }
       }
     } catch (err) {
@@ -337,6 +424,9 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
 
   const updateOrderStatus = async (orderId: string, action: 'start_station' | 'finish_station', station: 'plancha' | 'cocina') => {
     try {
+      // Turn off physical flashlight/torch immediately
+      togglePhysicalTorch(false);
+
       const order = orders.find(o => o.id === orderId);
       if (!order) return;
 
@@ -398,6 +488,9 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
 
   const toggleItemStatus = async (orderId: string, originalIndex: number, currentStatus?: string) => {
     try {
+      // Turn off physical flashlight/torch immediately
+      togglePhysicalTorch(false);
+
       const order = orders.find(o => o.id === orderId);
       if (!order) return;
 
@@ -573,6 +666,49 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
       setIsAlerting(false);
     }
   }, [hasActiveAlerts, kitchenSoundEnabled]);
+
+  // Manage reactive preparation music playback
+  const isPreparing = tickets.some(t => t.stationStatus === 'preparing');
+
+  useEffect(() => {
+    const audioUrl = getPrepAudioUrl();
+    
+    if (isPreparing && audioUrl && kitchenSoundEnabled) {
+      if (!preparationAudioRef.current || preparationAudioRef.current.src !== audioUrl) {
+        if (preparationAudioRef.current) {
+          try {
+            preparationAudioRef.current.pause();
+          } catch (e) {}
+        }
+        const audio = new Audio(audioUrl);
+        audio.loop = true;
+        audio.volume = 0.5;
+        preparationAudioRef.current = audio;
+      }
+
+      preparationAudioRef.current.play().catch(err => {
+        console.log("Failed to play preparation song:", err);
+      });
+    } else {
+      if (preparationAudioRef.current) {
+        try {
+          preparationAudioRef.current.pause();
+          preparationAudioRef.current.currentTime = 0;
+        } catch (e) {}
+      }
+    }
+  }, [isPreparing, prepSongType, prepSongPreset, prepSongUrl, prepSongLocalUrl, kitchenSoundEnabled]);
+
+  useEffect(() => {
+    return () => {
+      if (preparationAudioRef.current) {
+        try {
+          preparationAudioRef.current.pause();
+        } catch (e) {}
+        preparationAudioRef.current = null;
+      }
+    };
+  }, []);
 
   // Handle newly arrived tickets
   useEffect(() => {
@@ -793,8 +929,8 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
       {/* --- FLOATING ALERTS CONFIG MODAL --- */}
       {showSettingsPopover && (
         <div className="fixed inset-0 bg-stone-900/50 backdrop-blur-sm z-[450] flex items-center justify-center p-4">
-          <div className="bg-white rounded-[2rem] shadow-2xl border border-stone-200 p-6 w-full max-w-md animate-in fade-in duration-250">
-            <div className="flex items-center justify-between mb-4 pb-3 border-b border-stone-100">
+          <div className="bg-white rounded-[2rem] shadow-2xl border border-stone-200 p-6 w-full max-w-md max-h-[90vh] flex flex-col animate-in fade-in duration-250">
+            <div className="flex items-center justify-between mb-4 pb-3 border-b border-stone-100 shrink-0">
               <div className="flex items-center gap-2.5">
                 <Smartphone className="text-mex-brown" size={20} />
                 <h3 className="font-serif font-black text-stone-800 text-base leading-tight">Configurar Alertas</h3>
@@ -807,7 +943,7 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
               </button>
             </div>
 
-            <div className="space-y-4">
+            <div className="space-y-4 overflow-y-auto flex-1 pr-1.5 scrollbar-thin pb-4">
               <p className="text-[10px] text-stone-500 font-bold uppercase tracking-widest leading-relaxed">
                 Control de vibrador, alarmas y destellos de luz para los nuevos pedidos de cocina.
               </p>
@@ -914,9 +1050,123 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
                       : "🔵 SOLICITAR"}
                 </button>
               </div>
+
+              {/* 5. PREPARATION MUSIC CONFIGURATION */}
+              <div className="p-4 rounded-2xl bg-amber-50/55 border border-amber-100 space-y-3">
+                <div className="flex items-center gap-2">
+                  <Music className="text-amber-600" size={16} />
+                  <p className="text-xs font-black text-stone-850 uppercase tracking-wide">Música de Preparación</p>
+                </div>
+                <p className="text-[9px] text-stone-600 font-medium leading-relaxed">
+                  Reproduce música automáticamente en tu dispositivo mientras haya platillos en preparación para {userRole === 'parrilla' ? 'parrilla' : userRole === 'kitchen' ? 'cocina' : 'cocina/parrilla'}. Al terminar la preparación, la música se detendrá.
+                </p>
+
+                {/* Song source selector */}
+                <div className="grid grid-cols-3 gap-1.5 p-1 bg-stone-100 rounded-xl">
+                  <button
+                    type="button"
+                    onClick={() => setPrepSongType('preset')}
+                    className={cn(
+                      "py-1.5 text-[8px] font-bold uppercase rounded-lg transition-all border-none cursor-pointer",
+                      prepSongType === 'preset' ? "bg-white text-stone-900 shadow-sm font-black" : "text-stone-500 hover:text-stone-800 bg-transparent"
+                    )}
+                  >
+                    🎵 De Lista
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPrepSongType('file')}
+                    className={cn(
+                      "py-1.5 text-[8px] font-bold uppercase rounded-lg transition-all border-none cursor-pointer",
+                      prepSongType === 'file' ? "bg-white text-stone-900 shadow-sm font-black" : "text-stone-500 hover:text-stone-800 bg-transparent"
+                    )}
+                  >
+                    📱 Del Celular
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPrepSongType('url')}
+                    className={cn(
+                      "py-1.5 text-[8px] font-bold uppercase rounded-lg transition-all border-none cursor-pointer",
+                      prepSongType === 'url' ? "bg-white text-stone-900 shadow-sm font-black" : "text-stone-500 hover:text-stone-800 bg-transparent"
+                    )}
+                  >
+                    🔗 Enlace Web
+                  </button>
+                </div>
+
+                {/* Conditional fields based on type */}
+                {prepSongType === 'preset' && (
+                  <div className="space-y-1">
+                    <label className="text-[8px] font-black text-stone-500 uppercase tracking-wider block">Seleccionar Estilo:</label>
+                    <select
+                      value={prepSongPreset}
+                      onChange={(e) => setPrepSongPreset(e.target.value)}
+                      className="w-full text-xs p-2 rounded-xl border border-stone-200 bg-white text-stone-800 focus:outline-none focus:border-amber-400 font-bold"
+                    >
+                      {PRESET_SONGS.map(song => (
+                        <option key={song.id} value={song.id}>{song.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {prepSongType === 'file' && (
+                  <div className="space-y-2">
+                    <label className="text-[8px] font-black text-stone-500 uppercase tracking-wider block">Cargar de tu Celular:</label>
+                    <div className="flex items-center gap-2">
+                      <label className="flex items-center justify-center gap-2 px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-[9px] font-black tracking-wider cursor-pointer uppercase transition-all shadow-md shadow-amber-600/10 border-none">
+                        <FileAudio size={13} />
+                        Buscar Música
+                        <input
+                          type="file"
+                          accept="audio/*"
+                          onChange={handlePrepFileChange}
+                          className="hidden"
+                        />
+                      </label>
+                    </div>
+                    {prepSongFileName ? (
+                      <div className="p-2 bg-white border border-stone-200 rounded-lg text-[9px] text-stone-700 flex items-center justify-between gap-1">
+                        <span className="font-bold truncate max-w-[200px]">🟢 {prepSongFileName}</span>
+                      </div>
+                    ) : (
+                      <p className="text-[8px] text-amber-600 font-bold">⚠️ Toca "Buscar Música" para subir una canción de tu celular.</p>
+                    )}
+                  </div>
+                )}
+
+                {prepSongType === 'url' && (
+                  <div className="space-y-1">
+                    <label className="text-[8px] font-black text-stone-500 uppercase tracking-wider block">Enlace directo MP3:</label>
+                    <input
+                      type="url"
+                      value={prepSongUrl}
+                      onChange={(e) => setPrepSongUrl(e.target.value)}
+                      placeholder="https://ejemplo.com/musica.mp3"
+                      className="w-full text-xs p-2 rounded-xl border border-stone-200 bg-white text-stone-800 focus:outline-none focus:border-amber-400 font-mono font-medium"
+                    />
+                  </div>
+                )}
+
+                {/* Playback status indicator */}
+                <div className="p-2 bg-amber-100/30 border border-amber-200/40 rounded-xl flex items-center justify-between text-[9px]">
+                  <span className="font-extrabold text-stone-700 uppercase tracking-wider">Estado Actual:</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className={cn(
+                      "inline-block w-1.5 h-1.5 rounded-full",
+                      isPreparing ? "bg-emerald-500 animate-pulse" : "bg-stone-400"
+                    )} />
+                    <span className="font-black uppercase text-stone-800">
+                      {isPreparing ? "Sonando..." : "En pausa (sin preparación)"}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
             </div>
 
-            <div className="mt-5 pt-3 border-t border-stone-100 flex justify-end gap-2">
+            <div className="mt-5 pt-3 border-t border-stone-100 flex justify-end gap-2 shrink-0">
               {isAlerting && (
                 <button
                   onClick={() => {
