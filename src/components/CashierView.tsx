@@ -5,7 +5,7 @@ import { CreditCard, DollarSign, Receipt, TrendingUp, TrendingDown, Clock, Check
 import { Button } from "./Button";
 import { Card, CardContent, CardHeader, CardFooter } from "./Card";
 import { formatCurrency, cn, customRound } from "@/src/lib/utils";
-import { Order, CashLog, OrderStatus, TipLoan } from "@/src/types";
+import { Order, CashLog, OrderStatus, TipLoan, OrderItem } from "@/src/types";
 import { db, auth } from "../firebase";
 import { collection, onSnapshot, query, where, orderBy, doc, updateDoc, addDoc, deleteDoc, writeBatch, getDocs, getDocsFromServer } from "firebase/firestore";
 import { handleFirestoreError, OperationType } from "../lib/firestoreErrorHandler";
@@ -105,6 +105,156 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
   const [isProcessingCreditPayment, setIsProcessingCreditPayment] = useState(false);
   const [isSavingLog, setIsSavingLog] = useState(false);
   const [showDuplicateDetails, setShowDuplicateDetails] = useState(false);
+
+  // State variables for checkout items CRUD
+  const [editingPaymentItem, setEditingPaymentItem] = useState<{ orderId: string; itemIndex: number; name: string; price: number; quantity: number; notes?: string } | null>(null);
+  const [showAddPaymentItem, setShowAddPaymentItem] = useState<boolean>(false);
+  const [addPaymentItemForm, setAddPaymentItemForm] = useState<{ name: string; price: number; quantity: number }>({ name: '', price: 0, quantity: 1 });
+
+  const handleDeleteOrderItem = async (orderId: string, itemIndex: number) => {
+    try {
+      const orderRef = doc(db, "orders", orderId);
+      const orderToUpdate = orders.find(o => o.id === orderId);
+      if (!orderToUpdate) return;
+      
+      const newItems = [...orderToUpdate.items];
+      newItems.splice(itemIndex, 1);
+      
+      // Recalculate total
+      const newTotal = newItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+      
+      await updateDoc(orderRef, {
+        items: newItems,
+        total: newTotal,
+        updatedAt: new Date().toISOString()
+      });
+      
+      // Update selectedGroup locally so total updates immediately
+      setSelectedGroup(prev => {
+        if (!prev) return null;
+        const updatedOrders = prev.orders.map(o => {
+          if (o.id === orderId) {
+            return { ...o, items: newItems, total: newTotal };
+          }
+          return o;
+        });
+        const updatedTotal = updatedOrders.reduce((sum, o) => sum + o.total, 0);
+        return {
+          ...prev,
+          orders: updatedOrders,
+          total: updatedTotal
+        };
+      });
+      
+      toast.success("Artículo eliminado");
+    } catch (error) {
+      console.error("Error deleting order item:", error);
+      toast.error("Error al eliminar el artículo");
+    }
+  };
+
+  const handleUpdateOrderItem = async (orderId: string, itemIndex: number, name: string, price: number, quantity: number, notes?: string) => {
+    try {
+      const orderRef = doc(db, "orders", orderId);
+      const orderToUpdate = orders.find(o => o.id === orderId);
+      if (!orderToUpdate) return;
+      
+      const newItems = [...orderToUpdate.items];
+      newItems[itemIndex] = {
+        ...newItems[itemIndex],
+        name: name.trim(),
+        price: price,
+        quantity: quantity,
+        notes: notes || ""
+      };
+      
+      // Recalculate total
+      const newTotal = newItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+      
+      await updateDoc(orderRef, {
+        items: newItems,
+        total: newTotal,
+        updatedAt: new Date().toISOString()
+      });
+      
+      // Update selectedGroup locally
+      setSelectedGroup(prev => {
+        if (!prev) return null;
+        const updatedOrders = prev.orders.map(o => {
+          if (o.id === orderId) {
+            return { ...o, items: newItems, total: newTotal };
+          }
+          return o;
+        });
+        const updatedTotal = updatedOrders.reduce((sum, o) => sum + o.total, 0);
+        return {
+          ...prev,
+          orders: updatedOrders,
+          total: updatedTotal
+        };
+      });
+      
+      setEditingPaymentItem(null);
+      toast.success("Artículo actualizado");
+    } catch (error) {
+      console.error("Error updating order item:", error);
+      toast.error("Error al actualizar el artículo");
+    }
+  };
+
+  const handleAddOrderItem = async (orderId: string, name: string, price: number, quantity: number) => {
+    if (!name.trim()) {
+      toast.error("Escribe un nombre para el artículo");
+      return;
+    }
+    try {
+      const orderRef = doc(db, "orders", orderId);
+      const orderToUpdate = orders.find(o => o.id === orderId);
+      if (!orderToUpdate) return;
+      
+      const newItem: OrderItem = {
+        productId: `custom-${Date.now()}`,
+        name: name.trim(),
+        price: price,
+        quantity: quantity,
+        status: 'completed',
+        station: 'cocina'
+      };
+      
+      const newItems = [...orderToUpdate.items, newItem];
+      const newTotal = newItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+      
+      await updateDoc(orderRef, {
+        items: newItems,
+        total: newTotal,
+        updatedAt: new Date().toISOString()
+      });
+      
+      // Update selectedGroup locally
+      setSelectedGroup(prev => {
+        if (!prev) return null;
+        const updatedOrders = prev.orders.map(o => {
+          if (o.id === orderId) {
+            return { ...o, items: newItems, total: newTotal };
+          }
+          return o;
+        });
+        const updatedTotal = updatedOrders.reduce((sum, o) => sum + o.total, 0);
+        return {
+          ...prev,
+          orders: updatedOrders,
+          total: updatedTotal
+        };
+      });
+      
+      setShowAddPaymentItem(false);
+      setAddPaymentItemForm({ name: '', price: 0, quantity: 1 });
+      toast.success("Artículo agregado");
+    } catch (error) {
+      console.error("Error adding order item:", error);
+      toast.error("Error al agregar el artículo");
+    }
+  };
 
   // Group log data by Day, Week, and Month for reporting
   const aggregatedHistory = React.useMemo(() => {
@@ -3911,13 +4061,13 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
 
       {/* Payment Modal */}
       {showPaymentModal && selectedGroup && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[150] p-4 backdrop-blur-sm">
-          <Card className="w-full max-w-sm rounded-[2rem] shadow-2xl animate-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[150] p-4 backdrop-blur-sm overflow-y-auto">
+          <Card className="w-full max-w-4xl rounded-[2rem] shadow-2xl animate-in zoom-in-95 duration-200 my-8 overflow-hidden">
             <CardHeader className="bg-mex-brown text-white rounded-t-[2rem] p-6 text-center relative overflow-hidden">
               <div className="absolute top-0 right-0 p-4">
-                <button onClick={() => setShowPaymentModal(false)} className="text-white/50 hover:text-white transition-colors"><X size={20}/></button>
+                <button onClick={() => { setShowPaymentModal(false); setEditingPaymentItem(null); setShowAddPaymentItem(false); }} className="text-white/50 hover:text-white transition-colors cursor-pointer"><X size={20}/></button>
               </div>
-              <p className="text-[10px] font-black text-mex-gold uppercase tracking-[0.3em] mb-1">Total de Cuenta</p>
+              <p className="text-[10px] font-black text-mex-gold uppercase tracking-[0.3em] mb-1">Caja • Cobro de Cuenta</p>
               <h3 className="text-4xl font-serif">{formatCurrency(finalTotal)}</h3>
               <div className="mt-2 flex flex-col items-center">
                 <p className="text-[10px] text-white/60 font-mono italic">Folios: {selectedGroup.folios.join(', ')}</p>
@@ -3926,255 +4076,497 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
                 )}
               </div>
             </CardHeader>
-            <CardContent className="p-6 space-y-6">
-              {/* Disposable Section */}
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-stone-400 uppercase tracking-widest block text-center">
-                  Desechables
-                </label>
-                <div className="flex items-center gap-2">
-                  <input 
-                    type="number" 
-                    min="0"
-                    value={paymentDisposableQuantity}
-                    onChange={(e) => setPaymentDisposableQuantity(Math.max(0, parseInt(e.target.value) || 0))}
-                    className="w-full py-2.5 bg-stone-50 border border-stone-200 rounded-xl text-xs font-bold text-stone-800 text-center focus:outline-none focus:ring-2 focus:ring-mex-green/25 focus:border-mex-green transition-all"
-                  />
-                  <span className="text-xs text-stone-500 font-bold whitespace-nowrap">x {formatCurrency(disposablePrice)}</span>
-                </div>
-              </div>
-
-              {/* Payment Method Section... */}
-              <div className="space-y-3">
-                <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-stone-200 bg-white">
+              
+              {/* COL 1: ELEMENTOS A COBRAR (CRUD) */}
+              <div className="p-6 space-y-4 max-h-[75vh] md:max-h-[500px] overflow-y-auto">
+                <div className="flex items-center justify-between border-b border-stone-100 pb-2">
+                  <h4 className="text-xs font-black text-stone-700 uppercase tracking-wider flex items-center gap-1.5">
+                    📋 Artículos a Cobrar
+                  </h4>
                   <button 
-                    onClick={() => { setPaymentMethod('cash'); setTransferReceipt(null); }}
-                    className={cn(
-                      "flex flex-col items-center gap-1.5 p-3 rounded-2xl border-2 transition-all",
-                      paymentMethod === 'cash' ? "bg-mex-green/5 border-mex-green text-mex-green" : "bg-stone-50 border-stone-100 text-stone-400 hover:border-stone-200"
-                    )}
+                    type="button"
+                    onClick={() => setShowAddPaymentItem(!showAddPaymentItem)}
+                    className="p-1 px-2.5 rounded-lg bg-mex-green/10 text-mex-green hover:bg-mex-green/20 text-[9px] font-black uppercase tracking-wider flex items-center gap-1 transition-all cursor-pointer"
                   >
-                    <DollarSign size={22} />
-                    <span className="text-[9px] font-black uppercase">Efectivo</span>
-                  </button>
-                  <button 
-                    onClick={() => { setPaymentMethod('card'); setTransferReceipt(null); }}
-                    className={cn(
-                      "flex flex-col items-center gap-1.5 p-3 rounded-2xl border-2 transition-all",
-                      paymentMethod === 'card' ? "bg-blue-50 border-blue-600 text-blue-600" : "bg-stone-50 border-stone-100 text-stone-400 hover:border-stone-200"
-                    )}
-                  >
-                    <CreditCard size={22} />
-                    <span className="text-[9px] font-black uppercase">Tarjeta</span>
-                  </button>
-                  <button 
-                    onClick={() => setPaymentMethod('transfer')}
-                    className={cn(
-                      "flex flex-col items-center gap-1.5 p-3 rounded-2xl border-2 transition-all",
-                      paymentMethod === 'transfer' ? "bg-purple-50 border-purple-600 text-purple-600" : "bg-stone-50 border-stone-100 text-stone-400 hover:border-stone-200"
-                    )}
-                  >
-                    <LucideImage size={22} />
-                    <span className="text-[9px] font-black uppercase">Transfer</span>
-                  </button>
-                  <button 
-                    onClick={() => { setPaymentMethod('credit'); setTransferReceipt(null); }}
-                    className={cn(
-                      "flex flex-col items-center gap-1.5 p-3 rounded-2xl border-2 transition-all",
-                      paymentMethod === 'credit' ? "bg-rose-50 border-rose-600 text-rose-600" : "bg-stone-50 border-stone-100 text-stone-400 hover:border-stone-200"
-                    )}
-                  >
-                    <User size={22} />
-                    <span className="text-[9px] font-black uppercase">Crédito</span>
+                    <Plus size={12} />
+                    Agregar
                   </button>
                 </div>
-              </div>
 
-              {/* Cash Received & Change Section */}
-              {paymentMethod === 'cash' && (
-                <motion.div 
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="p-4 bg-stone-50 rounded-2xl border border-stone-200"
-                >
-                  <div className="flex justify-between items-end mb-4">
-                    <div className="flex-1 mr-4">
-                      <label className="text-[10px] font-black text-stone-400 uppercase tracking-widest mb-1.5 block">
-                        Efectivo Recibido
-                      </label>
-                      <div className="relative">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400 font-bold">$</span>
-                        <input
-                          type="number"
-                          value={cashReceived}
-                          onChange={(e) => setCashReceived(e.target.value)}
-                          placeholder="0.00"
-                          className="w-full pl-7 pr-4 py-2 bg-white border border-stone-200 rounded-xl font-bold text-lg focus:ring-2 focus:ring-mex-green/20 focus:border-mex-green outline-none"
-                          autoFocus
-                        />
+                {/* Add Item form */}
+                {showAddPaymentItem && (
+                  <motion.div 
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    className="p-3 bg-mex-green/5 border border-mex-green/20 rounded-xl space-y-2"
+                  >
+                    <p className="text-[9px] font-black text-mex-green uppercase tracking-wider">Agregar artículo extra</p>
+                    <div className="space-y-2">
+                      <input 
+                        type="text"
+                        placeholder="Nombre del artículo (ej. Coca Cola)"
+                        className="w-full px-3 py-1.5 bg-white border border-stone-200 rounded-lg text-xs font-bold focus:ring-1 focus:ring-mex-green"
+                        value={addPaymentItemForm.name}
+                        onChange={(e) => setAddPaymentItemForm(prev => ({ ...prev, name: e.target.value }))}
+                      />
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-[8px] font-bold text-stone-400 uppercase">Precio Unitario</label>
+                          <input 
+                            type="number"
+                            min="0"
+                            placeholder="Precio"
+                            className="w-full px-3 py-1.5 bg-white border border-stone-200 rounded-lg text-xs font-bold"
+                            value={addPaymentItemForm.price || ''}
+                            onChange={(e) => setAddPaymentItemForm(prev => ({ ...prev, price: Math.max(0, parseFloat(e.target.value) || 0) }))}
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[8px] font-bold text-stone-400 uppercase">Cantidad</label>
+                          <input 
+                            type="number"
+                            min="1"
+                            placeholder="Cant."
+                            className="w-full px-3 py-1.5 bg-white border border-stone-200 rounded-lg text-xs font-bold"
+                            value={addPaymentItemForm.quantity}
+                            onChange={(e) => setAddPaymentItemForm(prev => ({ ...prev, quantity: Math.max(1, parseInt(e.target.value) || 1) }))}
+                          />
+                        </div>
+                      </div>
+                      <div className="flex justify-end gap-1.5 pt-1">
+                        <button 
+                          type="button"
+                          onClick={() => setShowAddPaymentItem(false)}
+                          className="px-2.5 py-1 text-[9px] font-black uppercase text-stone-500 hover:bg-stone-100 rounded-lg"
+                        >
+                          Cancelar
+                        </button>
+                        <button 
+                          type="button"
+                          onClick={() => {
+                            if (selectedGroup.orders.length > 0) {
+                              handleAddOrderItem(selectedGroup.orders[0].id, addPaymentItemForm.name, addPaymentItemForm.price, addPaymentItemForm.quantity);
+                            }
+                          }}
+                          className="px-3 py-1 text-[9px] font-black uppercase bg-mex-green text-white hover:bg-mex-green/90 rounded-lg"
+                        >
+                          Confirmar
+                        </button>
                       </div>
                     </div>
-                    <div className="text-right">
-                      <label className="text-[10px] font-black text-stone-400 uppercase tracking-widest mb-1.5 block">
-                        Cambio
-                      </label>
-                      <p className={cn(
-                        "text-2xl font-black font-serif",
-                        Number(cashReceived) - finalTotal >= 0 ? "text-mex-green" : "text-stone-300"
-                      )}>
-                        {Number(cashReceived) - finalTotal > 0 
-                          ? formatCurrency(Number(cashReceived) - finalTotal) 
-                          : formatCurrency(0)}
-                      </p>
-                    </div>
-                  </div>
+                  </motion.div>
+                )}
 
-                  <div className="grid grid-cols-4 gap-1.5">
-                    {[20, 50, 100, 200, 500].map((val) => (
-                      <button
-                        key={val}
-                        type="button"
-                        onClick={() => setCashReceived((prev) => (Number(prev || 0) + val).toString())}
-                        className="py-1.5 bg-white border border-stone-200 rounded-lg text-[10px] font-bold text-stone-600 hover:bg-stone-50 active:scale-95 transition-all shadow-sm"
-                      >
-                        +${val}
-                      </button>
-                    ))}
-                    <button
-                      type="button"
-                      onClick={() => setCashReceived(finalTotal.toString())}
-                      className="py-1.5 bg-mex-green/10 text-mex-green rounded-lg text-[10px] font-black uppercase hover:bg-mex-green/20 active:scale-95 transition-all border border-mex-green/10"
-                    >
-                      Exacto
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setCashReceived('')}
-                      className="py-1.5 col-span-2 bg-stone-200 rounded-lg text-[10px] font-black uppercase text-stone-600 hover:bg-stone-300 active:scale-95 transition-all"
-                    >
-                      Limpiar
-                    </button>
-                  </div>
-                </motion.div>
-              )}
-
-              {/* Customer Name Section for Credit Payments */}
-              {paymentMethod === 'credit' && (
-                <div className="space-y-2 animate-in fade-in slide-in-from-top-3 duration-200">
-                  <label className="text-[10px] font-black text-stone-400 uppercase tracking-widest block text-center">
-                    Nombre del Cliente
-                  </label>
-                  <div className="relative">
-                    <User className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" size={16} />
-                    <input 
-                      type="text"
-                      className="w-full pl-9 pr-4 py-2.5 bg-stone-50 border border-stone-200 rounded-xl text-xs font-bold text-stone-800 placeholder-stone-400 focus:outline-none focus:ring-2 focus:ring-mex-green/25 focus:border-mex-green transition-all"
-                      placeholder="Escribe el nombre del cliente..."
-                      value={clientName}
-                      onChange={(e) => setClientName(e.target.value)}
-                    />
-                  </div>
-                </div>
-              )}
-
-              {/* Upload section for transfer receipt */}
-              {paymentMethod === 'transfer' && (
-                <div className="space-y-2 animate-in fade-in-50 duration-200">
-                  <label className="text-[10px] font-black text-stone-400 uppercase tracking-widest block text-center">
-                    Foto del Comprobante (Opcional)
-                  </label>
-                  
-                  {!transferReceipt ? (
-                    <div
-                      id="transfer-dropzone"
-                      onDragOver={handleDragOver}
-                      onDragLeave={handleDragLeave}
-                      onDrop={handleDrop}
-                      onClick={() => document.getElementById('receipt-upload')?.click()}
-                      className={cn(
-                        "border-2 border-dashed rounded-2xl p-4 text-center cursor-pointer transition-all flex flex-col items-center justify-center gap-1",
-                        isDragging 
-                          ? "border-mex-green bg-mex-green/5 text-mex-green scale-[1.02]" 
-                          : "border-stone-200 bg-stone-50 hover:bg-stone-100/50 text-stone-500 hover:border-stone-300"
+                {/* Items list with CRUD */}
+                <div className="space-y-2">
+                  {selectedGroup.orders.map((order) => (
+                    <div key={order.id} className="space-y-1.5">
+                      {selectedGroup.orders.length > 1 && (
+                        <p className="text-[8px] font-black text-stone-400 uppercase tracking-widest pl-1">
+                          Folio: {order.folio || order.id.slice(0, 6)}
+                        </p>
                       )}
-                    >
-                      <UploadCloud size={24} className={isDragging ? "text-mex-green" : "text-stone-450"} />
-                      <p className="text-[11px] font-black leading-tight">
-                        Arrastra la foto aquí o <span className="text-mex-brown underline">haz clic</span>
-                      </p>
-                      <p className="text-[9px] text-stone-400">JPG, PNG o WEBP (Opcional • máx. 10MB)</p>
-                      <input 
-                        id="receipt-upload"
-                        type="file" 
-                        accept="image/*" 
-                        className="hidden" 
-                        onChange={(e) => {
-                          if (e.target.files && e.target.files.length > 0) {
-                            processReceiptFile(e.target.files[0]);
-                          }
-                        }}
-                      />
+                      
+                      {order.items.map((item, idx) => {
+                        const isEditingThis = editingPaymentItem?.orderId === order.id && editingPaymentItem?.itemIndex === idx;
+                        
+                        return (
+                          <div 
+                            key={`${order.id}-${idx}`} 
+                            className={cn(
+                              "p-2.5 rounded-xl border text-stone-800 transition-all flex flex-col gap-1.5",
+                              isEditingThis ? "bg-amber-50/50 border-amber-200" : "bg-stone-50/50 border-stone-150 hover:bg-stone-50"
+                            )}
+                          >
+                            {isEditingThis ? (
+                              <div className="space-y-2">
+                                <input 
+                                  type="text"
+                                  className="w-full px-2 py-1 bg-white border border-amber-200 rounded text-xs font-bold"
+                                  value={editingPaymentItem.name}
+                                  onChange={(e) => setEditingPaymentItem(prev => prev ? { ...prev, name: e.target.value } : null)}
+                                />
+                                <div className="grid grid-cols-2 gap-1.5">
+                                  <div>
+                                    <label className="text-[8px] font-bold text-stone-400 uppercase">Precio</label>
+                                    <input 
+                                      type="number"
+                                      className="w-full px-2 py-1 bg-white border border-amber-200 rounded text-xs font-bold"
+                                      value={editingPaymentItem.price}
+                                      onChange={(e) => setEditingPaymentItem(prev => prev ? { ...prev, price: Math.max(0, parseFloat(e.target.value) || 0) } : null)}
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="text-[8px] font-bold text-stone-400 uppercase">Cantidad</label>
+                                    <input 
+                                      type="number"
+                                      className="w-full px-2 py-1 bg-white border border-amber-200 rounded text-xs font-bold"
+                                      value={editingPaymentItem.quantity}
+                                      onChange={(e) => setEditingPaymentItem(prev => prev ? { ...prev, quantity: Math.max(1, parseInt(e.target.value) || 1) } : null)}
+                                    />
+                                  </div>
+                                </div>
+                                <div className="flex justify-end gap-1.5 pt-1">
+                                  <button 
+                                    type="button"
+                                    onClick={() => setEditingPaymentItem(null)}
+                                    className="px-2 py-0.5 text-[8px] font-black uppercase text-stone-500 hover:bg-stone-200 rounded"
+                                  >
+                                    Cancelar
+                                  </button>
+                                  <button 
+                                    type="button"
+                                    onClick={() => handleUpdateOrderItem(
+                                      editingPaymentItem.orderId,
+                                      editingPaymentItem.itemIndex,
+                                      editingPaymentItem.name,
+                                      editingPaymentItem.price,
+                                      editingPaymentItem.quantity,
+                                      editingPaymentItem.notes
+                                    )}
+                                    className="px-2.5 py-0.5 text-[8px] font-black uppercase bg-amber-600 text-white hover:bg-amber-700 rounded"
+                                  >
+                                    Guardar
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="flex items-center justify-between gap-2">
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="text-xs font-black text-stone-700">{item.quantity}x</span>
+                                    <span className="text-xs font-bold text-stone-900 truncate">{item.name}</span>
+                                  </div>
+                                  {item.notes && (
+                                    <p className="text-[9px] text-stone-400 font-mono italic ml-5 leading-none">
+                                      Nota: {item.notes}
+                                    </p>
+                                  )}
+                                  <div className="text-[10px] text-stone-500 font-medium ml-5 mt-0.5">
+                                    {formatCurrency(item.price)} c/u • <span className="font-bold text-stone-700">{formatCurrency(item.price * item.quantity)}</span>
+                                  </div>
+                                </div>
+                                
+                                <div className="flex items-center gap-1 shrink-0">
+                                  <button 
+                                    type="button"
+                                    onClick={() => {
+                                      if (item.quantity > 1) {
+                                        handleUpdateOrderItem(order.id, idx, item.name, item.price, item.quantity - 1, item.notes);
+                                      } else {
+                                        handleDeleteOrderItem(order.id, idx);
+                                      }
+                                    }}
+                                    className="w-6 h-6 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-600 flex items-center justify-center text-xs font-bold cursor-pointer"
+                                    title="Restar 1"
+                                  >
+                                    -
+                                  </button>
+                                  <button 
+                                    type="button"
+                                    onClick={() => handleUpdateOrderItem(order.id, idx, item.name, item.price, item.quantity + 1, item.notes)}
+                                    className="w-6 h-6 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-600 flex items-center justify-center text-xs font-bold cursor-pointer"
+                                    title="Sumar 1"
+                                  >
+                                    +
+                                  </button>
+                                  <button 
+                                    type="button"
+                                    onClick={() => setEditingPaymentItem({
+                                      orderId: order.id,
+                                      itemIndex: idx,
+                                      name: item.name,
+                                      price: item.price,
+                                      quantity: item.quantity,
+                                      notes: item.notes
+                                    })}
+                                    className="p-1 rounded-lg hover:bg-amber-100 text-amber-600 transition-colors cursor-pointer"
+                                    title="Editar nombre/precio"
+                                  >
+                                    <Edit2 size={13} />
+                                  </button>
+                                  <button 
+                                    type="button"
+                                    onClick={() => handleDeleteOrderItem(order.id, idx)}
+                                    className="p-1 rounded-lg hover:bg-red-150 text-red-600 transition-colors cursor-pointer"
+                                    title="Eliminar artículo"
+                                  >
+                                    <Trash2 size={13} />
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
-                  ) : (
-                    <div className="relative rounded-2xl overflow-hidden border border-stone-200 bg-stone-50 p-2">
-                       <img 
-                        src={transferReceipt} 
-                        alt="Comprobante de Transferencia" 
-                        className="w-full h-32 object-contain rounded-xl"
-                      />
-                      <button 
-                        id="remove-receipt-button"
-                        type="button"
-                        onClick={() => setTransferReceipt(null)}
-                        className="absolute top-4 right-4 bg-black/60 hover:bg-black/80 text-white p-1.5 rounded-full transition-colors shadow-md cursor-pointer"
-                      >
-                        <X size={14} />
-                      </button>
-                      <p className="text-[9px] text-center mt-1 text-stone-400 font-bold uppercase tracking-wider">Comprobante listo</p>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              <div className="space-y-3 pt-2 text-center text-stone-500">
-                <p className="text-[10px] font-bold uppercase tracking-widest">Resumen</p>
-                <div className="space-y-1">
-                  <div className="flex justify-between text-xs px-2">
-                    <span>Consumo</span>
-                    <span className="font-bold">{formatCurrency(selectedGroup.total)}</span>
-                  </div>
-                  {paymentMethod === 'card' && (
-                    <div className="flex justify-between text-xs px-2 text-mex-green">
-                      <span>Comisión</span>
-                      <span className="font-bold">+{formatCurrency(cardFee)}</span>
-                    </div>
-                  )}
-                  {paymentMethod === 'transfer' && (
-                    <div className="flex justify-between text-xs px-2 text-purple-600">
-                      <span>Comprobante</span>
-                      <span className="font-bold">{transferReceipt ? "Cargado ✓" : "Sin foto (Opcional)"}</span>
+                  ))}
+                  
+                  {selectedGroup.orders.every(o => o.items.length === 0) && (
+                    <div className="text-center py-6 border border-dashed border-stone-200 rounded-2xl bg-stone-50/50">
+                      <p className="text-xs text-stone-400 font-medium">La cuenta no tiene artículos.</p>
                     </div>
                   )}
                 </div>
               </div>
-            </CardContent>
-            <CardFooter className="p-6 pt-0">
-              <Button 
-                variant="primary" 
-                className="w-full h-14 text-lg font-black rounded-xl bg-mex-green hover:bg-mex-green/90 shadow-lg shadow-mex-green/20 tracking-widest disabled:grayscale disabled:opacity-50 flex items-center justify-center gap-2" 
-                onClick={handleConfirmPayment}
-                disabled={isProcessingPayment || (paymentMethod === 'cash' && Number(cashReceived || 0) < finalTotal)}
-              >
-                {isProcessingPayment ? (
-                  <>
-                    <Loader2 className="animate-spin text-white" size={20} />
-                    <span>PROCESANDO...</span>
-                  </>
-                ) : paymentMethod === 'cash' && Number(cashReceived || 0) < finalTotal && Number(cashReceived || 0) > 0
-                  ? `Faltan ${formatCurrency(finalTotal - Number(cashReceived || 0))}`
-                  : 'CONFIRMAR PAGO'}
-              </Button>
-            </CardFooter>
+
+              {/* COL 2: MÉTODO DE PAGO Y DETALLE DE COBRO */}
+              <div className="p-6 space-y-6">
+                {/* Disposable Section */}
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-stone-400 uppercase tracking-widest block text-center">
+                    Desechables
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <input 
+                      type="number" 
+                      min="0"
+                      value={paymentDisposableQuantity}
+                      onChange={(e) => setPaymentDisposableQuantity(Math.max(0, parseInt(e.target.value) || 0))}
+                      className="w-full py-2.5 bg-stone-50 border border-stone-200 rounded-xl text-xs font-bold text-stone-800 text-center focus:outline-none focus:ring-2 focus:ring-mex-green/25 focus:border-mex-green transition-all"
+                    />
+                    <span className="text-xs text-stone-500 font-bold whitespace-nowrap">x {formatCurrency(disposablePrice)}</span>
+                  </div>
+                </div>
+
+                {/* Payment Method Section */}
+                <div className="space-y-3">
+                  <label className="text-[10px] font-black text-stone-400 uppercase tracking-widest block text-center">
+                    Método de Pago
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button 
+                      onClick={() => { setPaymentMethod('cash'); setTransferReceipt(null); }}
+                      className={cn(
+                        "flex flex-col items-center gap-1.5 p-3 rounded-2xl border-2 transition-all cursor-pointer",
+                        paymentMethod === 'cash' ? "bg-mex-green/5 border-mex-green text-mex-green" : "bg-stone-50 border-stone-100 text-stone-400 hover:border-stone-200"
+                      )}
+                    >
+                      <DollarSign size={22} />
+                      <span className="text-[9px] font-black uppercase">Efectivo</span>
+                    </button>
+                    <button 
+                      onClick={() => { setPaymentMethod('card'); setTransferReceipt(null); }}
+                      className={cn(
+                        "flex flex-col items-center gap-1.5 p-3 rounded-2xl border-2 transition-all cursor-pointer",
+                        paymentMethod === 'card' ? "bg-blue-50 border-blue-600 text-blue-600" : "bg-stone-50 border-stone-100 text-stone-400 hover:border-stone-200"
+                      )}
+                    >
+                      <CreditCard size={22} />
+                      <span className="text-[9px] font-black uppercase">Tarjeta</span>
+                    </button>
+                    <button 
+                      onClick={() => setPaymentMethod('transfer')}
+                      className={cn(
+                        "flex flex-col items-center gap-1.5 p-3 rounded-2xl border-2 transition-all cursor-pointer",
+                        paymentMethod === 'transfer' ? "bg-purple-50 border-purple-600 text-purple-600" : "bg-stone-50 border-stone-100 text-stone-400 hover:border-stone-200"
+                      )}
+                    >
+                      <LucideImage size={22} />
+                      <span className="text-[9px] font-black uppercase">Transfer</span>
+                    </button>
+                    <button 
+                      onClick={() => { setPaymentMethod('credit'); setTransferReceipt(null); }}
+                      className={cn(
+                        "flex flex-col items-center gap-1.5 p-3 rounded-2xl border-2 transition-all cursor-pointer",
+                        paymentMethod === 'credit' ? "bg-rose-50 border-rose-600 text-rose-600" : "bg-stone-50 border-stone-100 text-stone-400 hover:border-stone-200"
+                      )}
+                    >
+                      <User size={22} />
+                      <span className="text-[9px] font-black uppercase">Crédito</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Cash Received & Change Section */}
+                {paymentMethod === 'cash' && (
+                  <motion.div 
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="p-4 bg-stone-50 rounded-2xl border border-stone-200"
+                  >
+                    <div className="flex justify-between items-end mb-4">
+                      <div className="flex-1 mr-4">
+                        <label className="text-[10px] font-black text-stone-400 uppercase tracking-widest mb-1.5 block">
+                          Efectivo Recibido
+                        </label>
+                        <div className="relative">
+                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400 font-bold">$</span>
+                          <input
+                            type="number"
+                            value={cashReceived}
+                            onChange={(e) => setCashReceived(e.target.value)}
+                            placeholder="0.00"
+                            className="w-full pl-7 pr-4 py-2 bg-white border border-stone-200 rounded-xl font-bold text-lg focus:ring-2 focus:ring-mex-green/20 focus:border-mex-green outline-none"
+                            autoFocus
+                          />
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <label className="text-[10px] font-black text-stone-400 uppercase tracking-widest mb-1.5 block">
+                          Cambio
+                        </label>
+                        <p className={cn(
+                          "text-2xl font-black font-serif",
+                          Number(cashReceived) - finalTotal >= 0 ? "text-mex-green" : "text-stone-300"
+                        )}>
+                          {Number(cashReceived) - finalTotal > 0 
+                            ? formatCurrency(Number(cashReceived) - finalTotal) 
+                            : formatCurrency(0)}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-4 gap-1.5">
+                      {[20, 50, 100, 200, 500].map((val) => (
+                        <button
+                          key={val}
+                          type="button"
+                          onClick={() => setCashReceived((prev) => (Number(prev || 0) + val).toString())}
+                          className="py-1.5 bg-white border border-stone-200 rounded-lg text-[10px] font-bold text-stone-600 hover:bg-stone-50 active:scale-95 transition-all shadow-sm cursor-pointer"
+                        >
+                          +${val}
+                        </button>
+                      ))}
+                      <button
+                        type="button"
+                        onClick={() => setCashReceived(finalTotal.toString())}
+                        className="py-1.5 bg-mex-green/10 text-mex-green rounded-lg text-[10px] font-black uppercase hover:bg-mex-green/20 active:scale-95 transition-all border border-mex-green/10 cursor-pointer"
+                      >
+                        Exacto
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setCashReceived('')}
+                        className="py-1.5 col-span-2 bg-stone-200 rounded-lg text-[10px] font-black uppercase text-stone-600 hover:bg-stone-300 active:scale-95 transition-all cursor-pointer"
+                      >
+                        Limpiar
+                      </button>
+                    </div>
+                  </motion.div>
+                )}
+
+                {/* Customer Name Section for Credit Payments */}
+                {paymentMethod === 'credit' && (
+                  <div className="space-y-2 animate-in fade-in slide-in-from-top-3 duration-200">
+                    <label className="text-[10px] font-black text-stone-400 uppercase tracking-widest block text-center">
+                      Nombre del Cliente
+                    </label>
+                    <div className="relative">
+                      <User className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" size={16} />
+                      <input 
+                        type="text"
+                        className="w-full pl-9 pr-4 py-2.5 bg-stone-50 border border-stone-200 rounded-xl text-xs font-bold text-stone-800 placeholder-stone-400 focus:outline-none focus:ring-2 focus:ring-mex-green/25 focus:border-mex-green transition-all"
+                        placeholder="Escribe el nombre del cliente..."
+                        value={clientName}
+                        onChange={(e) => setClientName(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Upload section for transfer receipt */}
+                {paymentMethod === 'transfer' && (
+                  <div className="space-y-2 animate-in fade-in-50 duration-200">
+                    <label className="text-[10px] font-black text-stone-400 uppercase tracking-widest block text-center">
+                      Foto del Comprobante (Opcional)
+                    </label>
+                    
+                    {!transferReceipt ? (
+                      <div
+                        id="transfer-dropzone"
+                        onDragOver={handleDragOver}
+                        onDragLeave={handleDragLeave}
+                        onDrop={handleDrop}
+                        onClick={() => document.getElementById('receipt-upload')?.click()}
+                        className={cn(
+                          "border-2 border-dashed rounded-2xl p-4 text-center cursor-pointer transition-all flex flex-col items-center justify-center gap-1",
+                          isDragging 
+                            ? "border-mex-green bg-mex-green/5 text-mex-green scale-[1.02]" 
+                            : "border-stone-200 bg-stone-50 hover:bg-stone-100/50 text-stone-500 hover:border-stone-300"
+                        )}
+                      >
+                        <UploadCloud size={24} className={isDragging ? "text-mex-green" : "text-stone-450"} />
+                        <p className="text-[11px] font-black leading-tight">
+                          Arrastra la foto aquí o <span className="text-mex-brown underline">haz clic</span>
+                        </p>
+                        <p className="text-[9px] text-stone-400">JPG, PNG o WEBP (Opcional • máx. 10MB)</p>
+                        <input 
+                          id="receipt-upload"
+                          type="file" 
+                          accept="image/*" 
+                          className="hidden" 
+                          onChange={(e) => {
+                            if (e.target.files && e.target.files.length > 0) {
+                              processReceiptFile(e.target.files[0]);
+                            }
+                          }}
+                        />
+                      </div>
+                    ) : (
+                      <div className="relative rounded-2xl overflow-hidden border border-stone-200 bg-stone-50 p-2">
+                        <img 
+                          src={transferReceipt} 
+                          alt="Comprobante de Transferencia" 
+                          className="w-full h-32 object-contain rounded-xl"
+                        />
+                        <button 
+                          id="remove-receipt-button"
+                          type="button"
+                          onClick={() => setTransferReceipt(null)}
+                          className="absolute top-4 right-4 bg-black/60 hover:bg-black/80 text-white p-1.5 rounded-full transition-colors shadow-md cursor-pointer"
+                        >
+                          <X size={14} />
+                        </button>
+                        <p className="text-[9px] text-center mt-1 text-stone-400 font-bold uppercase tracking-wider">Comprobante listo</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <div className="space-y-3 pt-2 text-center text-stone-500">
+                  <p className="text-[10px] font-bold uppercase tracking-widest">Resumen</p>
+                  <div className="space-y-1">
+                    <div className="flex justify-between text-xs px-2">
+                      <span>Consumo</span>
+                      <span className="font-bold">{formatCurrency(selectedGroup.total)}</span>
+                    </div>
+                    {paymentMethod === 'card' && (
+                      <div className="flex justify-between text-xs px-2 text-mex-green">
+                        <span>Comisión</span>
+                        <span className="font-bold">+{formatCurrency(cardFee)}</span>
+                      </div>
+                    )}
+                    {paymentMethod === 'transfer' && (
+                      <div className="flex justify-between text-xs px-2 text-purple-600">
+                        <span>Comprobante</span>
+                        <span className="font-bold">{transferReceipt ? "Cargado ✓" : "Sin foto (Opcional)"}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="pt-2">
+                  <Button 
+                    variant="primary" 
+                    className="w-full h-14 text-lg font-black rounded-xl bg-mex-green hover:bg-mex-green/90 shadow-lg shadow-mex-green/20 tracking-widest disabled:grayscale disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer" 
+                    onClick={handleConfirmPayment}
+                    disabled={isProcessingPayment || (paymentMethod === 'cash' && Number(cashReceived || 0) < finalTotal)}
+                  >
+                    {isProcessingPayment ? (
+                      <>
+                        <Loader2 className="animate-spin text-white" size={20} />
+                        <span>PROCESANDO...</span>
+                      </>
+                    ) : paymentMethod === 'cash' && Number(cashReceived || 0) < finalTotal && Number(cashReceived || 0) > 0
+                      ? `Faltan ${formatCurrency(finalTotal - Number(cashReceived || 0))}`
+                      : 'CONFIRMAR PAGO'}
+                  </Button>
+                </div>
+              </div>
+
+            </div>
           </Card>
         </div>
       )}
