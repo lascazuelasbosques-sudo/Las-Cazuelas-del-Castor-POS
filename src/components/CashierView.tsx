@@ -1505,33 +1505,76 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
     });
     const totalExpenses = filteredExpenses.reduce((sum, log) => sum + log.amount, 0);
     
-    // 1. Payment Methods Composition
-    const paymentMethods: Record<string, number> = {
-      efectivo: 0,
-      tarjeta: 0,
-      transferencia: 0,
-      credito: 0
-    };
-    
+    // 1. Payment Methods and Credit Recovery Composition
+    let cashSales = 0;
+    let cardSales = 0;
+    let transferSales = 0;
+    let creditSales = 0;
+    let creditSettlementsCash = 0;
+    let creditSettlementsCard = 0;
+    let creditSettlementsTransfer = 0;
+
     filteredLogs.forEach(log => {
       const reasonLower = log.reason.toLowerCase();
-      if (reasonLower.includes('tarjeta')) {
-        paymentMethods.tarjeta += log.amount;
-      } else if (reasonLower.includes('transferencia')) {
-        paymentMethods.transferencia += log.amount;
-      } else if (reasonLower.includes('crédito') || reasonLower.includes('credito')) {
-        paymentMethods.credito += log.amount;
+      
+      const isCreditSettlementCheck = log.isCreditSettlement || 
+                                    reasonLower.includes('cobro de adeudo') || 
+                                    reasonLower.includes('cobro de crédito') || 
+                                    reasonLower.includes('cobro de credito');
+
+      if (isCreditSettlementCheck) {
+        const method = log.paymentMethod || (reasonLower.includes('tarjeta') ? 'card' : reasonLower.includes('transferencia') ? 'transfer' : 'cash');
+        if (method === 'card') {
+          creditSettlementsCard += log.amount;
+        } else if (method === 'transfer') {
+          creditSettlementsTransfer += log.amount;
+        } else {
+          creditSettlementsCash += log.amount;
+        }
       } else {
-        paymentMethods.efectivo += log.amount;
+        const methodLower = (log.paymentMethod || "").toLowerCase();
+        const isCredit = reasonLower.includes('crédito') || reasonLower.includes('credito') || methodLower === 'crédito' || methodLower === 'credito' || methodLower === 'credit';
+        const isCard = reasonLower.includes('tarjeta') || methodLower.includes('tarjeta') || methodLower === 'card';
+        const isTransfer = reasonLower.includes('transferencia') || methodLower.includes('transferencia') || methodLower === 'transfer';
+
+        if (isCard) {
+          cardSales += log.amount;
+        } else if (isTransfer) {
+          transferSales += log.amount;
+        } else if (isCredit) {
+          creditSales += log.amount;
+        } else {
+          cashSales += log.amount;
+        }
       }
     });
-    
+
+    const totalCashInDrawer = cashSales + creditSettlementsCash;
+    const totalCard = cardSales + creditSettlementsCard;
+    const totalTransfer = transferSales + creditSettlementsTransfer;
+    const totalCreditRecovery = creditSettlementsCash + creditSettlementsCard + creditSettlementsTransfer;
+
+    const paymentMethods: Record<string, number> = {
+      'Efectivo': cashSales,
+      'Tarjeta': cardSales,
+      'Transferencia': transferSales,
+      'Crédito': creditSales,
+      'Cobro Crédito (Efe)': creditSettlementsCash,
+      'Cobro Crédito (Tar)': creditSettlementsCard,
+      'Cobro Crédito (Trf)': creditSettlementsTransfer
+    };
+
     const paymentMethodPieData = Object.entries(paymentMethods)
-      .map(([key, value]) => ({
-        name: key === 'efectivo' ? 'Efectivo' : key === 'tarjeta' ? 'Tarjeta' : key === 'transferencia' ? 'Transferencia' : 'Crédito',
-        value,
-        color: key === 'efectivo' ? '#006847' : key === 'tarjeta' ? '#3B82F6' : key === 'transferencia' ? '#8B5CF6' : '#CE1126'
-      }))
+      .map(([key, value]) => {
+        let color = '#006847';
+        if (key === 'Tarjeta') color = '#3B82F6';
+        else if (key === 'Transferencia') color = '#8B5CF6';
+        else if (key === 'Crédito') color = '#CE1126';
+        else if (key === 'Cobro Crédito (Efe)') color = '#10B981';
+        else if (key === 'Cobro Crédito (Tar)') color = '#60A5FA';
+        else if (key === 'Cobro Crédito (Trf)') color = '#A78BFA';
+        return { name: key, value, color };
+      })
       .filter(item => item.value > 0);
 
     // 2. Top Products Sold
@@ -1636,7 +1679,18 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
       topProducts,
       staffSales,
       trendData,
-      filteredLogs
+      filteredLogs,
+      cashSales,
+      cardSales,
+      transferSales,
+      creditSales,
+      creditSettlementsCash,
+      creditSettlementsCard,
+      creditSettlementsTransfer,
+      totalCashInDrawer,
+      totalCard,
+      totalTransfer,
+      totalCreditRecovery
     };
   };
 
@@ -2885,38 +2939,75 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
           {(() => {
             const rData = getReportData(reportPeriod);
             return (
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 animate-in zoom-in-95 duration-200">
-                <Card className="bg-white border-none shadow-sm ring-1 ring-stone-100">
-                  <CardContent className="p-4">
-                    <p className="text-[10px] text-stone-500 uppercase font-black tracking-widest mb-1">Ventas del Período</p>
-                    <p className="text-2xl font-bold text-mex-green font-serif tracking-tight">{formatCurrency(rData.totalSales)}</p>
-                    <p className="text-[10px] text-stone-400 font-medium mt-1">Suma de todos los ingresos del período</p>
-                  </CardContent>
-                </Card>
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 animate-in zoom-in-95 duration-200">
+                  <Card className="bg-white border-none shadow-sm ring-1 ring-stone-100">
+                    <CardContent className="p-4">
+                      <p className="text-[10px] text-stone-500 uppercase font-black tracking-widest mb-1">Ventas del Período</p>
+                      <p className="text-2xl font-bold text-mex-green font-serif tracking-tight">{formatCurrency(rData.totalSales)}</p>
+                      <p className="text-[10px] text-stone-400 font-medium mt-1">Suma de todos los ingresos del período</p>
+                    </CardContent>
+                  </Card>
 
-                <Card className="bg-white border-none shadow-sm ring-1 ring-stone-100">
-                  <CardContent className="p-4">
-                    <p className="text-[10px] text-stone-500 uppercase font-black tracking-widest mb-1">Gastos del Período</p>
-                    <p className="text-2xl font-bold text-red-650 font-serif tracking-tight">-{formatCurrency(rData.totalExpenses)}</p>
-                    <p className="text-[10px] text-stone-400 font-medium mt-1">Egresos o deducciones registradas</p>
-                  </CardContent>
-                </Card>
+                  <Card className="bg-white border-none shadow-sm ring-1 ring-stone-100">
+                    <CardContent className="p-4">
+                      <p className="text-[10px] text-stone-500 uppercase font-black tracking-widest mb-1">Gastos del Período</p>
+                      <p className="text-2xl font-bold text-red-650 font-serif tracking-tight">-{formatCurrency(rData.totalExpenses)}</p>
+                      <p className="text-[10px] text-stone-400 font-medium mt-1">Egresos o deducciones registradas</p>
+                    </CardContent>
+                  </Card>
 
-                <Card className="bg-white border-none shadow-sm ring-1 ring-stone-100">
-                  <CardContent className="p-4">
-                    <p className="text-[10px] text-stone-500 uppercase font-black tracking-widest mb-1">Balance Neto</p>
-                    <p className="text-2xl font-bold text-stone-900 font-serif tracking-tight">{formatCurrency(rData.totalSales - rData.totalExpenses)}</p>
-                    <p className="text-[10px] text-stone-400 font-medium mt-1">Utilidad neta restante</p>
-                  </CardContent>
-                </Card>
+                  <Card className="bg-white border-none shadow-sm ring-1 ring-stone-100">
+                    <CardContent className="p-4">
+                      <p className="text-[10px] text-stone-500 uppercase font-black tracking-widest mb-1">Balance Neto</p>
+                      <p className="text-2xl font-bold text-stone-900 font-serif tracking-tight">{formatCurrency(rData.totalSales - rData.totalExpenses)}</p>
+                      <p className="text-[10px] text-stone-400 font-medium mt-1">Utilidad neta restante</p>
+                    </CardContent>
+                  </Card>
 
-                <Card className="bg-white border-none shadow-sm ring-1 ring-stone-100">
-                  <CardContent className="p-4">
-                    <p className="text-[10px] text-stone-500 uppercase font-black tracking-widest mb-1">Ticket Promedio</p>
-                    <p className="text-2xl font-bold text-purple-750 font-serif tracking-tight">{formatCurrency(rData.averageTicket)}</p>
-                    <p className="text-[10px] text-stone-400 font-medium mt-1">Total de {rData.totalTransactions} transacciones</p>
-                  </CardContent>
-                </Card>
+                  <Card className="bg-white border-none shadow-sm ring-1 ring-stone-100">
+                    <CardContent className="p-4">
+                      <p className="text-[10px] text-stone-500 uppercase font-black tracking-widest mb-1">Ticket Promedio</p>
+                      <p className="text-2xl font-bold text-purple-750 font-serif tracking-tight">{formatCurrency(rData.averageTicket)}</p>
+                      <p className="text-[10px] text-stone-400 font-medium mt-1">Total de {rData.totalTransactions} transacciones</p>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {/* Secondary breakdown requested by user */}
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 animate-in zoom-in-95 duration-200">
+                  <Card className="bg-stone-50/70 border-none shadow-sm ring-1 ring-stone-150">
+                    <CardContent className="p-4">
+                      <p className="text-[10px] text-mex-green uppercase font-black tracking-widest mb-1">Efectivo en Caja</p>
+                      <p className="text-xl font-bold text-stone-850 font-serif tracking-tight">{formatCurrency(rData.totalCashInDrawer)}</p>
+                      <p className="text-[10px] text-stone-500 font-medium mt-1">Efectivo {formatCurrency(rData.cashSales)} + Cobro Créd. {formatCurrency(rData.creditSettlementsCash)}</p>
+                    </CardContent>
+                  </Card>
+
+                  <Card className="bg-stone-50/70 border-none shadow-sm ring-1 ring-stone-150">
+                    <CardContent className="p-4">
+                      <p className="text-[10px] text-blue-600 uppercase font-black tracking-widest mb-1">Tarjeta</p>
+                      <p className="text-xl font-bold text-stone-850 font-serif tracking-tight">{formatCurrency(rData.totalCard)}</p>
+                      <p className="text-[10px] text-stone-500 font-medium mt-1">Tarjeta {formatCurrency(rData.cardSales)} + Cobro Créd. {formatCurrency(rData.creditSettlementsCard)}</p>
+                    </CardContent>
+                  </Card>
+
+                  <Card className="bg-stone-50/70 border-none shadow-sm ring-1 ring-stone-150">
+                    <CardContent className="p-4">
+                      <p className="text-[10px] text-purple-650 uppercase font-black tracking-widest mb-1">Transferencias</p>
+                      <p className="text-xl font-bold text-stone-850 font-serif tracking-tight">{formatCurrency(rData.totalTransfer)}</p>
+                      <p className="text-[10px] text-stone-500 font-medium mt-1">Trf. {formatCurrency(rData.transferSales)} + Cobro Créd. {formatCurrency(rData.creditSettlementsTransfer)}</p>
+                    </CardContent>
+                  </Card>
+
+                  <Card className="bg-stone-50/70 border-none shadow-sm ring-1 ring-stone-150">
+                    <CardContent className="p-4">
+                      <p className="text-[10px] text-amber-600 uppercase font-black tracking-widest mb-1">Recuperación de Créditos</p>
+                      <p className="text-xl font-bold text-stone-850 font-serif tracking-tight">{formatCurrency(rData.totalCreditRecovery)}</p>
+                      <p className="text-[10px] text-stone-500 font-medium mt-1">Total cobrado de cuentas de crédito</p>
+                    </CardContent>
+                  </Card>
+                </div>
               </div>
             );
           })()}
@@ -5591,6 +5682,26 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
             </div>
           </div>
 
+          <div style={{ marginBottom: '15px' }}>
+            <h4 style={{ borderBottom: '1px solid #ccc', paddingBottom: '3px', margin: '0 0 8px 0', fontSize: '12px', fontWeight: 'bold' }}>1.B CONCILIACIÓN DE CAJA</h4>
+            <div style={{ display: 'flex', justifyContent: 'space-between', margin: '4px 0', fontSize: '11px' }}>
+              <span>Efectivo en Caja Total:</span>
+              <span style={{ fontWeight: 'bold' }}>{formatCurrency(printReportData.totalCashInDrawer)}</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', margin: '4px 0', fontSize: '11px' }}>
+              <span>Tarjetas Total:</span>
+              <span style={{ fontWeight: 'bold' }}>{formatCurrency(printReportData.totalCard)}</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', margin: '4px 0', fontSize: '11px' }}>
+              <span>Transferencias Total:</span>
+              <span style={{ fontWeight: 'bold' }}>{formatCurrency(printReportData.totalTransfer)}</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', margin: '4px 0', fontSize: '11px' }}>
+              <span>Recuperación de Créditos:</span>
+              <span style={{ fontWeight: 'bold' }}>{formatCurrency(printReportData.totalCreditRecovery)}</span>
+            </div>
+          </div>
+
           {printReportData.paymentMethodPieData && (
             <div style={{ marginBottom: '15px' }}>
               <h4 style={{ borderBottom: '1px solid #ccc', paddingBottom: '3px', margin: '0 0 8px 0', fontSize: '12px', fontWeight: 'bold' }}>2. VENTAS POR MÉTODO DE PAGO</h4>
@@ -5789,6 +5900,27 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
                   <div className="flex justify-between text-[11px] text-stone-500">
                     <span>Ticket Promedio:</span>
                     <span>{formatCurrency(printReportData.averageTicket)}</span>
+                  </div>
+                </div>
+
+                {/* Conciliación de Caja */}
+                <div className="mb-6 space-y-2">
+                  <h4 className="border-b border-stone-300 pb-1 text-xs font-bold text-stone-700">1.B CONCILIACIÓN DE CAJA</h4>
+                  <div className="flex justify-between text-xs py-0.5">
+                    <span className="text-stone-600">Efectivo en Caja Total:</span>
+                    <span className="font-bold text-stone-900">{formatCurrency(printReportData.totalCashInDrawer)}</span>
+                  </div>
+                  <div className="flex justify-between text-xs py-0.5">
+                    <span className="text-stone-600">Tarjetas Total:</span>
+                    <span className="font-bold text-stone-900">{formatCurrency(printReportData.totalCard)}</span>
+                  </div>
+                  <div className="flex justify-between text-xs py-0.5">
+                    <span className="text-stone-600">Transferencias Total:</span>
+                    <span className="font-bold text-stone-900">{formatCurrency(printReportData.totalTransfer)}</span>
+                  </div>
+                  <div className="flex justify-between text-xs py-0.5">
+                    <span className="text-stone-600">Recuperación de Créditos:</span>
+                    <span className="font-bold text-stone-900">{formatCurrency(printReportData.totalCreditRecovery)}</span>
                   </div>
                 </div>
 

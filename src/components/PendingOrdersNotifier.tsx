@@ -1,13 +1,17 @@
 import { useState, useEffect, useRef } from "react";
 import { collection, query, where, onSnapshot, orderBy } from "firebase/firestore";
 import { db } from "../firebase";
-import { Order } from "../types";
+import { Order, Category, Product } from "../types";
 import { Bell, BellOff, Volume2, VolumeX, AlertTriangle, Clock, ChevronDown, ChevronUp, Eye, CheckCircle2, Mic } from "lucide-react";
 import { formatCurrency } from "@/src/lib/utils";
 import toast from "react-hot-toast";
+import { useDraggable } from "../lib/useDraggable";
 
 export function PendingOrdersNotifier({ userRole = 'waiter' }: { userRole?: string }) {
+  const { dragProps, hasMoved } = useDraggable();
   const [pendingOrders, setPendingOrders] = useState<Order[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [soundEnabled, setSoundEnabled] = useState<boolean>(() => {
     const saved = localStorage.getItem("pending_orders_sound_enabled");
     return saved === null ? true : saved === "true";
@@ -95,25 +99,62 @@ export function PendingOrdersNotifier({ userRole = 'waiter' }: { userRole?: stri
   const speakText = (text: string) => {
     if (typeof window !== "undefined" && window.speechSynthesis) {
       try {
-        // Cancel any active speech to avoid queues piling up
+        // Resume if paused
+        if (window.speechSynthesis.paused) {
+          window.speechSynthesis.resume();
+        }
+
+        // Cancel previous speech to prevent overlapping queues
         window.speechSynthesis.cancel();
         
-        const utterance = new SpeechSynthesisUtterance(text);
-        utterance.lang = "es-MX";
-        utterance.rate = 0.95; // Slightly slower speed for clearer restaurant kitchen hearing
-        utterance.pitch = 1.0;
-        
-        // Try finding a Spanish voice
-        const voices = window.speechSynthesis.getVoices();
-        const spanishVoice = voices.find(v => v.lang.startsWith("es"));
-        if (spanishVoice) {
-          utterance.voice = spanishVoice;
-        }
-        
-        window.speechSynthesis.speak(utterance);
+        // Use a small timeout so that the cancel operation fully completes in the browser's speech thread
+        // before we queue the new utterance. This solves the famous WebKit bug where cancel() instantly
+        // voids the immediately following speak() call.
+        setTimeout(() => {
+          try {
+            const utterance = new SpeechSynthesisUtterance(text);
+            
+            // Configure language and speech properties
+            utterance.lang = "es-MX";
+            utterance.rate = 0.95; // Slightly slower speed for clearer restaurant kitchen hearing
+            utterance.pitch = 1.0;
+            
+            // Find any Spanish voice
+            const voices = window.speechSynthesis.getVoices();
+            const spanishVoice = voices.find(v => {
+              const langLower = v.lang.toLowerCase();
+              return langLower.includes("es-mx") || langLower.includes("es-es") || langLower.startsWith("es");
+            });
+            
+            if (spanishVoice) {
+              utterance.voice = spanishVoice;
+            }
+            
+            utterance.onerror = (e) => {
+              console.error("SpeechSynthesisUtterance error event:", e);
+              // Fallback retry with default language if voice is unavailable or fails
+              if (e.error === 'network' || e.error === 'voice-unavailable') {
+                try {
+                  const retryUtterance = new SpeechSynthesisUtterance(text);
+                  retryUtterance.lang = "es-ES";
+                  retryUtterance.rate = 0.95;
+                  window.speechSynthesis.speak(retryUtterance);
+                } catch (retryErr) {
+                  console.error("Speech retry error:", retryErr);
+                }
+              }
+            };
+
+            window.speechSynthesis.speak(utterance);
+          } catch (innerErr) {
+            console.error("Error instantiating or speaking utterance:", innerErr);
+          }
+        }, 150);
       } catch (err) {
         console.error("Speech synthesis error:", err);
       }
+    } else {
+      console.warn("Speech synthesis not supported in this environment");
     }
   };
 
@@ -127,6 +168,20 @@ export function PendingOrdersNotifier({ userRole = 'waiter' }: { userRole?: stri
   useEffect(() => {
     localStorage.setItem("pending_orders_sound_enabled", String(soundEnabled));
   }, [soundEnabled]);
+
+  // Load products and categories to identify drinks vs dishes
+  useEffect(() => {
+    const unsubscribeCat = onSnapshot(collection(db, "categories"), (snapshot) => {
+      setCategories(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Category)));
+    });
+    const unsubscribeProd = onSnapshot(collection(db, "products"), (snapshot) => {
+      setProducts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Product)));
+    });
+    return () => {
+      unsubscribeCat();
+      unsubscribeProd();
+    };
+  }, []);
 
   // Subscribe to unattended/unfinished orders
   useEffect(() => {
@@ -165,33 +220,81 @@ export function PendingOrdersNotifier({ userRole = 'waiter' }: { userRole?: stri
       prevOrdersRef.current = orders;
       setPendingOrders(orders);
 
-      // Play sound and speak immediately on NEW order arrival if sound is enabled and the user is the preparer
+      // Play sound and speak immediately on NEW order arrival if sound is enabled
       if (orders.length > prevOrdersCountRef.current) {
         const newest = orders[0];
 
-        // Filter items based on the user's preparation station
-        const cocinaItems = newest.items.filter(item => (item.station === 'cocina' || !item.station) && item.status !== 'cancelled');
-        const planchaItems = newest.items.filter(item => item.station === 'plancha' && item.status !== 'cancelled');
+        // Helper to check if an item is a drink
+        const isDrinkItem = (item: any) => {
+          // Check categories if loaded
+          const prod = products.find(p => p.id === item.productId || p.name === item.name);
+          if (prod) {
+            const cat = categories.find(c => c.id === prod.categoryId);
+            if (cat && cat.name.toLowerCase().includes('bebida')) {
+              return true;
+            }
+          }
+          const nameLower = item.name.toLowerCase();
+          return nameLower.includes("agua") || 
+                 nameLower.includes("jugo") || 
+                 nameLower.includes("bebida") || 
+                 nameLower.includes("refresco") || 
+                 nameLower.includes("café") || 
+                 nameLower.includes("cafe") || 
+                 nameLower.includes("coca") || 
+                 nameLower.includes("soda") || 
+                 nameLower.includes("fanta") || 
+                 nameLower.includes("sprite") || 
+                 nameLower.includes("boing") || 
+                 nameLower.includes("cerveza") || 
+                 nameLower.includes("licuado") || 
+                 nameLower.includes("té") || 
+                 nameLower.includes("te");
+        };
+
+        const activeItems = newest.items.filter(item => item.status !== 'cancelled');
+        const drinksToDeliver = activeItems.filter(isDrinkItem);
+        const dishesToPrepare = activeItems.filter(item => !isDrinkItem(item));
 
         let shouldAlert = false;
-        let itemsToSpeak: typeof newest.items = [];
+        let speakMsg = "";
+
+        const destiny = newest.isTakeaway 
+          ? "para llevar" 
+          : `para la mesa ${newest.tableNumber || ""}`;
 
         if (userRole === 'kitchen') {
-          shouldAlert = cocinaItems.length > 0;
-          itemsToSpeak = cocinaItems;
+          const relevantDishes = dishesToPrepare.filter(item => item.station === 'cocina' || !item.station);
+          shouldAlert = relevantDishes.length > 0;
+          if (shouldAlert) {
+            const listText = relevantDishes.map(item => `${item.quantity} ${item.name}`).join(", ");
+            speakMsg = `Nuevo pedido ${destiny}. Preparar en cocina: ${listText}.`;
+          }
         } else if (userRole === 'parrilla') {
-          shouldAlert = planchaItems.length > 0;
-          itemsToSpeak = planchaItems;
+          const relevantDishes = dishesToPrepare.filter(item => item.station === 'plancha');
+          shouldAlert = relevantDishes.length > 0;
+          if (shouldAlert) {
+            const listText = relevantDishes.map(item => `${item.quantity} ${item.name}`).join(", ");
+            speakMsg = `Nuevo pedido ${destiny}. Preparar en parrilla: ${listText}.`;
+          }
+        } else {
+          // For waiter, cashier, admin, or other roles, announce both dishes and drinks!
+          shouldAlert = activeItems.length > 0;
+          if (shouldAlert) {
+            const dishesText = dishesToPrepare.map(item => `${item.quantity} ${item.name}`).join(", ");
+            const drinksText = drinksToDeliver.map(item => `${item.quantity} ${item.name}`).join(", ");
+            
+            speakMsg = `Nuevo pedido ${destiny}.`;
+            if (dishesToPrepare.length > 0) {
+              speakMsg += ` Platillos a preparar: ${dishesText}.`;
+            }
+            if (drinksToDeliver.length > 0) {
+              speakMsg += ` Bebidas a entregar: ${drinksText}.`;
+            }
+          }
         }
 
         if (shouldAlert) {
-          const destiny = newest.isTakeaway 
-            ? "para llevar" 
-            : `para la mesa ${newest.tableNumber || ""}`;
-          
-          const itemsListText = itemsToSpeak.map(item => `${item.quantity} ${item.name}`).join(", ");
-          const speakMsg = `Nuevo pedido ${destiny}. Preparar: ${itemsListText}.`;
-
           if (soundEnabled) {
             // Play chime sound
             audioRef.current?.play().catch(err => {
@@ -206,7 +309,7 @@ export function PendingOrdersNotifier({ userRole = 'waiter' }: { userRole?: stri
             const toastInfo = newest.folio || newest.tableNumber ? `Mesa ${newest.tableNumber}` : newest.clientName || "Llevar";
             toast(`🔔 Nuevo pedido recibido: ${toastInfo}`, {
               icon: "🍳",
-              duration: 4000,
+              duration: 5000,
               style: {
                 background: "#1e293b",
                 color: "#fff",
@@ -218,11 +321,11 @@ export function PendingOrdersNotifier({ userRole = 'waiter' }: { userRole?: stri
             lastPlayTimeRef.current = Date.now();
           }
 
-          // Trigger system background Notification for the preparer
+          // Trigger system background Notification
           if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted") {
             try {
               new Notification("🍳 ¡NUEVO PEDIDO RECIBIDO!", {
-                body: `Pedido ${destiny}. Preparar: ${itemsListText}.`,
+                body: speakMsg,
                 requireInteraction: true,
                 tag: `new-order-notifier-${newest.id}`
               });
@@ -239,54 +342,65 @@ export function PendingOrdersNotifier({ userRole = 'waiter' }: { userRole?: stri
     });
 
     return () => unsubscribe();
-  }, [soundEnabled, userRole]);
+  }, [soundEnabled, userRole, categories, products]);
 
-  // Periodic Reminder Sound Loop (Every 3 minutes if there are unattended orders)
+  // Periodic Voice Reminder of pending kitchen items (Every 10 minutes)
   useEffect(() => {
     const interval = setInterval(() => {
-      // Only preparers get alerts
-      const isPreparer = userRole === 'kitchen' || userRole === 'parrilla';
-      if (!isPreparer) return;
+      // Only preparers or admin/cashier roles get reminders of pending kitchen items
+      const isRelevantRole = ['kitchen', 'parrilla', 'admin', 'cashier'].includes(userRole);
+      if (!isRelevantRole) return;
 
-      // Filter orders that have pending items for this specific station
-      const relevantOrders = pendingOrders.filter(order => {
-        const hasStationItems = order.items.some(item => {
+      // Group pending items across all active orders
+      const pendingItemsMap: Record<string, number> = {};
+      let totalPendingCount = 0;
+
+      pendingOrders.forEach(order => {
+        order.items.forEach(item => {
           const isCancelled = item.status === 'cancelled';
           const isCompleted = item.status === 'completed';
-          if (isCancelled || isCompleted) return false;
+          if (isCancelled || isCompleted) return;
 
+          // Check if this item matches the role's station or is a dish to prepare
+          let matchesStation = false;
           if (userRole === 'kitchen') {
-            return item.station === 'cocina' || !item.station;
+            matchesStation = item.station === 'cocina' || !item.station;
+          } else if (userRole === 'parrilla') {
+            matchesStation = item.station === 'plancha';
           } else {
-            return item.station === 'plancha';
+            // For admin/cashier, we include all items that need preparation
+            matchesStation = true;
+          }
+
+          if (matchesStation) {
+            pendingItemsMap[item.name] = (pendingItemsMap[item.name] || 0) + item.quantity;
+            totalPendingCount++;
           }
         });
-        return hasStationItems;
       });
 
-      if (relevantOrders.length > 0 && soundEnabled) {
+      if (totalPendingCount > 0 && soundEnabled) {
         const now = Date.now();
-        // Prevent playing too rapidly (3 minutes = 180,000 ms, safeguard at 170,000 ms)
-        if (now - lastPlayTimeRef.current >= 170000) {
+        // Prevent playing too rapidly (10 minutes = 600,000 ms, safeguard at 580,000 ms)
+        if (now - lastPlayTimeRef.current >= 580000) {
           // Play chime
           audioRef.current?.play().catch(e => console.log("Sound loop play blocked:", e));
-          
-          // Prepare friendly Spanish reminder
-          const criticalCount = relevantOrders.filter(o => getWaitTime(o.createdAt) >= 10).length;
-          let speakMsg = `Recordatorio: tienes ${relevantOrders.length} ${relevantOrders.length === 1 ? 'pedido pendiente' : 'pedidos pendientes'} de atender.`;
-          if (criticalCount > 0) {
-            speakMsg += ` ¡Atención! ${criticalCount} de ellos ya llevan más de diez minutos de espera.`;
-          }
-          
+
+          const pendingItemsList = Object.entries(pendingItemsMap)
+            .map(([name, qty]) => `${qty} ${name}`)
+            .join(", ");
+
+          const speakMsg = `Recordatorio de lo que falta por preparar en cocina: ${pendingItemsList}.`;
+
           // Delay to wait for chime sound
           setTimeout(() => {
             speakText(speakMsg);
           }, 1000);
-          
+
           lastPlayTimeRef.current = now;
         }
       }
-    }, 180000); // 3 minutes in ms
+    }, 600000); // 10 minutes in ms
 
     return () => clearInterval(interval);
   }, [pendingOrders, soundEnabled, userRole]);
@@ -298,7 +412,10 @@ export function PendingOrdersNotifier({ userRole = 'waiter' }: { userRole?: stri
   const criticalOrdersCount = pendingOrders.filter(o => getWaitTime(o.createdAt) >= 10).length;
 
   return (
-    <div className="fixed bottom-20 md:bottom-4 right-4 z-[99] flex flex-col items-end gap-2 max-w-[360px] w-full px-2 sm:px-0">
+    <div 
+      className="fixed bottom-20 md:bottom-4 right-4 z-[99] flex flex-col items-end gap-2 max-w-[360px] w-full px-2 sm:px-0 select-none"
+      {...dragProps}
+    >
       {/* Alert Header Box / Pill */}
       <div 
         className={`w-full flex items-center justify-between gap-3 p-3 rounded-2xl shadow-xl border backdrop-blur-md transition-all duration-300 ${
@@ -307,7 +424,17 @@ export function PendingOrdersNotifier({ userRole = 'waiter' }: { userRole?: stri
             : "bg-stone-900/95 text-white border-stone-800 shadow-black/30"
         }`}
       >
-        <div className="flex items-center gap-2.5 min-w-0 flex-1 cursor-pointer" onClick={() => setIsOpen(!isOpen)}>
+        <div 
+          className="flex items-center gap-2.5 min-w-0 flex-1 cursor-pointer" 
+          onClick={(e) => {
+            if (hasMoved) {
+              e.preventDefault();
+              e.stopPropagation();
+              return;
+            }
+            setIsOpen(!isOpen);
+          }}
+        >
           <div className="relative shrink-0">
             <span className={`flex h-4 w-4 items-center justify-center rounded-full text-[10px] font-black ${
               criticalOrdersCount > 0 ? "bg-white text-amber-600" : "bg-mex-green text-white"

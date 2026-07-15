@@ -7,6 +7,7 @@ import { Product, Category, OrderItem, Order, OrderStatus } from "@/src/types";
 import { db, auth } from "../firebase";
 import { collection, onSnapshot, query, orderBy, addDoc, updateDoc, doc, where, runTransaction } from "firebase/firestore";
 import toast from "react-hot-toast";
+import { useDraggable } from "../lib/useDraggable";
 
 const Utensils = UtensilsIcon;
 
@@ -20,6 +21,7 @@ interface OrderViewProps {
 }
 
 export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }: OrderViewProps) => {
+  const dragCart = useDraggable();
   const [categories, setCategories] = useState<Category[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>('');
@@ -843,12 +845,22 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
       </div>
 
       {/* Mobile Cart Toggle Button */}
-      <div className="md:hidden fixed bottom-24 right-4 z-40">
+      <div 
+        className="md:hidden fixed bottom-24 right-4 z-40 select-none"
+        {...dragCart.dragProps}
+      >
         <Button 
           variant="primary" 
           size="lg" 
           className="rounded-full w-14 h-14 shadow-2xl flex items-center justify-center p-0"
-          onClick={() => setShowCartMobile(true)}
+          onClick={(e) => {
+            if (dragCart.hasMoved) {
+              e.preventDefault();
+              e.stopPropagation();
+              return;
+            }
+            setShowCartMobile(true);
+          }}
         >
           <div className="relative">
             <ShoppingCart size={24} />

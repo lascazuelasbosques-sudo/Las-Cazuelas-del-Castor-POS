@@ -28,6 +28,7 @@ import {
 } from "firebase/firestore";
 import { db } from "../firebase";
 import toast from "react-hot-toast";
+import { useDraggable } from "../lib/useDraggable";
 
 interface WalkieMessage {
   id: string;
@@ -194,6 +195,8 @@ const playRadioBeep = (type: 'activate' | 'receive' | 'deactivate') => {
 };
 
 export function WalkieTalkie({ posUser, isOpen, setIsOpen }: WalkieTalkieProps) {
+  const dragSpeaker = useDraggable();
+  const dragPanel = useDraggable();
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [targetId, setTargetId] = useState<string>('all');
   const [targetType, setTargetType] = useState<'group' | 'individual'>('group');
@@ -817,7 +820,10 @@ export function WalkieTalkie({ posUser, isOpen, setIsOpen }: WalkieTalkieProps) 
     <>
       {/* Floating Walkie Talkie Active Speaker Overlay */}
       {activeSpeaker && (
-        <div className="fixed bottom-20 md:bottom-6 left-5 z-[80] flex flex-col items-start gap-2">
+        <div 
+          className="fixed bottom-20 md:bottom-6 left-5 z-[80] flex flex-col items-start gap-2 select-none"
+          {...dragSpeaker.dragProps}
+        >
           <div className="bg-stone-900 border-2 border-amber-400 text-white p-3 rounded-2xl shadow-2xl max-w-xs md:max-w-md flex flex-col gap-1 items-start text-xs animate-bounce animate-pulse">
             <div className="flex items-center gap-1.5 font-black uppercase text-[10px] text-amber-400">
               <span className="w-2 h-2 rounded-full bg-red-600 animate-ping"></span>
@@ -830,7 +836,10 @@ export function WalkieTalkie({ posUser, isOpen, setIsOpen }: WalkieTalkieProps) 
 
       {/* Rugged Physical Walkie Talkie Simulator Panel */}
       {isOpen && (
-        <div className="fixed bottom-[74px] md:bottom-24 left-4 right-4 md:right-auto md:left-5 z-[90] md:w-72 bg-stone-900 border-4 border-stone-800 rounded-3xl shadow-2xl overflow-hidden flex flex-col border-b-[8px] transform transition-all duration-300 scale-100">
+        <div 
+          className="fixed bottom-[74px] md:bottom-24 left-4 right-4 md:right-auto md:left-5 z-[90] md:w-72 bg-stone-900 border-4 border-stone-800 rounded-3xl shadow-2xl overflow-hidden flex flex-col border-b-[8px] transform transition-all duration-300 scale-100 select-none"
+          {...dragPanel.dragProps}
+        >
           
           {/* Top Antenna / Volume Knob Representation */}
           <div className="bg-stone-950 px-3 py-1.5 flex items-center justify-between border-b border-stone-800 text-[9px] text-stone-500 font-bold tracking-wider">

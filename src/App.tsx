@@ -22,8 +22,10 @@ import { db } from './firebase';
 
 import { Order, User as POSUser } from './types';
 import { useBranding } from './lib/useBranding';
+import { useDraggable } from './lib/useDraggable';
 
 export default function App() {
+  const dragExitPortal = useDraggable();
   const [activeTab, setActiveTab] = useState('orders');
   const [isWalkieOpen, setIsWalkieOpen] = useState(false);
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
@@ -325,11 +327,13 @@ export default function App() {
         <div className="relative">
            <button 
              onClick={() => {
+               if (dragExitPortal.hasMoved) return;
                setIsPortalView(false);
                exitFullscreen();
              }}
-             className="fixed top-3 right-3 z-[100] bg-stone-950 hover:bg-stone-850 text-white font-black px-4 py-2.5 rounded-full text-[10px] flex items-center gap-2 shadow-xl border-none cursor-pointer uppercase tracking-widest transition-all active:scale-95"
+             className="fixed top-3 right-3 z-[100] bg-stone-950 hover:bg-stone-850 text-white font-black px-4 py-2.5 rounded-full text-[10px] flex items-center gap-2 shadow-xl border-none cursor-pointer uppercase tracking-widest transition-all active:scale-95 select-none"
              title="Salir de la Simulación"
+             {...dragExitPortal.dragProps}
            >
              <span>🚪</span>
              <span>Salir</span>
