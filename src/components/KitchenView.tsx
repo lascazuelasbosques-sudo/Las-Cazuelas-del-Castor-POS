@@ -1482,31 +1482,48 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
               )}
 
               {selectedGenreTab === "file" && (
-                <div className="p-3.5 bg-emerald-50/40 border border-emerald-100 rounded-2xl space-y-2 mb-2">
+                <div className="p-3.5 bg-emerald-50/40 border border-emerald-100 rounded-2xl space-y-3 mb-2">
                   <div className="flex items-center gap-2">
                     <div className="w-8 h-8 rounded-full bg-emerald-50 flex items-center justify-center text-emerald-600 shrink-0">
                       <FolderOpen size={16} />
                     </div>
                     <div>
-                      <span className="text-[10px] font-black uppercase tracking-wide text-stone-800 block">Cargar Audio desde Smartphone</span>
-                      <span className="text-[8px] text-stone-500 font-bold">Formatos sugeridos: MP3, M4A, WAV, OGG</span>
+                      <span className="text-[10px] font-black uppercase tracking-wide text-stone-800 block">Cargar Audio desde Celular / PC</span>
+                      <span className="text-[8px] text-stone-500 font-bold">Resuelve el problema de selección en Smartphones</span>
                     </div>
                   </div>
                   
-                  <div className="flex flex-col gap-1.5">
+                  <div className="flex flex-col gap-2.5">
                     <label className="flex items-center justify-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-[10px] font-black tracking-wider cursor-pointer uppercase transition-all shadow-sm border-none w-full text-center">
                       <FileAudio size={13} />
-                      Toca para Buscar en Carpetas
+                      1. Buscar Solo Audios (.mp3, .wav, .m4a)
                       <input
                         type="file"
-                        accept="audio/*,audio/mp3,audio/mpeg,audio/x-m4a,audio/wav,audio/ogg,.mp3,.m4a,.wav,.ogg"
+                        accept=".mp3,.wav,.m4a,.ogg,.aac,.mp4,audio/mpeg,audio/mp3,audio/wav,audio/x-m4a,audio/x-aac,audio/mpeg3,audio/x-mpeg-3"
                         onChange={handlePrepFileChange}
                         className="hidden"
                       />
                     </label>
-                    <p className="text-[8px] text-stone-400 text-center leading-normal leading-relaxed">
-                      💡 <b>Nota Celular:</b> Al presionar arriba, selecciona "Archivos" o "Descargas" de tu smartphone. Si no ves tus canciones, puedes usar la pestaña <b>"Enlaces"</b> para pegar cualquier enlace directo de internet.
-                    </p>
+
+                    <label className="flex items-center justify-center gap-2 px-4 py-2.5 bg-stone-900 hover:bg-stone-950 text-white rounded-xl text-[10px] font-black tracking-wider cursor-pointer uppercase transition-all shadow-sm border-none w-full text-center">
+                      <FolderOpen size={13} />
+                      2. Explorador Completo (Recomendado Celular)
+                      <input
+                        type="file"
+                        accept="*/*"
+                        onChange={handlePrepFileChange}
+                        className="hidden"
+                      />
+                    </label>
+
+                    <div className="p-2.5 bg-amber-50/60 border border-amber-200/50 rounded-xl text-left text-[9px] text-stone-600 space-y-1">
+                      <p className="font-bold text-amber-800">💡 ¿CÓMO ELEGIR TU MÚSICA EN SMARTPHONES?</p>
+                      <ul className="list-disc list-inside space-y-0.5 text-stone-500 font-medium">
+                        <li>Usa la opción <b>2. Explorador Completo</b> si el celular solo te abre la grabadora de voz o cámara.</li>
+                        <li>En el explorador, toca las 3 líneas arriba a la izquierda y entra a <b>"Descargas"</b>, <b>"Audio"</b> o <b>"Almacenamiento interno"</b>.</li>
+                        <li>También puedes usar la pestaña <b>"Enlaces"</b> para escuchar cualquier radio, directo o link de música de internet sin descargar nada.</li>
+                      </ul>
+                    </div>
                   </div>
                 </div>
               )}
