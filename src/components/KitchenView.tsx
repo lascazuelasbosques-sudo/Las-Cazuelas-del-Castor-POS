@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardHeader, CardFooter } from "./Card";
 import { Button } from "./Button";
-import { Order, OrderStatus, OrderItem } from "@/src/types";
+import { Order, OrderStatus, OrderItem, Product } from "@/src/types";
 import { Clock, CheckCircle2, PlayCircle, ClipboardList, PlusCircle, Trash2, Ban, X, XCircle, Bell, BellOff, Volume2, VolumeX, Smartphone, Music, FileAudio, Search, Play, Pause, Plus, FolderOpen, ListMusic, Globe, Save } from "lucide-react";
 import { db } from "../firebase";
 import { collection, onSnapshot, query, where, orderBy, doc, updateDoc, addDoc } from "firebase/firestore";
@@ -62,6 +62,16 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
   });
   const [orderToCancel, setOrderToCancel] = useState<Order | null>(null);
   const [itemCancellation, setItemCancellation] = useState<{ orderId: string; originalIndex: number; itemName: string } | null>(null);
+
+  // States for adding dishes directly to orders from the kitchen
+  const [products, setProducts] = useState<Product[]>([]);
+  const [orderToAddItems, setOrderToAddItems] = useState<Order | null>(null);
+  const [searchProductQuery, setSearchProductQuery] = useState("");
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [addQuantity, setAddQuantity] = useState(1);
+  const [addNotes, setAddNotes] = useState("");
+  const [addStation, setAddStation] = useState<'cocina' | 'plancha'>('cocina');
+  const [showDirectAddModal, setShowDirectAddModal] = useState(false);
 
   // Kitchen alerts state and references
   const [silencedTickets, setSilencedTickets] = useState<string[]>([]);
@@ -432,10 +442,22 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
     }
   }, []);
 
+  // Subscribe to products on mount
+  useEffect(() => {
+    const qProd = query(collection(db, "products"), orderBy("name", "asc"));
+    const unsubscribe = onSnapshot(qProd, (snapshot) => {
+      const prods = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Product));
+      setProducts(prods);
+    }, (error) => {
+      console.error("Error loading products for kitchen:", error);
+    });
+    return () => unsubscribe();
+  }, []);
+
   useEffect(() => {
     const q = query(
       collection(db, "orders"),
-      where("status", "in", ["pending", "preparing"]),
+      where("status", "in", ["pending", "preparing", "ready", "served"]),
       orderBy("createdAt", "asc")
     );
 
@@ -881,6 +903,73 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
     }
   };
 
+  const addProductToOrderDirectly = async (
+    order: Order,
+    product: Product,
+    quantity: number,
+    notes: string,
+    station: 'plancha' | 'cocina'
+  ) => {
+    try {
+      const newItem: OrderItem = {
+        productId: product.id,
+        name: product.name,
+        price: product.price,
+        quantity: quantity,
+        status: 'pending',
+        station: station || product.station || 'cocina',
+        notes: notes.trim() || undefined,
+        hasExtraCheese: false
+      };
+
+      // Check if there's already a pending item of the exact same product with same notes and station
+      let updatedItems = [...order.items];
+      const existingItemIndex = updatedItems.findIndex(i => 
+        i.productId === product.id && 
+        i.status === 'pending' && 
+        i.station === station && 
+        (i.notes || "") === (notes.trim() || "")
+      );
+
+      if (existingItemIndex !== -1) {
+        updatedItems[existingItemIndex] = {
+          ...updatedItems[existingItemIndex],
+          quantity: updatedItems[existingItemIndex].quantity + quantity
+        };
+      } else {
+        updatedItems.push(newItem);
+      }
+
+      // Filter out any completely cancelled items or just sum up everything active (not cancelled)
+      const activeItems = updatedItems.filter(item => item.status !== 'cancelled');
+      const newSubtotal = activeItems.reduce((acc, item) => acc + (item.price * item.quantity), 0);
+      const newTotal = customRound(newSubtotal);
+
+      // We update the order in Firestore. We set status to 'pending' so it reactivates 
+      // the kitchen comanda ticket and sounds/strobe if enabled.
+      const orderRef = doc(db, "orders", order.id);
+      await updateDoc(orderRef, {
+        items: updatedItems,
+        subtotal: newSubtotal,
+        total: newTotal,
+        status: 'pending', // Regresar a pendiente para alertar a la cocina
+        updatedAt: new Date().toISOString()
+      });
+
+      toast.success(`Agregado: ${quantity}x ${product.name}`);
+      
+      // Reset modal state
+      setOrderToAddItems(null);
+      setSelectedProduct(null);
+      setAddQuantity(1);
+      setAddNotes("");
+      setShowDirectAddModal(false);
+    } catch (error) {
+      console.error("Error adding product to order:", error);
+      toast.error("Error al agregar platillo al pedido.");
+    }
+  };
+
   const getStatusColor = (status: OrderStatus) => {
     switch (status) {
       case 'pending': return 'bg-amber-100 text-amber-700 border-amber-200';
@@ -1160,7 +1249,9 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
           </div>
 
           <button
-            onClick={() => setShowSettingsPopover(!showSettingsPopover)}
+            onClick={() => {
+              setShowSettingsPopover(!showSettingsPopover);
+            }}
             className={cn(
               "p-2.5 px-3.5 rounded-2xl border transition-all flex items-center gap-2 cursor-pointer shadow-sm text-[10px] font-black uppercase tracking-wider h-[46px]",
               showSettingsPopover 
@@ -1173,6 +1264,23 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
           >
             {isAlerting ? <Bell className="animate-bounce text-red-500" size={15} /> : <Bell size={15} />}
             <span>⚙️ Alertas</span>
+          </button>
+
+          <button
+            onClick={() => {
+              setOrderToAddItems(null);
+              setSelectedProduct(null);
+              setSearchProductQuery("");
+              setAddQuantity(1);
+              setAddNotes("");
+              setAddStation(activeStation === 'plancha' ? 'plancha' : 'cocina');
+              setShowDirectAddModal(true);
+            }}
+            className="p-2.5 px-3.5 rounded-2xl bg-mex-green hover:bg-emerald-700 text-white transition-all flex items-center gap-2 cursor-pointer shadow-sm text-[10px] font-black uppercase tracking-wider h-[46px] border-none select-none active:scale-95"
+            title="Agregar Platillo a una Orden / Mesa"
+          >
+            <Plus size={15} strokeWidth={3} />
+            <span>Agregar Platillo</span>
           </button>
         </div>
       </div>
@@ -1857,7 +1965,15 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
                   <Button 
                     variant="ghost" 
                     className="flex-1 h-8 p-0 text-emerald-800 hover:text-emerald-900 hover:bg-emerald-100 bg-emerald-50 border border-emerald-300 rounded-lg cursor-pointer transition-all shadow-3xs active:scale-95 flex items-center justify-center font-bold"
-                    onClick={() => onEditOrder(ticket.order)}
+                    onClick={() => {
+                      setOrderToAddItems(ticket.order);
+                      setAddStation(ticket.station);
+                      setSelectedProduct(null);
+                      setSearchProductQuery("");
+                      setAddQuantity(1);
+                      setAddNotes("");
+                      setShowDirectAddModal(true);
+                    }}
                     title="Agregar Producto a Comanda"
                   >
                     <PlusCircle size={15} strokeWidth={2.5} />
@@ -1996,6 +2112,226 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
                   Confirmar Quitar
                 </Button>
               </div>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {/* --- MODAL: AGREGAR PLATILLO DIRECTAMENTE --- */}
+      {showDirectAddModal && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[350] p-4 backdrop-blur-sm">
+          <Card className="w-full max-w-lg rounded-[2rem] shadow-2xl overflow-hidden border border-stone-200 bg-mex-cream animate-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]">
+            <div className="bg-mex-brown text-white px-6 py-4 flex items-center justify-between shrink-0">
+              <h3 className="font-serif text-sm font-extrabold flex items-center gap-2 tracking-tight">
+                <Plus size={18} strokeWidth={2.5} />
+                Agregar Platillo a Comanda
+              </h3>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowDirectAddModal(false);
+                  setOrderToAddItems(null);
+                  setSelectedProduct(null);
+                  setAddQuantity(1);
+                  setAddNotes("");
+                }}
+                className="text-white/80 hover:text-white transition-colors cursor-pointer border-none bg-transparent"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="p-6 overflow-y-auto space-y-4 flex-1 scrollbar-thin">
+              {/* Table / Order Selector */}
+              <div className="space-y-1 text-left">
+                <label className="text-[10px] font-black text-stone-500 uppercase tracking-widest block px-1 text-left">
+                  Mesa / Orden de Destino
+                </label>
+                <select
+                  value={orderToAddItems?.id || ""}
+                  onChange={(e) => {
+                    const selected = orders.find(o => o.id === e.target.value);
+                    setOrderToAddItems(selected || null);
+                  }}
+                  className="w-full px-4 py-3 bg-white rounded-xl border border-stone-200 focus:outline-none focus:ring-2 focus:ring-mex-green/20 text-sm font-bold text-stone-800"
+                >
+                  <option value="">-- Seleccionar Mesa / Orden --</option>
+                  {orders
+                    .filter(o => o.status !== 'cancelled' && o.status !== 'paid')
+                    .map(o => (
+                      <option key={o.id} value={o.id}>
+                        {o.isTakeaway ? `Para Llevar (Cliente: ${o.clientName || 'Sin Nombre'})` : `Mesa ${o.tableNumber}`} {o.folio ? `[${o.folio.split('-').pop()}]` : ""}
+                      </option>
+                    ))
+                  }
+                </select>
+              </div>
+
+              {/* Product search & scroll track */}
+              <div className="space-y-2 text-left">
+                <label className="text-[10px] font-black text-stone-500 uppercase tracking-widest block px-1 text-left">
+                  Buscar Platillo o Bebida
+                </label>
+                <div className="relative">
+                  <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-stone-400" size={16} />
+                  <input
+                    type="text"
+                    placeholder="Escribe nombre de platillo..."
+                    value={searchProductQuery}
+                    onChange={(e) => setSearchProductQuery(e.target.value)}
+                    className="w-full pl-10 pr-4 py-3 bg-white rounded-xl border border-stone-200 focus:outline-none focus:ring-2 focus:ring-mex-green/20 text-sm font-bold text-stone-800"
+                  />
+                </div>
+
+                <div className="max-h-[180px] overflow-y-auto border border-stone-200 rounded-xl divide-y divide-stone-100 bg-white shadow-inner">
+                  {products
+                    .filter(p => {
+                      if (!p.available) return false;
+                      if (!searchProductQuery) return true;
+                      return p.name.toLowerCase().includes(searchProductQuery.toLowerCase()) || 
+                             (p.description && p.description.toLowerCase().includes(searchProductQuery.toLowerCase()));
+                    })
+                    .map(prod => {
+                      const isSelected = selectedProduct?.id === prod.id;
+                      return (
+                        <button
+                          key={prod.id}
+                          type="button"
+                          onClick={() => {
+                            setSelectedProduct(prod);
+                            if (prod.station) {
+                              setAddStation(prod.station);
+                            }
+                          }}
+                          className={cn(
+                            "w-full text-left p-3 flex items-center justify-between text-xs transition-all hover:bg-stone-50 border-none cursor-pointer",
+                            isSelected ? "bg-mex-green/10 text-mex-green font-black" : "text-stone-700"
+                          )}
+                        >
+                          <div>
+                            <p className="font-extrabold text-sm">{prod.name}</p>
+                            <p className="text-[10px] text-stone-400 font-medium truncate max-w-[200px] sm:max-w-[300px]">
+                              {prod.description || 'Delicioso platillo tradicional.'}
+                            </p>
+                          </div>
+                          <div className="text-right flex items-center gap-2 shrink-0">
+                            <span className="font-bold text-mex-terracotta text-sm">${prod.price}</span>
+                            <span className={cn(
+                              "text-[9px] font-black uppercase px-2 py-0.5 rounded-full",
+                              prod.station === 'plancha' ? "bg-orange-100 text-orange-700" : "bg-blue-100 text-blue-700"
+                            )}>
+                              {prod.station === 'plancha' ? 'Parrilla' : 'Cocina'}
+                            </span>
+                          </div>
+                        </button>
+                      );
+                    })}
+                </div>
+              </div>
+
+              {/* Selection details (Qty, notes, station) */}
+              {selectedProduct && (
+                <div className="space-y-4 p-4 bg-white rounded-2xl border border-stone-200 animate-in fade-in duration-200 text-left">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-[9px] text-stone-400 font-black uppercase tracking-wider">Platillo seleccionado:</p>
+                      <h4 className="font-serif font-black text-mex-brown text-base">{selectedProduct.name}</h4>
+                    </div>
+                    <div className="flex items-center bg-stone-50 rounded-full p-1 border border-stone-200 shadow-3xs">
+                      <button
+                        type="button"
+                        onClick={() => setAddQuantity(prev => Math.max(1, prev - 1))}
+                        className="w-8 h-8 rounded-full bg-white hover:bg-stone-100 text-stone-700 font-black flex items-center justify-center border border-stone-200 transition-all cursor-pointer active:scale-90 select-none text-base"
+                      >
+                        -
+                      </button>
+                      <span className="w-10 text-center text-sm font-black text-stone-800">{addQuantity}</span>
+                      <button
+                        type="button"
+                        onClick={() => setAddQuantity(prev => prev + 1)}
+                        className="w-8 h-8 rounded-full bg-mex-green hover:bg-emerald-700 text-white font-black flex items-center justify-center border-none transition-all cursor-pointer active:scale-90 select-none text-base"
+                      >
+                        +
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-[9px] font-black text-stone-500 uppercase tracking-widest block text-left">Notas / Modificaciones</label>
+                    <input
+                      type="text"
+                      placeholder="Ej: Sin cebolla, extra salsa, con queso..."
+                      value={addNotes}
+                      onChange={(e) => setAddNotes(e.target.value)}
+                      className="w-full px-3 py-2 bg-stone-50 rounded-lg border border-stone-200 text-xs font-bold text-stone-800 focus:outline-none focus:ring-1 focus:ring-mex-green"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-[9px] font-black text-stone-500 uppercase tracking-widest block text-left">Destino a Cocinar</label>
+                    <div className="grid grid-cols-2 gap-2 bg-stone-50 p-1.5 rounded-xl border border-stone-200">
+                      <button
+                        type="button"
+                        onClick={() => setAddStation('cocina')}
+                        className={cn(
+                          "py-2 px-3 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all border-none cursor-pointer",
+                          addStation === 'cocina'
+                            ? "bg-blue-600 text-white shadow-sm"
+                            : "bg-transparent text-stone-500 hover:text-stone-700"
+                        )}
+                      >
+                        Cocina
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setAddStation('plancha')}
+                        className={cn(
+                          "py-2 px-3 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all border-none cursor-pointer",
+                          addStation === 'plancha'
+                            ? "bg-orange-500 text-white shadow-sm"
+                            : "bg-transparent text-stone-500 hover:text-stone-700"
+                        )}
+                      >
+                        Parrilla
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="p-6 bg-white border-t border-stone-100 flex gap-3 shrink-0">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setShowDirectAddModal(false);
+                  setOrderToAddItems(null);
+                  setSelectedProduct(null);
+                  setAddQuantity(1);
+                  setAddNotes("");
+                }}
+                className="flex-1 py-3 bg-stone-55 border-stone-300 hover:bg-stone-100 text-stone-700 font-bold uppercase text-xs rounded-xl"
+              >
+                Cerrar
+              </Button>
+              <Button
+                type="button"
+                disabled={!orderToAddItems || !selectedProduct}
+                onClick={() => {
+                  if (orderToAddItems && selectedProduct) {
+                    addProductToOrderDirectly(orderToAddItems, selectedProduct, addQuantity, addNotes, addStation);
+                  }
+                }}
+                className={cn(
+                  "flex-1 py-3 font-bold uppercase text-xs rounded-xl shadow-md",
+                  (!orderToAddItems || !selectedProduct)
+                    ? "bg-stone-300 cursor-not-allowed text-stone-500"
+                    : "bg-mex-green hover:bg-emerald-700 text-white"
+                )}
+              >
+                Confirmar y Agregar
+              </Button>
             </div>
           </Card>
         </div>
