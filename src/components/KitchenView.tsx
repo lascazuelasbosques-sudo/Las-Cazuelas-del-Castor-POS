@@ -512,7 +512,7 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
                 } catch (e) {}
 
                 // Trigger background Web Notification for Cancelled Order
-                if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted") {
+                if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted" && userRole !== 'admin') {
                   try {
                     new Notification("🛑 ¡PEDIDO CANCELADO!", {
                       body: `El pedido de ${orderInfo} ha sido cancelado.`,
@@ -1031,7 +1031,7 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
       setSilencedTickets(prev => prev.filter(id => !newlyArrived.includes(id)));
 
       // Trigger Web Notifications for each newly arrived ticket
-      if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted") {
+      if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted" && userRole !== 'admin') {
         newlyArrived.forEach(id => {
           const tIdParts = id.split("-");
           const stationName = tIdParts[1] || "cocina";

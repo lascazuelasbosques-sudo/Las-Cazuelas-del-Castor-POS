@@ -44,7 +44,7 @@ export function PendingOrdersNotifier({ userRole = 'waiter' }: { userRole?: stri
     const orderInfo = order.isTakeaway ? "para llevar" : `de la Mesa ${order.tableNumber || ""}`;
     const speakMsg = `¡Atención! El pedido ${orderInfo} ha sido cancelado.`;
 
-    if (soundEnabled) {
+    if (soundEnabled && userRole !== 'admin') {
       speakText(speakMsg);
 
       // Play specific warning chime
@@ -58,7 +58,7 @@ export function PendingOrdersNotifier({ userRole = 'waiter' }: { userRole?: stri
     }
 
     // Trigger system background Notification
-    if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted") {
+    if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted" && userRole !== 'admin') {
       try {
         new Notification("🛑 ¡PEDIDO CANCELADO!", {
           body: `El pedido ${orderInfo} ha sido cancelado.`,
@@ -295,7 +295,7 @@ export function PendingOrdersNotifier({ userRole = 'waiter' }: { userRole?: stri
         }
 
         if (shouldAlert) {
-          if (soundEnabled) {
+          if (soundEnabled && userRole !== 'admin') {
             // Play chime sound
             audioRef.current?.play().catch(err => {
               console.log("Audio blocked by browser, needs user interaction first.", err);
@@ -322,7 +322,7 @@ export function PendingOrdersNotifier({ userRole = 'waiter' }: { userRole?: stri
           }
 
           // Trigger system background Notification
-          if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted") {
+          if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted" && userRole !== 'admin') {
             try {
               new Notification("🍳 ¡NUEVO PEDIDO RECIBIDO!", {
                 body: speakMsg,
@@ -347,9 +347,9 @@ export function PendingOrdersNotifier({ userRole = 'waiter' }: { userRole?: stri
   // Periodic Voice Reminder of pending kitchen items (Every 10 minutes)
   useEffect(() => {
     const interval = setInterval(() => {
-      // Only preparers or admin/cashier roles get reminders of pending kitchen items
-      const isRelevantRole = ['kitchen', 'parrilla', 'admin', 'cashier'].includes(userRole);
-      if (!isRelevantRole) return;
+      // Only preparers or cashier roles get reminders of pending kitchen items (exclude admin)
+      const isRelevantRole = ['kitchen', 'parrilla', 'cashier'].includes(userRole);
+      if (!isRelevantRole || userRole === 'admin') return;
 
       // Group pending items across all active orders
       const pendingItemsMap: Record<string, number> = {};
