@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardHeader, CardFooter } from "./Card";
 import { Button } from "./Button";
 import { Order, OrderStatus, OrderItem } from "@/src/types";
-import { Clock, CheckCircle2, PlayCircle, ClipboardList, PlusCircle, Trash2, Ban, X, XCircle, Bell, BellOff, Volume2, VolumeX, Smartphone, Music, FileAudio } from "lucide-react";
+import { Clock, CheckCircle2, PlayCircle, ClipboardList, PlusCircle, Trash2, Ban, X, XCircle, Bell, BellOff, Volume2, VolumeX, Smartphone, Music, FileAudio, Search, Play, Pause, Plus, FolderOpen, ListMusic, Globe, Save } from "lucide-react";
 import { db } from "../firebase";
 import { collection, onSnapshot, query, where, orderBy, doc, updateDoc, addDoc } from "firebase/firestore";
 import { cn, customRound } from "@/src/lib/utils";
@@ -23,9 +23,27 @@ interface KitchenTicket {
 }
 
 const PRESET_SONGS = [
-  { id: "preset_1", name: "Salsa Cocina Alegre (Estilo 1)", url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3" },
-  { id: "preset_2", name: "Cumbia Ritmo Parrilla (Estilo 2)", url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3" },
-  { id: "preset_3", name: "Rock Cocinando Rápido (Estilo 3)", url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-8.mp3" }
+  // Cumbias y Salsas
+  { id: "cumbia_1", name: "💃 Cumbia del Al Pastor (Activa)", genre: "Cumbias y Salsas", url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3" },
+  { id: "salsa_1", name: "🔥 Salsa de la Plancha Hirviendo", genre: "Cumbias y Salsas", url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3" },
+  { id: "cumbia_2", name: "🥁 Ritmo Sabroso Parrillero", genre: "Cumbias y Salsas", url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3" },
+  { id: "salsa_2", name: "🌶️ Salsa Habanera Explosiva", genre: "Cumbias y Salsas", url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3" },
+
+  // Rock y Pop
+  { id: "rock_1", name: "🎸 Rock del Carbón (Clásico)", genre: "Rock y Pop", url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-5.mp3" },
+  { id: "pop_1", name: "🥑 Pop de los Tacos Dorados", genre: "Rock y Pop", url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-6.mp3" },
+  { id: "rock_2", name: "⚡ Metal de la Campana de Extracción", genre: "Rock y Pop", url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-7.mp3" },
+  { id: "pop_2", name: "🍋 Pop Cítrico Refrescante", genre: "Rock y Pop", url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-8.mp3" },
+
+  // Música Mexicana
+  { id: "mex_1", name: "🎺 Banda Alegre Sinaloense", genre: "Música Mexicana", url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-9.mp3" },
+  { id: "mex_2", name: "🎻 Mariachi Imperial las Cazuelas", genre: "Música Mexicana", url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-10.mp3" },
+  { id: "mex_3", name: "🤠 Norteño de Carbón y Leña", genre: "Música Mexicana", url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-11.mp3" },
+
+  // Relajante
+  { id: "zen_1", name: "🍃 Clásica de Chiles en Nogada", genre: "Relajante y Ambiental", url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-12.mp3" },
+  { id: "zen_2", name: "☕ Café Chill para Tarde Lenta", genre: "Relajante y Ambiental", url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-13.mp3" },
+  { id: "zen_3", name: "🧘 Meditación del Sabor Secreto", genre: "Relajante y Ambiental", url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-14.mp3" }
 ];
 
 interface KitchenViewProps {
@@ -71,9 +89,9 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
   });
   const [prepSongPreset, setPrepSongPreset] = useState<string>(() => {
     if (typeof window !== "undefined") {
-      return localStorage.getItem("prep_song_preset") || "preset_1";
+      return localStorage.getItem("prep_song_preset") || "cumbia_1";
     }
-    return "preset_1";
+    return "cumbia_1";
   });
   const [prepSongUrl, setPrepSongUrl] = useState<string>(() => {
     if (typeof window !== "undefined") {
@@ -95,7 +113,63 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
     return false;
   });
 
+  // Music Explorer states
+  const [musicSearchQuery, setMusicSearchQuery] = useState<string>("");
+  const [selectedGenreTab, setSelectedGenreTab] = useState<string>("all");
+  const [customLibrary, setCustomLibrary] = useState<{ id: string; name: string; url: string; isCustom: boolean }[]>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const saved = localStorage.getItem("custom_music_library");
+        return saved ? JSON.parse(saved) : [];
+      } catch (e) {
+        return [];
+      }
+    }
+    return [];
+  });
+  const [newCustomName, setNewCustomName] = useState<string>("");
+  const [newCustomUrl, setNewCustomUrl] = useState<string>("");
+  const [uploadedFiles, setUploadedFiles] = useState<{ id: string; name: string; url: string; size?: string }[]>([]);
+
+  // State to track a direct list item play/pause preview
+  const [previewingSongId, setPreviewingSongId] = useState<string | null>(null);
+  const previewAudioRef = useRef<HTMLAudioElement | null>(null);
+
   const preparationAudioRef = useRef<HTMLAudioElement | null>(null);
+
+  // Toggle previewing a song directly in the explorer list
+  const handleTogglePreview = (songId: string, url: string) => {
+    if (previewingSongId === songId) {
+      // Pause
+      if (previewAudioRef.current) {
+        previewAudioRef.current.pause();
+      }
+      setPreviewingSongId(null);
+    } else {
+      // Play new preview
+      if (previewAudioRef.current) {
+        previewAudioRef.current.pause();
+      }
+      const audio = new Audio(url);
+      audio.loop = true;
+      audio.volume = 0.5;
+      previewAudioRef.current = audio;
+      audio.play().catch(e => console.log("Preview play failed:", e));
+      setPreviewingSongId(songId);
+    }
+  };
+
+  // Clean up preview audio on unmount or settings close
+  useEffect(() => {
+    return () => {
+      if (previewAudioRef.current) {
+        try {
+          previewAudioRef.current.pause();
+        } catch (e) {}
+        previewAudioRef.current = null;
+      }
+    };
+  }, []);
 
   const handlePrepFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -107,7 +181,133 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
       setPrepSongLocalUrl(fileUrl);
       setPrepSongFileName(file.name);
       localStorage.setItem("prep_song_file_name", file.name);
-      toast.success(`Canción seleccionada: ${file.name}`);
+      
+      const fileId = `upload_${Date.now()}`;
+      const fileSize = (file.size / (1024 * 1024)).toFixed(2) + " MB";
+      setUploadedFiles(prev => [
+        { id: fileId, name: file.name, url: fileUrl, size: fileSize },
+        ...prev
+      ]);
+      
+      setPrepSongType('file');
+      setPrepSongPreset(fileId); // select it
+      setIsTestingMusic(false);
+      toast.success(`Canción cargada correctamente: ${file.name}`);
+    }
+  };
+
+  // Filter and search songs inside the explorer
+  const getFilteredSongs = () => {
+    let allSongs: { id: string; name: string; url: string; genre: string; isCustom?: boolean }[] = [];
+    
+    // Add presets
+    PRESET_SONGS.forEach(s => {
+      allSongs.push({ id: s.id, name: s.name, url: s.url, genre: s.genre });
+    });
+
+    // Add custom links
+    customLibrary.forEach(s => {
+      allSongs.push({ id: s.id, name: `🔗 ${s.name}`, url: s.url, genre: "Mis Enlaces", isCustom: true });
+    });
+
+    // Add uploaded files
+    uploadedFiles.forEach(s => {
+      allSongs.push({ id: s.id, name: `📱 ${s.name}`, url: s.url, genre: "Cargados" });
+    });
+
+    // Filter by genre tab
+    if (selectedGenreTab !== "all") {
+      if (selectedGenreTab === "cumbias") {
+        allSongs = allSongs.filter(s => s.genre === "Cumbias y Salsas");
+      } else if (selectedGenreTab === "rock") {
+        allSongs = allSongs.filter(s => s.genre === "Rock y Pop");
+      } else if (selectedGenreTab === "mexicana") {
+        allSongs = allSongs.filter(s => s.genre === "Música Mexicana");
+      } else if (selectedGenreTab === "ambient") {
+        allSongs = allSongs.filter(s => s.genre === "Relajante y Ambiental");
+      } else if (selectedGenreTab === "custom") {
+        allSongs = allSongs.filter(s => s.genre === "Mis Enlaces");
+      } else if (selectedGenreTab === "file") {
+        allSongs = allSongs.filter(s => s.genre === "Cargados");
+      }
+    }
+
+    // Filter by search query
+    if (musicSearchQuery.trim()) {
+      const q = musicSearchQuery.toLowerCase();
+      allSongs = allSongs.filter(s => s.name.toLowerCase().includes(q));
+    }
+
+    return allSongs;
+  };
+
+  // Set the chosen song as active prep music
+  const handleSelectSong = (song: { id: string; name: string; url: string; genre: string }) => {
+    if (song.genre === "Cargados") {
+      setPrepSongType('file');
+      setPrepSongLocalUrl(song.url);
+      setPrepSongFileName(song.name.replace("📱 ", ""));
+      setPrepSongPreset(song.id);
+      localStorage.setItem("prep_song_file_name", song.name.replace("📱 ", ""));
+    } else if (song.genre === "Mis Enlaces") {
+      setPrepSongType('url');
+      setPrepSongUrl(song.url);
+      setPrepSongFileName(song.name.replace("🔗 ", ""));
+      setPrepSongPreset(song.id);
+      localStorage.setItem("prep_song_file_name", song.name.replace("🔗 ", ""));
+    } else {
+      setPrepSongType('preset');
+      setPrepSongPreset(song.id);
+      setIsTestingMusic(false);
+    }
+    toast.success(`Establecido: ${song.name}`);
+  };
+
+  // Add custom URL to library
+  const handleAddCustomSong = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newCustomName.trim() || !newCustomUrl.trim()) {
+      toast.error("Por favor ingresa nombre y enlace de audio");
+      return;
+    }
+    if (!newCustomUrl.startsWith("http://") && !newCustomUrl.startsWith("https://")) {
+      toast.error("El enlace debe comenzar con http:// o https://");
+      return;
+    }
+
+    const newSong = {
+      id: `custom_${Date.now()}`,
+      name: newCustomName.trim(),
+      url: newCustomUrl.trim(),
+      isCustom: true
+    };
+
+    const updated = [...customLibrary, newSong];
+    setCustomLibrary(updated);
+    localStorage.setItem("custom_music_library", JSON.stringify(updated));
+    
+    // Auto select it
+    setPrepSongType('url');
+    setPrepSongUrl(newSong.url);
+    setPrepSongFileName(newSong.name);
+    setPrepSongPreset(newSong.id);
+    localStorage.setItem("prep_song_file_name", newSong.name);
+
+    setNewCustomName("");
+    setNewCustomUrl("");
+    toast.success(`Guardado y establecido: ${newSong.name}`);
+  };
+
+  // Delete custom URL from library
+  const handleDeleteCustomSong = (id: string, name: string) => {
+    const updated = customLibrary.filter(s => s.id !== id);
+    setCustomLibrary(updated);
+    localStorage.setItem("custom_music_library", JSON.stringify(updated));
+    toast.success(`Eliminado: ${name}`);
+    
+    if (prepSongPreset === id) {
+      setPrepSongType('preset');
+      setPrepSongPreset('cumbia_1');
     }
   };
 
@@ -118,6 +318,14 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
     if (prepSongType === 'url') {
       return prepSongUrl;
     }
+    // Check custom library
+    const customFound = customLibrary.find(p => p.id === prepSongPreset);
+    if (customFound) return customFound.url;
+    
+    // Check uploaded files
+    const uploadedFound = uploadedFiles.find(p => p.id === prepSongPreset);
+    if (uploadedFound) return uploadedFound.url;
+
     const found = PRESET_SONGS.find(p => p.id === prepSongPreset);
     return found ? found.url : PRESET_SONGS[0].url;
   };
@@ -1118,242 +1326,328 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
         </div>
       )}
 
-      {/* --- FLOATING MUSIC CONFIG MODAL --- */}
+      {/* --- FLOATING MUSIC CONFIG MODAL (BUILT-IN MUSIC EXPLORER) --- */}
       {showMusicSettings && (
-        <div className="fixed inset-0 bg-stone-900/50 backdrop-blur-sm z-[450] flex items-center justify-center p-4">
-          <div className="bg-white rounded-[2rem] shadow-2xl border border-stone-200 p-6 w-full max-w-md max-h-[90vh] flex flex-col animate-in fade-in duration-250">
-            <div className="flex items-center justify-between mb-4 pb-3 border-b border-stone-100 shrink-0">
+        <div className="fixed inset-0 bg-stone-950/65 backdrop-blur-sm z-[450] flex items-center justify-center p-2 sm:p-4">
+          <div className="bg-white rounded-[2rem] shadow-2xl border border-stone-200 p-5 sm:p-6 w-full max-w-lg max-h-[95vh] flex flex-col animate-in fade-in duration-200">
+            {/* Header */}
+            <div className="flex items-center justify-between mb-3 pb-3 border-b border-stone-100 shrink-0">
               <div className="flex items-center gap-2.5">
-                <Music className="text-amber-600 animate-pulse" size={20} />
-                <h3 className="font-serif font-black text-stone-800 text-base leading-tight">Música de Preparación</h3>
+                <div className="w-9 h-9 rounded-full bg-amber-50 flex items-center justify-center">
+                  <Music className="text-amber-600 animate-bounce" size={18} />
+                </div>
+                <div>
+                  <h3 className="font-serif font-black text-stone-900 text-base leading-tight">Explorador de Música</h3>
+                  <p className="text-[9px] text-stone-500 font-bold uppercase tracking-wider">Música para {userRole === 'parrilla' ? 'Parrilla' : 'Cocina'}</p>
+                </div>
               </div>
               <button
                 onClick={() => {
                   setIsTestingMusic(false);
+                  if (previewAudioRef.current) {
+                    previewAudioRef.current.pause();
+                  }
+                  setPreviewingSongId(null);
                   setShowMusicSettings(false);
                 }}
-                className="text-stone-400 hover:text-stone-700 p-1.5 rounded-full hover:bg-stone-50 transition-all border-none bg-transparent cursor-pointer"
+                className="text-stone-400 hover:text-stone-700 p-2 rounded-full hover:bg-stone-50 transition-all border-none bg-transparent cursor-pointer"
               >
                 <X size={18} />
               </button>
             </div>
 
-            <div className="space-y-4 overflow-y-auto flex-1 pr-1.5 scrollbar-thin pb-4">
-              <p className="text-[10px] text-stone-500 font-bold uppercase tracking-widest leading-relaxed">
-                Selecciona la música de fondo que se reproducirá automáticamente cuando haya comandas en estado de preparación para la {userRole === 'parrilla' ? 'Parrilla' : 'Cocina'}.
-              </p>
-
-              {/* 1. SELECCIONAR ORIGEN DE MÚSICA */}
-              <div className="space-y-1.5">
-                <label className="text-[9px] font-black text-stone-400 uppercase tracking-wider block">Origen del Audio</label>
-                <div className="grid grid-cols-3 gap-1.5 p-1 bg-stone-100 rounded-xl">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setPrepSongType('preset');
-                      setIsTestingMusic(false);
-                    }}
-                    className={cn(
-                      "py-2 text-[9px] font-bold uppercase rounded-lg transition-all border-none cursor-pointer",
-                      prepSongType === 'preset' ? "bg-white text-stone-900 shadow-sm font-black" : "text-stone-500 hover:text-stone-800 bg-transparent"
-                    )}
-                  >
-                    🎵 De Lista
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setPrepSongType('file');
-                      setIsTestingMusic(false);
-                    }}
-                    className={cn(
-                      "py-2 text-[9px] font-bold uppercase rounded-lg transition-all border-none cursor-pointer",
-                      prepSongType === 'file' ? "bg-white text-stone-900 shadow-sm font-black" : "text-stone-500 hover:text-stone-800 bg-transparent"
-                    )}
-                  >
-                    📱 Del Celular
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setPrepSongType('url');
-                      setIsTestingMusic(false);
-                    }}
-                    className={cn(
-                      "py-2 text-[9px] font-bold uppercase rounded-lg transition-all border-none cursor-pointer",
-                      prepSongType === 'url' ? "bg-white text-stone-900 shadow-sm font-black" : "text-stone-500 hover:text-stone-800 bg-transparent"
-                    )}
-                  >
-                    🔗 Enlace Web
-                  </button>
-                </div>
-              </div>
-
-              {/* 2. CONFIGURACIÓN DINÁMICA SEGÚN ORIGEN */}
-              {prepSongType === 'preset' && (
-                <div className="p-4 rounded-2xl bg-stone-50 border border-stone-200 space-y-2">
-                  <span className="text-[9px] font-black text-stone-400 uppercase tracking-wider block">Selecciona un estilo de nuestra lista:</span>
-                  <div className="space-y-1.5">
-                    {PRESET_SONGS.map(song => (
-                      <button
-                        key={song.id}
-                        onClick={() => {
-                          setPrepSongPreset(song.id);
-                          setIsTestingMusic(false);
-                        }}
-                        className={cn(
-                          "w-full text-left p-2.5 rounded-xl border text-xs font-bold transition-all flex items-center justify-between cursor-pointer",
-                          prepSongPreset === song.id 
-                            ? "bg-amber-50 border-amber-300 text-amber-800" 
-                            : "bg-white border-stone-250 text-stone-700 hover:border-stone-300"
-                        )}
-                      >
-                        <span>{song.name}</span>
-                        {prepSongPreset === song.id && <span className="text-[9px] font-black uppercase text-amber-600 bg-amber-100/50 px-2 py-0.5 rounded-md">Activado</span>}
-                      </button>
-                    ))}
+            {/* Quick Playback & Mute Status Bar */}
+            <div className="mb-4 p-3 rounded-2xl bg-stone-50 border border-stone-150 flex flex-col gap-2 shrink-0">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className={cn(
+                    "w-2.5 h-2.5 rounded-full",
+                    shouldPlayMusic ? "bg-emerald-500 animate-pulse" : "bg-stone-400"
+                  )} />
+                  <div className="text-[10px] leading-tight">
+                    <span className="font-bold text-stone-500 uppercase tracking-wider block">Sonido Activo:</span>
+                    <span className="font-black text-stone-850 uppercase max-w-[200px] truncate block">
+                      {prepSongFileName ? prepSongFileName : "Canción por Defecto"}
+                    </span>
                   </div>
                 </div>
+                
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPrepMusicMuted(!prepMusicMuted);
+                  }}
+                  className={cn(
+                    "px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-wider border transition-all cursor-pointer flex items-center gap-1.5",
+                    prepMusicMuted 
+                      ? "bg-red-50 text-red-600 border-red-200 hover:bg-red-100" 
+                      : "bg-white text-stone-700 border-stone-250 hover:bg-stone-100"
+                  )}
+                >
+                  {prepMusicMuted ? (
+                    <>
+                      <VolumeX size={12} />
+                      🔇 Muteado
+                    </>
+                  ) : (
+                    <>
+                      <Volume2 size={12} />
+                      🔊 Sonando
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {/* Search Input Bar */}
+            <div className="relative mb-3 shrink-0">
+              <span className="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none text-stone-400">
+                <Search size={14} />
+              </span>
+              <input
+                type="text"
+                placeholder="Buscar canción, estilo, cumbia, pop..."
+                value={musicSearchQuery}
+                onChange={(e) => setMusicSearchQuery(e.target.value)}
+                className="w-full pl-9 pr-4 py-2.5 bg-stone-50 hover:bg-stone-100 focus:bg-white text-xs font-bold text-stone-800 placeholder-stone-400 rounded-xl border border-stone-200 focus:outline-none focus:ring-2 focus:ring-amber-500/15 focus:border-amber-500 transition-all"
+              />
+              {musicSearchQuery && (
+                <button 
+                  onClick={() => setMusicSearchQuery("")}
+                  className="absolute inset-y-0 right-0 flex items-center pr-3 text-stone-400 hover:text-stone-600 border-none bg-transparent cursor-pointer"
+                >
+                  <X size={14} />
+                </button>
+              )}
+            </div>
+
+            {/* Category / Genre Selector Tabs */}
+            <div className="flex gap-1 overflow-x-auto pb-2 shrink-0 scrollbar-none border-b border-stone-100 -mx-1 px-1">
+              {[
+                { id: "all", label: "🎵 Todo" },
+                { id: "cumbias", label: "💃 Cumbia/Salsa" },
+                { id: "rock", label: "🎸 Rock/Pop" },
+                { id: "mexicana", label: "🇲🇽 Mexicana" },
+                { id: "ambient", label: "🍃 Relax" },
+                { id: "custom", label: "🔗 Enlaces" },
+                { id: "file", label: "📱 Celular" }
+              ].map(tab => (
+                <button
+                  key={tab.id}
+                  onClick={() => setSelectedGenreTab(tab.id)}
+                  className={cn(
+                    "px-3 py-1.5 text-[9px] font-black uppercase tracking-wider rounded-lg border transition-all whitespace-nowrap cursor-pointer",
+                    selectedGenreTab === tab.id
+                      ? "bg-amber-600 text-white border-amber-600 shadow-md shadow-amber-600/10"
+                      : "bg-stone-50 text-stone-600 border-stone-200 hover:bg-stone-100"
+                  )}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+
+            {/* List & Scrollable Area */}
+            <div className="flex-1 overflow-y-auto pr-1 scrollbar-thin py-3 space-y-3 min-h-[160px]">
+              
+              {/* Special Context Forms based on active tab */}
+              {selectedGenreTab === "custom" && (
+                <form onSubmit={handleAddCustomSong} className="p-3 bg-amber-50/40 border border-amber-200/60 rounded-2xl space-y-2 mb-2">
+                  <span className="text-[8px] font-black uppercase tracking-widest text-amber-800 block">➕ Guardar Nuevo Enlace de Audio Web</span>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <input 
+                      type="text" 
+                      placeholder="Nombre (ej: Radio Cumbia)" 
+                      value={newCustomName}
+                      onChange={(e) => setNewCustomName(e.target.value)}
+                      className="p-2 bg-white text-[11px] font-bold rounded-lg border border-stone-200 focus:outline-none focus:border-amber-400"
+                    />
+                    <input 
+                      type="url" 
+                      placeholder="Enlace URL de audio (.mp3, stream)" 
+                      value={newCustomUrl}
+                      onChange={(e) => setNewCustomUrl(e.target.value)}
+                      className="p-2 bg-white text-[11px] font-bold rounded-lg border border-stone-200 focus:outline-none focus:border-amber-400"
+                    />
+                  </div>
+                  <div className="flex justify-end">
+                    <button 
+                      type="submit"
+                      className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-black uppercase text-[9px] tracking-wider rounded-lg flex items-center gap-1 transition-all border-none cursor-pointer"
+                    >
+                      <Plus size={11} /> Guardar Canción
+                    </button>
+                  </div>
+                </form>
               )}
 
-              {prepSongType === 'file' && (
-                <div className="p-4 rounded-2xl bg-amber-50/40 border border-amber-100 space-y-3">
-                  <span className="text-[9px] font-black text-amber-700 uppercase tracking-wider block">Cargar archivo de audio de tu dispositivo:</span>
-                  <div className="flex flex-col gap-2">
-                    <p className="text-[10px] text-stone-500 leading-relaxed">
-                      Selecciona cualquier canción o audio que tengas guardado en tu teléfono móvil o computadora (formatos soportados: MP3, WAV, M4A).
-                    </p>
-                    <label className="flex items-center justify-center gap-2 px-4 py-3 bg-amber-600 hover:bg-amber-700 text-white rounded-2xl text-[10px] font-black tracking-wider cursor-pointer uppercase transition-all shadow-md shadow-amber-600/15 border-none w-full text-center">
-                      <FileAudio size={15} />
-                      Toca para Buscar Canción
+              {selectedGenreTab === "file" && (
+                <div className="p-3.5 bg-emerald-50/40 border border-emerald-100 rounded-2xl space-y-2 mb-2">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-full bg-emerald-50 flex items-center justify-center text-emerald-600 shrink-0">
+                      <FolderOpen size={16} />
+                    </div>
+                    <div>
+                      <span className="text-[10px] font-black uppercase tracking-wide text-stone-800 block">Cargar Audio desde Smartphone</span>
+                      <span className="text-[8px] text-stone-500 font-bold">Formatos sugeridos: MP3, M4A, WAV, OGG</span>
+                    </div>
+                  </div>
+                  
+                  <div className="flex flex-col gap-1.5">
+                    <label className="flex items-center justify-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-[10px] font-black tracking-wider cursor-pointer uppercase transition-all shadow-sm border-none w-full text-center">
+                      <FileAudio size={13} />
+                      Toca para Buscar en Carpetas
                       <input
                         type="file"
-                        accept="audio/*"
+                        accept="audio/*,audio/mp3,audio/mpeg,audio/x-m4a,audio/wav,audio/ogg,.mp3,.m4a,.wav,.ogg"
                         onChange={handlePrepFileChange}
                         className="hidden"
                       />
                     </label>
-                  </div>
-                  {prepSongFileName ? (
-                    <div className="p-3 bg-white border border-amber-200 rounded-xl text-[10px] text-stone-700 flex items-center justify-between gap-1.5">
-                      <span className="font-bold truncate max-w-[240px]">🟢 {prepSongFileName}</span>
-                    </div>
-                  ) : (
-                    <div className="p-2.5 rounded-xl bg-amber-100/30 text-center text-[9px] text-amber-700 font-bold border border-dashed border-amber-200">
-                      ⚠️ No se ha seleccionado canción aún. Toca arriba para seleccionar una.
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {prepSongType === 'url' && (
-                <div className="p-4 rounded-2xl bg-stone-50 border border-stone-200 space-y-2">
-                  <span className="text-[9px] font-black text-stone-400 uppercase tracking-wider block">Ingresar Enlace Directo (URL):</span>
-                  <input
-                    type="url"
-                    value={prepSongUrl}
-                    onChange={(e) => {
-                      setPrepSongUrl(e.target.value);
-                      setIsTestingMusic(false);
-                    }}
-                    placeholder="https://ejemplo.com/musica.mp3"
-                    className="w-full text-xs p-3 rounded-xl border border-stone-200 bg-white text-stone-800 focus:outline-none focus:border-amber-400 font-mono font-medium shadow-inner"
-                  />
-                  <p className="text-[8px] text-stone-500">
-                    Asegúrate de que sea un enlace público directo que termine en .mp3 o similar.
-                  </p>
-                </div>
-              )}
-
-              {/* 3. OPCIÓN SILENCIAR MÚSICA */}
-              <div className="p-4 rounded-2xl bg-stone-50 border border-stone-200">
-                <div className="flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <span className="text-[10px] font-black text-stone-800 uppercase tracking-wider block">Silenciar Música</span>
-                    <p className="text-[9px] text-stone-500 leading-tight">
-                      Mutea la música de preparación de forma rápida.
+                    <p className="text-[8px] text-stone-400 text-center leading-normal leading-relaxed">
+                      💡 <b>Nota Celular:</b> Al presionar arriba, selecciona "Archivos" o "Descargas" de tu smartphone. Si no ves tus canciones, puedes usar la pestaña <b>"Enlaces"</b> para pegar cualquier enlace directo de internet.
                     </p>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setPrepMusicMuted(!prepMusicMuted);
-                    }}
-                    className={cn(
-                      "px-3.5 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider border transition-all cursor-pointer",
-                      prepMusicMuted 
-                        ? "bg-red-50 text-red-600 border-red-200 hover:bg-red-100" 
-                        : "bg-white text-stone-700 border-stone-250 hover:bg-stone-50"
-                    )}
-                  >
-                    {prepMusicMuted ? "🔇 Muteado" : "🔊 Activo"}
-                  </button>
                 </div>
-              </div>
+              )}
 
-              {/* 3. CONTROL DE PRUEBA DE SONIDO */}
-              <div className="p-4 rounded-2xl bg-stone-50 border border-stone-200 space-y-2.5">
-                <span className="text-[9px] font-black text-stone-400 uppercase tracking-wider block">Probar Reproducción</span>
-                <p className="text-[10px] text-stone-500 leading-relaxed">
-                  ¿Quieres asegurarte de que se escuche correctamente? Toca el botón de abajo para reproducir o detener la canción seleccionada en este momento.
-                </p>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsTestingMusic(!isTestingMusic);
-                    }}
-                    className={cn(
-                      "flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-wider border-none cursor-pointer transition-all flex items-center justify-center gap-2 shadow-md",
-                      isTestingMusic 
-                        ? "bg-red-600 hover:bg-red-700 text-white shadow-red-600/10" 
-                        : "bg-amber-600 hover:bg-amber-700 text-white shadow-amber-600/10"
-                    )}
-                  >
-                    {isTestingMusic ? (
-                      <>
-                        <VolumeX size={14} />
-                        Detener Prueba
-                      </>
-                    ) : (
-                      <>
-                        <Volume2 size={14} />
-                        Iniciar Prueba de Sonido
-                      </>
-                    )}
-                  </button>
-                </div>
-              </div>
+              {/* Tracks List */}
+              <div className="space-y-1.5">
+                {getFilteredSongs().length > 0 ? (
+                  getFilteredSongs().map(song => {
+                    const isSelected = prepSongPreset === song.id;
+                    const isPreviewing = previewingSongId === song.id;
 
-              {/* 4. PLAYBACK STATUS INDICATOR */}
-              <div className="p-3 bg-amber-50/55 border border-amber-100 rounded-xl flex items-center justify-between text-[10px]">
-                <span className="font-extrabold text-stone-700 uppercase tracking-wider">Estado de Reproducción:</span>
-                <div className="flex items-center gap-1.5">
-                  <span className={cn(
-                    "inline-block w-2 h-2 rounded-full",
-                    shouldPlayMusic ? "bg-emerald-500 animate-pulse" : "bg-stone-400"
-                  )} />
-                  <span className="font-black uppercase text-stone-850">
-                    {isTestingMusic 
-                      ? "Escuchando Prueba" 
-                      : isPreparing 
-                        ? "Música Activa (Comanda en Preparación)" 
-                        : "Detenido (Sin Comandas Activas)"}
-                  </span>
-                </div>
-              </div>
+                    return (
+                      <div
+                        key={song.id}
+                        className={cn(
+                          "p-2.5 rounded-xl border flex items-center justify-between gap-3 transition-all",
+                          isSelected 
+                            ? "bg-amber-50/60 border-amber-300 shadow-sm" 
+                            : "bg-stone-50/55 border-stone-200 hover:bg-stone-50 hover:border-stone-350"
+                        )}
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                          {/* Play Preview button */}
+                          <button
+                            type="button"
+                            onClick={() => handleTogglePreview(song.id, song.url)}
+                            className={cn(
+                              "w-8 h-8 rounded-full flex items-center justify-center shrink-0 border-none transition-all cursor-pointer shadow-sm",
+                              isPreviewing 
+                                ? "bg-red-600 text-white animate-pulse" 
+                                : isSelected
+                                  ? "bg-amber-100 text-amber-800 hover:bg-amber-200"
+                                  : "bg-white text-stone-600 hover:bg-stone-100"
+                            )}
+                            title={isPreviewing ? "Detener vista previa" : "Escuchar vista previa"}
+                          >
+                            {isPreviewing ? <Pause size={13} /> : <Play className="ml-0.5" size={13} />}
+                          </button>
 
+                          {/* Song Details */}
+                          <div className="min-w-0 flex-1">
+                            <span className={cn(
+                              "text-xs block truncate leading-snug",
+                              isSelected ? "font-black text-amber-900" : "font-bold text-stone-850"
+                            )}>
+                              {song.name}
+                            </span>
+                            <div className="flex items-center gap-1.5 mt-0.5">
+                              <span className="text-[8px] px-1.5 py-0.5 rounded bg-stone-100 font-extrabold uppercase text-stone-500 tracking-wider">
+                                {song.genre}
+                              </span>
+                              {isSelected && (
+                                <span className="text-[8px] font-black uppercase text-amber-600 bg-amber-100 px-1.5 py-0.5 rounded-md">
+                                  🟢 Activo Cocina
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Actions */}
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          {/* Choose/Set Active button */}
+                          {!isSelected && (
+                            <button
+                              type="button"
+                              onClick={() => handleSelectSong(song)}
+                              className="px-2.5 py-1.5 bg-stone-900 hover:bg-stone-950 text-white rounded-lg text-[9px] font-black uppercase tracking-wider transition-all border-none cursor-pointer shadow-sm"
+                            >
+                              Establecer
+                            </button>
+                          )}
+                          
+                          {/* Trash/Delete button for custom library items */}
+                          {song.isCustom && (
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteCustomSong(song.id, song.name.replace("🔗 ", ""))}
+                              className="p-1.5 rounded-lg hover:bg-red-50 text-red-600 transition-colors cursor-pointer border-none bg-transparent"
+                              title="Eliminar de mi biblioteca"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div className="py-8 text-center text-stone-400 bg-stone-50 rounded-2xl border border-dashed border-stone-200">
+                    <ListMusic className="mx-auto opacity-20 mb-2" size={32} />
+                    <p className="text-[10px] font-black uppercase tracking-wider text-stone-500">No se encontraron canciones</p>
+                    <p className="text-[9px] text-stone-400 mt-0.5">Prueba buscando otra palabra o selecciona otra pestaña.</p>
+                  </div>
+                )}
+              </div>
             </div>
 
-            <div className="mt-5 pt-3 border-t border-stone-100 flex justify-end gap-2 shrink-0">
+            {/* Test alert block */}
+            <div className="p-3 bg-amber-50/40 border border-amber-100 rounded-2xl space-y-2 shrink-0">
+              <span className="text-[8px] font-black uppercase tracking-widest text-amber-700 block">Probar Bocina General de Cocina</span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsTestingMusic(!isTestingMusic);
+                  }}
+                  className={cn(
+                    "flex-1 py-2 rounded-xl text-[9px] font-black uppercase tracking-wider border-none cursor-pointer transition-all flex items-center justify-center gap-1.5 shadow-sm",
+                    isTestingMusic 
+                      ? "bg-red-600 hover:bg-red-700 text-white" 
+                      : "bg-stone-900 hover:bg-stone-950 text-white"
+                  )}
+                >
+                  {isTestingMusic ? (
+                    <>
+                      <VolumeX size={12} /> Detener Sonido General
+                    </>
+                  ) : (
+                    <>
+                      <Volume2 size={12} /> Iniciar Sonido General
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {/* Footer Buttons */}
+            <div className="mt-4 pt-3 border-t border-stone-100 flex justify-end shrink-0">
               <button
                 onClick={() => {
                   setIsTestingMusic(false);
+                  if (previewAudioRef.current) {
+                    previewAudioRef.current.pause();
+                  }
+                  setPreviewingSongId(null);
                   setShowMusicSettings(false);
                 }}
-                className="px-5 py-2 bg-stone-900 hover:bg-stone-950 text-white font-black text-[10px] uppercase tracking-wider rounded-xl transition-all border-none cursor-pointer shadow-md"
+                className="px-5 py-2.5 bg-stone-900 hover:bg-stone-950 text-white font-black text-[10px] uppercase tracking-wider rounded-xl transition-all border-none cursor-pointer shadow-md"
               >
-                Cerrar y Guardar
+                Cerrar Explorador
               </button>
             </div>
           </div>
