@@ -52,6 +52,24 @@ interface KitchenViewProps {
   onNavigateToOrders?: () => void;
 }
 
+const sanitizeItemsForFirestore = (items: OrderItem[]): any[] => {
+  return items.map(item => {
+    const cleaned: any = {
+      productId: item.productId || "",
+      name: item.name || "",
+      price: Number(item.price || 0),
+      quantity: Number(item.quantity || 1),
+      status: item.status || 'pending',
+      station: item.station || 'cocina',
+      hasExtraCheese: !!item.hasExtraCheese
+    };
+    if (item.notes && item.notes.trim()) {
+      cleaned.notes = item.notes.trim();
+    }
+    return cleaned;
+  });
+};
+
 export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrders }: KitchenViewProps) => {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
@@ -748,12 +766,12 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
         const updatedItems = order.items.map(item => {
           const itemStation = item.station || 'cocina';
           if (itemStation === station && item.status !== 'completed') {
-            return { ...item, status: 'preparing' };
+            return { ...item, status: 'preparing' as const };
           }
           return item;
         });
 
-        updateData.items = updatedItems;
+        updateData.items = sanitizeItemsForFirestore(updatedItems);
         updateData.status = 'preparing';
 
         await updateDoc(doc(db, "orders", orderId), updateData);
@@ -763,12 +781,12 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
         const updatedItems = order.items.map(item => {
           const itemStation = item.station || 'cocina';
           if (itemStation === station) {
-            return { ...item, status: 'completed' };
+            return { ...item, status: 'completed' as const };
           }
           return item;
         });
 
-        updateData.items = updatedItems;
+        updateData.items = sanitizeItemsForFirestore(updatedItems);
 
         // Check if ALL items are now completed
         const allCompleted = updatedItems.every(item => item.status === 'completed');
@@ -802,7 +820,7 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
 
       let updateData: any = {
         updatedAt: new Date().toISOString(),
-        items: updatedItems,
+        items: sanitizeItemsForFirestore(updatedItems),
       };
 
       // Check if ALL items are now completed
@@ -845,7 +863,7 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
 
       let updateData: any = {
         updatedAt: new Date().toISOString(),
-        items: updatedItems,
+        items: sanitizeItemsForFirestore(updatedItems),
         subtotal: newSubtotal,
         total: newTotal
       };
@@ -888,7 +906,7 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
 
       const updateData: any = {
         updatedAt: new Date().toISOString(),
-        items: updatedItems,
+        items: sanitizeItemsForFirestore(updatedItems),
         status: 'cancelled',
         subtotal: 0,
         total: 0
@@ -911,24 +929,31 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
     station: 'plancha' | 'cocina'
   ) => {
     try {
+      // Find the absolute latest order state from active reactive list to prevent stale data overwrites
+      const latestOrder = orders.find(o => o.id === order.id) || order;
+
+      const trimmedNotes = notes.trim();
       const newItem: OrderItem = {
         productId: product.id,
         name: product.name,
-        price: product.price,
-        quantity: quantity,
+        price: Number(product.price),
+        quantity: Number(quantity),
         status: 'pending',
         station: station || product.station || 'cocina',
-        notes: notes.trim() || undefined,
         hasExtraCheese: false
       };
 
+      if (trimmedNotes) {
+        newItem.notes = trimmedNotes;
+      }
+
       // Check if there's already a pending item of the exact same product with same notes and station
-      let updatedItems = [...order.items];
+      let updatedItems = [...latestOrder.items];
       const existingItemIndex = updatedItems.findIndex(i => 
         i.productId === product.id && 
         i.status === 'pending' && 
         i.station === station && 
-        (i.notes || "") === (notes.trim() || "")
+        (i.notes || "") === trimmedNotes
       );
 
       if (existingItemIndex !== -1) {
@@ -945,11 +970,13 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
       const newSubtotal = activeItems.reduce((acc, item) => acc + (item.price * item.quantity), 0);
       const newTotal = customRound(newSubtotal);
 
+      const sanitizedItems = sanitizeItemsForFirestore(updatedItems);
+
       // We update the order in Firestore. We set status to 'pending' so it reactivates 
       // the kitchen comanda ticket and sounds/strobe if enabled.
-      const orderRef = doc(db, "orders", order.id);
+      const orderRef = doc(db, "orders", latestOrder.id);
       await updateDoc(orderRef, {
-        items: updatedItems,
+        items: sanitizedItems,
         subtotal: newSubtotal,
         total: newTotal,
         status: 'pending', // Regresar a pendiente para alertar a la cocina
