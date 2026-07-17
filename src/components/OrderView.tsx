@@ -312,9 +312,10 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
       };
 
       if (editingOrderId) {
-        // Al actualizar un pedido, lo regresamos a 'pending' para que cocina 
-        // pueda ver los nuevos platillos agregados.
-        orderData.status = 'pending';
+        // Al actualizar un pedido, si ya estaba en preparación ('preparing') o listo ('ready'),
+        // conservamos ese estado general de la orden. Cocina de todas maneras verá los nuevos 
+        // platillos agregados con estado 'pending' e indicador visual de "NUEVO".
+        orderData.status = editingOrderStatus === 'preparing' ? 'preparing' : (editingOrderStatus === 'ready' ? 'ready' : 'pending');
         await updateDoc(doc(db, "orders", editingOrderId), orderData);
         toast.success("Pedido actualizado y enviado a cocina");
       } else {

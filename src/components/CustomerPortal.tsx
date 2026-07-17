@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import React from 'react';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase';
 import { Order } from '../types';
 import { useBranding } from '../lib/useBranding';
@@ -11,6 +11,7 @@ import WhatsAppInternoView from './WhatsAppInternoView';
 
 export function CustomerPortal() {
   const [orderId, setOrderId] = useState('');
+  const [activeOrderId, setActiveOrderId] = useState('');
   const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -31,18 +32,20 @@ export function CustomerPortal() {
     const idFromUrl = params.get('id') || params.get('pedido');
     if (idFromUrl) {
       setHasIdUrl(true);
-      setOrderId(idFromUrl);
-      fetchOrder(idFromUrl);
+      setOrderId(idFromUrl.trim());
+      setActiveOrderId(idFromUrl.trim());
     }
   }, []);
 
-  const fetchOrder = async (id: string) => {
-    if (!id.trim()) return;
+  useEffect(() => {
+    if (!activeOrderId.trim()) return;
+
     setLoading(true);
     setError('');
-    try {
-      const docRef = doc(db, 'orders', id.trim());
-      const docSnap = await getDoc(docRef);
+
+    const docRef = doc(db, 'orders', activeOrderId.trim());
+    const unsubscribe = onSnapshot(docRef, (docSnap) => {
+      setLoading(false);
       if (docSnap.exists()) {
         const orderData = { id: docSnap.id, ...docSnap.data() } as Order;
         setOrder(orderData);
@@ -50,22 +53,25 @@ export function CustomerPortal() {
         setError('No pudimos encontrar este pedido. Verifica el código.');
         setOrder(null);
       }
-    } catch (err) {
-      console.error("Error fetching order:", err);
+    }, (err) => {
+      console.error("Error subscribing to order:", err);
       setError('Error al consultar el pedido. Por favor intenta de nuevo.');
       setOrder(null);
-    } finally {
       setLoading(false);
-    }
-  };
+    });
+
+    return () => unsubscribe();
+  }, [activeOrderId]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    fetchOrder(orderId);
-    // Update URL without reload to make it shareable
-    const newUrl = new URL(window.location.href);
-    newUrl.searchParams.set('id', orderId);
-    window.history.replaceState({}, '', newUrl);
+    if (orderId.trim()) {
+      setActiveOrderId(orderId.trim());
+      // Update URL without reload to make it shareable
+      const newUrl = new URL(window.location.href);
+      newUrl.searchParams.set('id', orderId.trim());
+      window.history.replaceState({}, '', newUrl);
+    }
   };
 
   const getStatusInfo = (status: string) => {

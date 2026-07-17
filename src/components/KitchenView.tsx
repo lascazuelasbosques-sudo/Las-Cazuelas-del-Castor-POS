@@ -381,24 +381,26 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
     const hasPendingCocina = cocinaItems.some(i => i.status !== 'completed');
 
     if (hasPendingPlancha && (activeStation === 'all' || activeStation === 'plancha')) {
+      const isPlanchaPending = planchaItems.some(i => i.status === 'pending' || !i.status);
       tickets.push({
         id: `${order.id}-plancha`,
         orderId: order.id,
         order: order,
         station: 'plancha',
         items: planchaItems,
-        stationStatus: planchaItems.some(i => i.status === 'preparing') ? 'preparing' : 'pending'
+        stationStatus: isPlanchaPending ? 'pending' : 'preparing'
       });
     }
     
     if (hasPendingCocina && (activeStation === 'all' || activeStation === 'cocina')) {
+      const isCocinaPending = cocinaItems.some(i => i.status === 'pending' || !i.status);
       tickets.push({
         id: `${order.id}-cocina`,
         orderId: order.id,
         order: order,
         station: 'cocina',
         items: cocinaItems,
-        stationStatus: cocinaItems.some(i => i.status === 'preparing') ? 'preparing' : 'pending'
+        stationStatus: isCocinaPending ? 'pending' : 'preparing'
       });
     }
   });
@@ -972,14 +974,14 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
 
       const sanitizedItems = sanitizeItemsForFirestore(updatedItems);
 
-      // We update the order in Firestore. We set status to 'pending' so it reactivates 
-      // the kitchen comanda ticket and sounds/strobe if enabled.
+      // We update the order in Firestore.
       const orderRef = doc(db, "orders", latestOrder.id);
       await updateDoc(orderRef, {
         items: sanitizedItems,
         subtotal: newSubtotal,
         total: newTotal,
-        status: 'pending', // Regresar a pendiente para alertar a la cocina
+        // Conservar 'preparing' si ya estaba en preparación, de lo contrario 'pending'
+        status: latestOrder.status === 'preparing' ? 'preparing' : 'pending',
         updatedAt: new Date().toISOString()
       });
 
@@ -1898,7 +1900,9 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
                       "w-full flex justify-between items-center p-2 rounded-xl border transition-all group bg-white shadow-xs", 
                       item.status === 'completed' 
                         ? "bg-stone-50/70 opacity-35 border-stone-200" 
-                        : "border-stone-200 hover:border-mex-green/35 hover:scale-[1.01]"
+                        : (item.status === 'pending' || !item.status)
+                          ? "border-amber-300 bg-amber-50/40 shadow-inner hover:scale-[1.01] animate-pulse duration-[3000ms]"
+                          : "border-stone-200 hover:border-mex-green/35 hover:scale-[1.01]"
                     )}
                   >
                     <button 
@@ -1937,6 +1941,11 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
                           )}>
                             {item.name}
                           </span>
+                          {(item.status === 'pending' || !item.status) && (
+                            <span className="bg-amber-500 text-white text-[7px] font-black uppercase px-1 py-0.5 rounded-md leading-none select-none tracking-wider animate-bounce">
+                              NUEVO
+                            </span>
+                          )}
                         </div>
 
                         {/* HIGH CONTRAST NOTES ALERT BANNER */}

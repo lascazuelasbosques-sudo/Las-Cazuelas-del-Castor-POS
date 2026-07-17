@@ -503,7 +503,7 @@ export function WalkieTalkie({ posUser, isOpen, setIsOpen }: WalkieTalkieProps) 
     setActiveSpeaker({ name: msg.senderName, role: msg.senderRole, text: msg.text });
 
     // Background notification if app is minimized
-    if (document.visibilityState === 'hidden' && 'Notification' in window && Notification.permission === 'granted' && senderRole !== 'admin') {
+    if (document.visibilityState === 'hidden' && 'Notification' in window && Notification.permission === 'granted' && senderRole !== 'admin' && posUser?.role !== 'admin') {
       const n = new Notification(`Radio: ${msg.senderName}`, {
         body: msg.text,
         icon: '/logo_las_cazuelas_del_castor.jpg',
