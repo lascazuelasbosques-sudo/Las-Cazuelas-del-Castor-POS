@@ -27,7 +27,7 @@ export interface Product {
   stock: number;
   available: boolean;
   imageUrl?: string;
-  station?: 'plancha' | 'cocina';
+  station?: 'plancha' | 'cocina' | 'comun';
   allowsExtraCheese?: boolean;
   printOrder?: number;
 }
@@ -39,7 +39,7 @@ export interface OrderItem {
   price: number;
   notes?: string;
   status?: 'pending' | 'preparing' | 'completed' | 'cancelled';
-  station?: 'plancha' | 'cocina';
+  station?: 'plancha' | 'cocina' | 'comun';
   hasExtraCheese?: boolean;
 }
 

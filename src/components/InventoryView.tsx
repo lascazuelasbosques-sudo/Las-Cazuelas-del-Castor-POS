@@ -292,9 +292,13 @@ export const InventoryView = ({ userRole = 'waiter' }: InventoryViewProps) => {
                     <div className="flex flex-wrap gap-1.5 mt-2.5">
                       <span className={cn(
                         "text-[8px] px-2 py-0.5 rounded-lg font-black uppercase tracking-widest",
-                        product.station === 'plancha' ? "bg-orange-50 text-orange-600 border border-orange-100" : "bg-blue-50 text-blue-600 border border-blue-100"
+                        product.station === 'comun' 
+                          ? "bg-purple-50 text-purple-600 border border-purple-100" 
+                          : product.station === 'plancha' 
+                            ? "bg-orange-50 text-orange-600 border border-orange-100" 
+                            : "bg-blue-50 text-blue-600 border border-blue-100"
                       )}>
-                        {product.station === 'plancha' ? 'Parrilla' : 'Cocina'}
+                        {product.station === 'comun' ? 'Común' : product.station === 'plancha' ? 'Parrilla' : 'Cocina'}
                       </span>
                       <span className="text-[8px] px-2 py-0.5 rounded-lg font-black uppercase tracking-widest bg-stone-50 text-stone-400 border border-stone-100">
                         {categories.find(c => c.id === product.categoryId)?.name || 'General'}
@@ -366,9 +370,13 @@ export const InventoryView = ({ userRole = 'waiter' }: InventoryViewProps) => {
                     <div className="flex items-center gap-2 mt-1">
                       <span className={cn(
                         "text-[10px] px-1.5 py-0.5 rounded font-bold uppercase",
-                        product.station === 'plancha' ? "bg-orange-100 text-orange-700" : "bg-blue-100 text-blue-700"
+                        product.station === 'comun'
+                          ? "bg-purple-100 text-purple-700"
+                          : product.station === 'plancha'
+                            ? "bg-orange-100 text-orange-700"
+                            : "bg-blue-100 text-blue-700"
                       )}>
-                        {product.station === 'plancha' ? 'Plancha' : 'Cocina'}
+                        {product.station === 'comun' ? 'Común' : product.station === 'plancha' ? 'Plancha' : 'Cocina'}
                       </span>
                       <p className="text-xs text-stone-400 truncate max-w-xs">{product.description}</p>
                     </div>
@@ -521,11 +529,12 @@ export const InventoryView = ({ userRole = 'waiter' }: InventoryViewProps) => {
                   <label className="text-[10px] font-black text-stone-400 uppercase tracking-widest px-1">Estación</label>
                   <select 
                     value={editingProduct.station || 'cocina'}
-                    onChange={e => setEditingProduct({...editingProduct, station: e.target.value as 'plancha' | 'cocina'})}
+                    onChange={e => setEditingProduct({...editingProduct, station: e.target.value as 'plancha' | 'cocina' | 'comun'})}
                     className="w-full px-4 py-2.5 rounded-xl border border-stone-100 bg-stone-50 focus:bg-white focus:border-mex-brown focus:ring-0 outline-none transition-all font-bold appearance-none cursor-pointer"
                   >
                     <option value="cocina">Cocina</option>
                     <option value="plancha">Parrilla / Plancha</option>
+                    <option value="comun">Común (Parrilla y Cocina)</option>
                   </select>
                 </div>
 

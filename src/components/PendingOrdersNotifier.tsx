@@ -264,14 +264,14 @@ export function PendingOrdersNotifier({ userRole = 'waiter' }: { userRole?: stri
           : `para la mesa ${newest.tableNumber || ""}`;
 
         if (userRole === 'kitchen') {
-          const relevantDishes = dishesToPrepare.filter(item => item.station === 'cocina' || !item.station);
+          const relevantDishes = dishesToPrepare.filter(item => item.station === 'cocina' || !item.station || item.station === 'comun');
           shouldAlert = relevantDishes.length > 0;
           if (shouldAlert) {
             const listText = relevantDishes.map(item => `${item.quantity} ${item.name}`).join(", ");
             speakMsg = `Nuevo pedido ${destiny}. Preparar en cocina: ${listText}.`;
           }
         } else if (userRole === 'parrilla') {
-          const relevantDishes = dishesToPrepare.filter(item => item.station === 'plancha');
+          const relevantDishes = dishesToPrepare.filter(item => item.station === 'plancha' || item.station === 'comun');
           shouldAlert = relevantDishes.length > 0;
           if (shouldAlert) {
             const listText = relevantDishes.map(item => `${item.quantity} ${item.name}`).join(", ");
@@ -364,9 +364,9 @@ export function PendingOrdersNotifier({ userRole = 'waiter' }: { userRole?: stri
           // Check if this item matches the role's station or is a dish to prepare
           let matchesStation = false;
           if (userRole === 'kitchen') {
-            matchesStation = item.station === 'cocina' || !item.station;
+            matchesStation = item.station === 'cocina' || !item.station || item.station === 'comun';
           } else if (userRole === 'parrilla') {
-            matchesStation = item.station === 'plancha';
+            matchesStation = item.station === 'plancha' || item.station === 'comun';
           } else {
             // For admin/cashier, we include all items that need preparation
             matchesStation = true;

@@ -88,7 +88,8 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [addQuantity, setAddQuantity] = useState(1);
   const [addNotes, setAddNotes] = useState("");
-  const [addStation, setAddStation] = useState<'cocina' | 'plancha'>('cocina');
+  const [addStation, setAddStation] = useState<'cocina' | 'plancha' | 'comun'>('cocina');
+  const [addTicketStationStatus, setAddTicketStationStatus] = useState<'pending' | 'preparing' | null>(null);
   const [showDirectAddModal, setShowDirectAddModal] = useState(false);
 
   // Kitchen alerts state and references
@@ -374,8 +375,8 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
   const tickets: KitchenTicket[] = [];
   orders.forEach(order => {
     const itemsWithIndex = order.items.map((item, index) => ({ ...item, originalIndex: index }));
-    const planchaItems = itemsWithIndex.filter(i => i.station === 'plancha' && i.status !== 'cancelled');
-    const cocinaItems = itemsWithIndex.filter(i => (i.station === 'cocina' || !i.station) && i.status !== 'cancelled');
+    const planchaItems = itemsWithIndex.filter(i => (i.station === 'plancha' || i.station === 'comun') && i.status !== 'cancelled');
+    const cocinaItems = itemsWithIndex.filter(i => (i.station === 'cocina' || !i.station || i.station === 'comun') && i.status !== 'cancelled');
 
     const hasPendingPlancha = planchaItems.some(i => i.status !== 'completed');
     const hasPendingCocina = cocinaItems.some(i => i.status !== 'completed');
@@ -928,7 +929,8 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
     product: Product,
     quantity: number,
     notes: string,
-    station: 'plancha' | 'cocina'
+    station: 'plancha' | 'cocina' | 'comun',
+    itemStatus: 'pending' | 'preparing' = 'pending'
   ) => {
     try {
       // Find the absolute latest order state from active reactive list to prevent stale data overwrites
@@ -940,7 +942,7 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
         name: product.name,
         price: Number(product.price),
         quantity: Number(quantity),
-        status: 'pending',
+        status: itemStatus,
         station: station || product.station || 'cocina',
         hasExtraCheese: false
       };
@@ -949,11 +951,11 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
         newItem.notes = trimmedNotes;
       }
 
-      // Check if there's already a pending item of the exact same product with same notes and station
+      // Check if there's already an item of the exact same product with same status, notes and station
       let updatedItems = [...latestOrder.items];
       const existingItemIndex = updatedItems.findIndex(i => 
         i.productId === product.id && 
-        i.status === 'pending' && 
+        i.status === itemStatus && 
         i.station === station && 
         (i.notes || "") === trimmedNotes
       );
@@ -992,6 +994,7 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
       setSelectedProduct(null);
       setAddQuantity(1);
       setAddNotes("");
+      setAddTicketStationStatus(null);
       setShowDirectAddModal(false);
     } catch (error) {
       console.error("Error adding product to order:", error);
@@ -2004,6 +2007,7 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
                     onClick={() => {
                       setOrderToAddItems(ticket.order);
                       setAddStation(ticket.station);
+                      setAddTicketStationStatus(ticket.stationStatus);
                       setSelectedProduct(null);
                       setSearchProductQuery("");
                       setAddQuantity(1);
@@ -2235,7 +2239,7 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
                           type="button"
                           onClick={() => {
                             setSelectedProduct(prod);
-                            if (prod.station) {
+                            if (prod.station && !addTicketStationStatus) {
                               setAddStation(prod.station);
                             }
                           }}
@@ -2254,9 +2258,13 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
                             <span className="font-bold text-mex-terracotta text-sm">${prod.price}</span>
                             <span className={cn(
                               "text-[9px] font-black uppercase px-2 py-0.5 rounded-full",
-                              prod.station === 'plancha' ? "bg-orange-100 text-orange-700" : "bg-blue-100 text-blue-700"
+                              prod.station === 'comun'
+                                ? "bg-purple-100 text-purple-700"
+                                : prod.station === 'plancha'
+                                  ? "bg-orange-100 text-orange-700"
+                                  : "bg-blue-100 text-blue-700"
                             )}>
-                              {prod.station === 'plancha' ? 'Parrilla' : 'Cocina'}
+                              {prod.station === 'comun' ? 'Común' : prod.station === 'plancha' ? 'Parrilla' : 'Cocina'}
                             </span>
                           </div>
                         </button>
@@ -2305,12 +2313,12 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
 
                   <div className="space-y-1.5">
                     <label className="text-[9px] font-black text-stone-500 uppercase tracking-widest block text-left">Destino a Cocinar</label>
-                    <div className="grid grid-cols-2 gap-2 bg-stone-50 p-1.5 rounded-xl border border-stone-200">
+                    <div className="grid grid-cols-3 gap-1.5 bg-stone-50 p-1.5 rounded-xl border border-stone-200">
                       <button
                         type="button"
                         onClick={() => setAddStation('cocina')}
                         className={cn(
-                          "py-2 px-3 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all border-none cursor-pointer",
+                          "py-2 px-1 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all border-none cursor-pointer text-center truncate",
                           addStation === 'cocina'
                             ? "bg-blue-600 text-white shadow-sm"
                             : "bg-transparent text-stone-500 hover:text-stone-700"
@@ -2322,13 +2330,25 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
                         type="button"
                         onClick={() => setAddStation('plancha')}
                         className={cn(
-                          "py-2 px-3 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all border-none cursor-pointer",
+                          "py-2 px-1 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all border-none cursor-pointer text-center truncate",
                           addStation === 'plancha'
                             ? "bg-orange-500 text-white shadow-sm"
                             : "bg-transparent text-stone-500 hover:text-stone-700"
                         )}
                       >
                         Parrilla
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setAddStation('comun')}
+                        className={cn(
+                          "py-2 px-1 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all border-none cursor-pointer text-center truncate",
+                          addStation === 'comun'
+                            ? "bg-purple-600 text-white shadow-sm"
+                            : "bg-transparent text-stone-500 hover:text-stone-700"
+                        )}
+                      >
+                        Común
                       </button>
                     </div>
                   </div>
@@ -2346,6 +2366,7 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
                   setSelectedProduct(null);
                   setAddQuantity(1);
                   setAddNotes("");
+                  setAddTicketStationStatus(null);
                 }}
                 className="flex-1 py-3 bg-stone-55 border-stone-300 hover:bg-stone-100 text-stone-700 font-bold uppercase text-xs rounded-xl"
               >
@@ -2356,7 +2377,7 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
                 disabled={!orderToAddItems || !selectedProduct}
                 onClick={() => {
                   if (orderToAddItems && selectedProduct) {
-                    addProductToOrderDirectly(orderToAddItems, selectedProduct, addQuantity, addNotes, addStation);
+                    addProductToOrderDirectly(orderToAddItems, selectedProduct, addQuantity, addNotes, addStation, addTicketStationStatus || 'pending');
                   }
                 }}
                 className={cn(

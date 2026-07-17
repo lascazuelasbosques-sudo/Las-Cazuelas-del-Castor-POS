@@ -143,8 +143,8 @@ export const Navbar = ({
         if (order.status === 'pending' || order.status === 'preparing') {
           order.items.forEach(item => {
             if (item.status !== 'completed') {
-              if (item.station === 'plancha') hasPlancha = true;
-              if (item.station === 'cocina' || !item.station) hasCocina = true;
+              if (item.station === 'plancha' || item.station === 'comun') hasPlancha = true;
+              if (item.station === 'cocina' || !item.station || item.station === 'comun') hasCocina = true;
             }
           });
         }
