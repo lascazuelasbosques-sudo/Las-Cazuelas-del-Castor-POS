@@ -57,6 +57,7 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
   const [orders, setOrders] = useState<Order[]>([]);
   const [cashLogs, setCashLogs] = useState<CashLog[]>([]);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
   const [selectedGroup, setSelectedGroup] = useState<GroupedOrder | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card' | 'transfer' | 'credit'>('cash');
   const [cashReceived, setCashReceived] = useState<number | string>('');
@@ -2494,6 +2495,24 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
                             <Trash2 size={16} />
                             <span className="hidden sm:inline">CANCELAR</span>
                           </Button>
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className={cn(
+                              "h-11 px-3 rounded-xl border border-stone-200 hover:bg-stone-50 font-bold text-[10px] uppercase flex items-center justify-center gap-1 shrink-0",
+                              expandedGroups[group.id] ? "bg-stone-100 border-stone-300 text-stone-800" : "text-stone-600"
+                            )}
+                            onClick={() => {
+                              setExpandedGroups(prev => ({
+                                ...prev,
+                                [group.id]: !prev[group.id]
+                              }));
+                            }}
+                            title="Ver platillos"
+                          >
+                            <Eye size={16} />
+                            <span className="hidden sm:inline">{expandedGroups[group.id] ? 'OCULTAR' : 'VER COMIDAS'}</span>
+                          </Button>
                           {group.isUnconfirmed ? (
                             <Button 
                               variant="primary" 
@@ -2519,6 +2538,40 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
                         </div>
                       </div>
                     </div>
+                    {expandedGroups[group.id] && (
+                      <div className="px-5 pb-5 pt-3 border-t border-dashed border-stone-200 bg-stone-50/50">
+                        <p className="text-[10px] font-black text-stone-400 uppercase tracking-widest mb-3">Comidas que se están cobrando:</p>
+                        <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                          {group.orders.flatMap((order) => 
+                            order.items.map((item, idx) => (
+                              <div key={`${order.id}-${idx}`} className="flex items-center justify-between text-xs py-2 border-b border-stone-200/50 last:border-0">
+                                <div className="flex items-start gap-2.5 min-w-0">
+                                  <span className="font-mono font-black text-mex-green bg-mex-green/5 px-2 py-0.5 rounded text-[11px] shrink-0">
+                                    {item.quantity}x
+                                  </span>
+                                  <div className="min-w-0">
+                                    <p className="font-bold text-stone-800 truncate">{item.name}</p>
+                                    {item.notes && (
+                                      <p className="text-[10px] text-mex-terracotta italic font-semibold mt-0.5">
+                                        Nota: {item.notes}
+                                      </p>
+                                    )}
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-3 shrink-0 pl-2">
+                                  <span className="text-stone-400 font-medium text-[11px]">
+                                    {formatCurrency(item.price)}
+                                  </span>
+                                  <span className="font-black text-stone-700">
+                                    {formatCurrency(item.price * item.quantity)}
+                                  </span>
+                                </div>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      </div>
+                    )}
                   </Card>
                 ))
               )
