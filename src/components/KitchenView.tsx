@@ -70,6 +70,64 @@ const sanitizeItemsForFirestore = (items: OrderItem[]): any[] => {
   });
 };
 
+const DB_NAME = "KitchenMusicDB";
+const STORE_NAME = "songs";
+const DB_VERSION = 1;
+
+function initDB(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    if (typeof window === "undefined" || !window.indexedDB) {
+      reject(new Error("IndexedDB not supported"));
+      return;
+    }
+    const request = indexedDB.open(DB_NAME, DB_VERSION);
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => resolve(request.result);
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains(STORE_NAME)) {
+        db.createObjectStore(STORE_NAME, { keyPath: "id" });
+      }
+    };
+  });
+}
+
+function saveSongToDB(song: { id: string; name: string; file: Blob; size: string }): Promise<void> {
+  return initDB().then(db => {
+    return new Promise<void>((resolve, reject) => {
+      const transaction = db.transaction(STORE_NAME, "readwrite");
+      const store = transaction.objectStore(STORE_NAME);
+      const request = store.put(song);
+      request.onsuccess = () => resolve();
+      request.onerror = () => reject(request.error);
+    });
+  });
+}
+
+function getSongsFromDB(): Promise<{ id: string; name: string; file: Blob; size: string }[]> {
+  return initDB().then(db => {
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction(STORE_NAME, "readonly");
+      const store = transaction.objectStore(STORE_NAME);
+      const request = store.getAll();
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+  });
+}
+
+function deleteSongFromDB(id: string): Promise<void> {
+  return initDB().then(db => {
+    return new Promise<void>((resolve, reject) => {
+      const transaction = db.transaction(STORE_NAME, "readwrite");
+      const store = transaction.objectStore(STORE_NAME);
+      const request = store.delete(id);
+      request.onsuccess = () => resolve();
+      request.onerror = () => reject(request.error);
+    });
+  });
+}
+
 export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrders }: KitchenViewProps) => {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
@@ -160,6 +218,48 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
   const [newCustomUrl, setNewCustomUrl] = useState<string>("");
   const [uploadedFiles, setUploadedFiles] = useState<{ id: string; name: string; url: string; size?: string }[]>([]);
 
+  // Load saved music files from IndexedDB on mount
+  useEffect(() => {
+    let activeUrls: string[] = [];
+    
+    getSongsFromDB().then(songs => {
+      if (songs && songs.length > 0) {
+        const mapped = songs.map(song => {
+          const objectUrl = URL.createObjectURL(song.file);
+          activeUrls.push(objectUrl);
+          return {
+            id: song.id,
+            name: song.name,
+            url: objectUrl,
+            size: song.size
+          };
+        });
+        
+        setUploadedFiles(mapped);
+
+        // Restore current active file URL if selected
+        const savedPreset = localStorage.getItem("prep_song_preset");
+        const savedType = localStorage.getItem("prep_song_type");
+        if (savedType === 'file' && savedPreset) {
+          const matching = mapped.find(m => m.id === savedPreset);
+          if (matching) {
+            setPrepSongLocalUrl(matching.url);
+          }
+        }
+      }
+    }).catch(err => {
+      console.error("Failed to load offline music files from IndexedDB:", err);
+    });
+
+    return () => {
+      activeUrls.forEach(url => {
+        try {
+          URL.revokeObjectURL(url);
+        } catch (e) {}
+      });
+    };
+  }, []);
+
   // State to track a direct list item play/pause preview
   const [previewingSongId, setPreviewingSongId] = useState<string | null>(null);
   const previewAudioRef = useRef<HTMLAudioElement | null>(null);
@@ -200,28 +300,42 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
     };
   }, []);
 
-  const handlePrepFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePrepFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (prepSongLocalUrl) {
-        URL.revokeObjectURL(prepSongLocalUrl);
+      try {
+        if (prepSongLocalUrl) {
+          URL.revokeObjectURL(prepSongLocalUrl);
+        }
+        const fileUrl = URL.createObjectURL(file);
+        const fileId = `upload_${Date.now()}`;
+        const fileSize = (file.size / (1024 * 1024)).toFixed(2) + " MB";
+
+        // Save to IndexedDB
+        await saveSongToDB({
+          id: fileId,
+          name: file.name,
+          file: file,
+          size: fileSize
+        });
+
+        setPrepSongLocalUrl(fileUrl);
+        setPrepSongFileName(file.name);
+        localStorage.setItem("prep_song_file_name", file.name);
+        
+        setUploadedFiles(prev => [
+          { id: fileId, name: file.name, url: fileUrl, size: fileSize },
+          ...prev
+        ]);
+        
+        setPrepSongType('file');
+        setPrepSongPreset(fileId); // select it
+        setIsTestingMusic(false);
+        toast.success(`Canción cargada correctamente: ${file.name}`);
+      } catch (err) {
+        console.error("Error saving uploaded file to IndexedDB:", err);
+        toast.error("No se pudo persistir el archivo de música en el dispositivo");
       }
-      const fileUrl = URL.createObjectURL(file);
-      setPrepSongLocalUrl(fileUrl);
-      setPrepSongFileName(file.name);
-      localStorage.setItem("prep_song_file_name", file.name);
-      
-      const fileId = `upload_${Date.now()}`;
-      const fileSize = (file.size / (1024 * 1024)).toFixed(2) + " MB";
-      setUploadedFiles(prev => [
-        { id: fileId, name: file.name, url: fileUrl, size: fileSize },
-        ...prev
-      ]);
-      
-      setPrepSongType('file');
-      setPrepSongPreset(fileId); // select it
-      setIsTestingMusic(false);
-      toast.success(`Canción cargada correctamente: ${file.name}`);
     }
   };
 
@@ -340,6 +454,30 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
     }
   };
 
+  // Delete local uploaded song from state and IndexedDB
+  const handleDeleteUploadedSong = async (id: string, name: string) => {
+    try {
+      await deleteSongFromDB(id);
+      
+      const found = uploadedFiles.find(u => u.id === id);
+      if (found && found.url) {
+        URL.revokeObjectURL(found.url);
+      }
+
+      setUploadedFiles(prev => prev.filter(s => s.id !== id));
+      toast.success(`Eliminado: ${name}`);
+
+      if (prepSongPreset === id) {
+        setPrepSongType('preset');
+        setPrepSongPreset('cumbia_1');
+        setPrepSongLocalUrl("");
+      }
+    } catch (e) {
+      console.error("Error deleting uploaded song:", e);
+      toast.error("No se pudo eliminar el archivo local");
+    }
+  };
+
   const getPrepAudioUrl = () => {
     if (prepSongType === 'file') {
       return prepSongLocalUrl || "";
@@ -415,7 +553,7 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
   const hasActiveAlerts = activeAlertTickets.length > 0 || testAlertActive;
   const pendingIdsString = currentPendingIds.join(",");
 
-  const isPreparing = tickets.some(t => t.stationStatus === 'preparing');
+  const isPreparing = tickets.some(t => t.stationStatus === 'preparing' || t.items.some(i => i.status === 'preparing'));
   const shouldPlayMusic = (isPreparing || isTestingMusic) && !prepMusicMuted;
 
   // Synchronize alerting status
@@ -1737,11 +1875,17 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
                             </button>
                           )}
                           
-                          {/* Trash/Delete button for custom library items */}
-                          {song.isCustom && (
+                          {/* Trash/Delete button for custom library items or local uploaded items */}
+                          {(song.isCustom || song.genre === "Cargados") && (
                             <button
                               type="button"
-                              onClick={() => handleDeleteCustomSong(song.id, song.name.replace("🔗 ", ""))}
+                              onClick={() => {
+                                if (song.genre === "Cargados") {
+                                  handleDeleteUploadedSong(song.id, song.name.replace("📱 ", ""));
+                                } else {
+                                  handleDeleteCustomSong(song.id, song.name.replace("🔗 ", ""));
+                                }
+                              }}
                               className="p-1.5 rounded-lg hover:bg-red-50 text-red-600 transition-colors cursor-pointer border-none bg-transparent"
                               title="Eliminar de mi biblioteca"
                             >
