@@ -802,7 +802,7 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
   // Screen strobe flash logic
   useEffect(() => {
     let flashInterval: any = null;
-    if (isAlerting) {
+    if (isAlerting && !isPreparing) {
       flashInterval = setInterval(() => {
         setFlashState(prev => !prev);
       }, 150); // Strobe frequency: 150ms
@@ -812,7 +812,7 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
     return () => {
       if (flashInterval) clearInterval(flashInterval);
     };
-  }, [isAlerting]);
+  }, [isAlerting, isPreparing]);
 
   // Physical vibration alert loop
   useEffect(() => {
