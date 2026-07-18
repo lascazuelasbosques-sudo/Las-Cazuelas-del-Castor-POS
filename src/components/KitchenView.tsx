@@ -145,6 +145,16 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
       waiterName = auth.currentUser?.displayName || auth.currentUser?.email || "Personal de Cocina";
     }
 
+    if (
+      waiterName.toLowerCase().trim() === 'abigail' || 
+      waiterName.toLowerCase().trim() === 'antonieta abigail' || 
+      waiterName.toLowerCase().trim() === 'abigail villagómez' ||
+      waiterName.toLowerCase().trim() === 'abigail villagomez' ||
+      waiterName.toLowerCase().includes('abigail')
+    ) {
+      waiterName = 'Antonieta Abigail Villagómez';
+    }
+
     let roleLabel = "Cocina";
     if (userRole === 'admin') roleLabel = "Administrador";
     else if (userRole === 'waiter') roleLabel = "Mesero";

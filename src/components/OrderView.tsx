@@ -37,6 +37,16 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
       waiterName = auth.currentUser?.displayName || auth.currentUser?.email || "Mesero";
     }
 
+    if (
+      waiterName.toLowerCase().trim() === 'abigail' || 
+      waiterName.toLowerCase().trim() === 'antonieta abigail' || 
+      waiterName.toLowerCase().trim() === 'abigail villagómez' ||
+      waiterName.toLowerCase().trim() === 'abigail villagomez' ||
+      waiterName.toLowerCase().includes('abigail')
+    ) {
+      waiterName = 'Antonieta Abigail Villagómez';
+    }
+
     let roleLabel = "Mesero";
     if (userRole === 'admin') roleLabel = "Administrador";
     else if (userRole === 'waiter') roleLabel = "Mesero";

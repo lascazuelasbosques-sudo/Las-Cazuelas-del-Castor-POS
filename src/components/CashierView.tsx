@@ -55,18 +55,32 @@ interface CashierViewProps {
 
 export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewProps) => {
   const getLoggedUserName = () => {
+    let name = "Usuario";
     try {
       const posUserStr = localStorage.getItem('posUser');
       if (posUserStr) {
         const parsed = JSON.parse(posUserStr);
         if (parsed && parsed.name) {
-          return parsed.name;
+          name = parsed.name;
         }
+      } else {
+        name = auth.currentUser?.displayName || auth.currentUser?.email || "Usuario";
       }
     } catch (e) {
       console.error(e);
+      name = auth.currentUser?.displayName || auth.currentUser?.email || "Usuario";
     }
-    return auth.currentUser?.displayName || auth.currentUser?.email || "Usuario";
+
+    if (
+      name.toLowerCase().trim() === 'abigail' || 
+      name.toLowerCase().trim() === 'antonieta abigail' || 
+      name.toLowerCase().trim() === 'abigail villagómez' ||
+      name.toLowerCase().trim() === 'abigail villagomez' ||
+      name.toLowerCase().includes('abigail')
+    ) {
+      return 'Antonieta Abigail Villagómez';
+    }
+    return name;
   };
 
   const getLoggedUserForLog = () => {

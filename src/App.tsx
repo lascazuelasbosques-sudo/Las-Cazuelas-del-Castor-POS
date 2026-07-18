@@ -201,6 +201,19 @@ export default function App() {
     if (savedUser) {
       try {
         const parsedUser = JSON.parse(savedUser);
+        if (parsedUser && parsedUser.name) {
+          const nameLower = parsedUser.name.toLowerCase().trim();
+          if (
+            nameLower === 'abigail' || 
+            nameLower === 'antonieta abigail' || 
+            nameLower === 'abigail villagómez' || 
+            nameLower === 'abigail villagomez' || 
+            nameLower.includes('abigail')
+          ) {
+            parsedUser.name = 'Antonieta Abigail Villagómez';
+            localStorage.setItem('posUser', JSON.stringify(parsedUser));
+          }
+        }
         setPosUser(parsedUser);
         setUserRole(parsedUser.role);
         if (parsedUser.role === 'kitchen' || parsedUser.role === 'parrilla') {
@@ -350,10 +363,23 @@ export default function App() {
       <>
         <Login 
           onLogin={(u) => {
-            setPosUser(u);
-            setUserRole(u.role);
-            localStorage.setItem('posUser', JSON.stringify(u));
-            if (u.role === 'kitchen' || u.role === 'parrilla') {
+            const userToSave = { ...u };
+            if (userToSave.name) {
+              const nameLower = userToSave.name.toLowerCase().trim();
+              if (
+                nameLower === 'abigail' || 
+                nameLower === 'antonieta abigail' || 
+                nameLower === 'abigail villagómez' || 
+                nameLower === 'abigail villagomez' || 
+                nameLower.includes('abigail')
+              ) {
+                userToSave.name = 'Antonieta Abigail Villagómez';
+              }
+            }
+            setPosUser(userToSave);
+            setUserRole(userToSave.role);
+            localStorage.setItem('posUser', JSON.stringify(userToSave));
+            if (userToSave.role === 'kitchen' || userToSave.role === 'parrilla') {
               setActiveTab('kitchen');
             } else {
               setActiveTab('orders');
