@@ -220,9 +220,11 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
 
   // Load saved music files from IndexedDB on mount
   useEffect(() => {
+    let isMounted = true;
     let activeUrls: string[] = [];
     
     getSongsFromDB().then(songs => {
+      if (!isMounted) return;
       if (songs && songs.length > 0) {
         const mapped = songs.map(song => {
           const objectUrl = URL.createObjectURL(song.file);
@@ -252,6 +254,7 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
     });
 
     return () => {
+      isMounted = false;
       activeUrls.forEach(url => {
         try {
           URL.revokeObjectURL(url);
@@ -513,8 +516,30 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
   const tickets: KitchenTicket[] = [];
   orders.forEach(order => {
     const itemsWithIndex = order.items.map((item, index) => ({ ...item, originalIndex: index }));
-    const planchaItems = itemsWithIndex.filter(i => (i.station === 'plancha' || i.station === 'comun') && i.status !== 'cancelled');
-    const cocinaItems = itemsWithIndex.filter(i => (i.station === 'cocina' || !i.station || i.station === 'comun') && i.status !== 'cancelled');
+    
+    // First, find if there are active (non-cancelled) specific items for plancha or cocina
+    const activePlanchaSpecific = itemsWithIndex.some(i => i.station === 'plancha' && i.status !== 'cancelled');
+    const activeCocinaSpecific = itemsWithIndex.some(i => (i.station === 'cocina' || !i.station) && i.status !== 'cancelled');
+
+    const planchaItems = itemsWithIndex.filter(i => {
+      if (i.status === 'cancelled') return false;
+      if (i.station === 'plancha') return true;
+      if (i.station === 'comun') {
+        // Only route to plancha if plancha has active specific items and cocina does not
+        return activePlanchaSpecific && !activeCocinaSpecific;
+      }
+      return false;
+    });
+
+    const cocinaItems = itemsWithIndex.filter(i => {
+      if (i.status === 'cancelled') return false;
+      if (i.station === 'cocina' || !i.station) return true;
+      if (i.station === 'comun') {
+        // Route to cocina if cocina has active specific items, or if both have active items (to avoid duplication), or if neither does
+        return activeCocinaSpecific || !activePlanchaSpecific;
+      }
+      return false;
+    });
 
     const hasPendingPlancha = planchaItems.some(i => i.status !== 'completed');
     const hasPendingCocina = cocinaItems.some(i => i.status !== 'completed');
@@ -2457,44 +2482,51 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
 
                   <div className="space-y-1.5">
                     <label className="text-[9px] font-black text-stone-500 uppercase tracking-widest block text-left">Destino a Cocinar</label>
-                    <div className="grid grid-cols-3 gap-1.5 bg-stone-50 p-1.5 rounded-xl border border-stone-200">
-                      <button
-                        type="button"
-                        onClick={() => setAddStation('cocina')}
-                        className={cn(
-                          "py-2 px-1 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all border-none cursor-pointer text-center truncate",
-                          addStation === 'cocina'
-                            ? "bg-blue-600 text-white shadow-sm"
-                            : "bg-transparent text-stone-500 hover:text-stone-700"
-                        )}
-                      >
-                        Cocina
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setAddStation('plancha')}
-                        className={cn(
-                          "py-2 px-1 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all border-none cursor-pointer text-center truncate",
-                          addStation === 'plancha'
-                            ? "bg-orange-500 text-white shadow-sm"
-                            : "bg-transparent text-stone-500 hover:text-stone-700"
-                        )}
-                      >
-                        Parrilla
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setAddStation('comun')}
-                        className={cn(
-                          "py-2 px-1 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all border-none cursor-pointer text-center truncate",
-                          addStation === 'comun'
-                            ? "bg-purple-600 text-white shadow-sm"
-                            : "bg-transparent text-stone-500 hover:text-stone-700"
-                        )}
-                      >
-                        Común
-                      </button>
-                    </div>
+                    {addTicketStationStatus ? (
+                      <div className="px-3 py-2 bg-emerald-50 text-emerald-800 rounded-xl border border-emerald-200 text-[11px] font-black uppercase tracking-wider flex items-center justify-between">
+                        <span>Asignado a: {addStation === 'plancha' ? 'Parrilla' : 'Cocina'}</span>
+                        <span className="text-[9px] font-medium text-emerald-600 lowercase bg-white px-2 py-0.5 rounded-md border border-emerald-100">(por solicitud de comanda)</span>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-3 gap-1.5 bg-stone-50 p-1.5 rounded-xl border border-stone-200">
+                        <button
+                          type="button"
+                          onClick={() => setAddStation('cocina')}
+                          className={cn(
+                            "py-2 px-1 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all border-none cursor-pointer text-center truncate",
+                            addStation === 'cocina'
+                              ? "bg-blue-600 text-white shadow-sm"
+                              : "bg-transparent text-stone-500 hover:text-stone-700"
+                          )}
+                        >
+                          Cocina
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setAddStation('plancha')}
+                          className={cn(
+                            "py-2 px-1 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all border-none cursor-pointer text-center truncate",
+                            addStation === 'plancha'
+                              ? "bg-orange-500 text-white shadow-sm"
+                              : "bg-transparent text-stone-500 hover:text-stone-700"
+                          )}
+                        >
+                          Parrilla
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setAddStation('comun')}
+                          className={cn(
+                            "py-2 px-1 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all border-none cursor-pointer text-center truncate",
+                            addStation === 'comun'
+                              ? "bg-purple-600 text-white shadow-sm"
+                              : "bg-transparent text-stone-500 hover:text-stone-700"
+                          )}
+                        >
+                          Común
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}

@@ -263,15 +263,30 @@ export function PendingOrdersNotifier({ userRole = 'waiter' }: { userRole?: stri
           ? "para llevar" 
           : `para la mesa ${newest.tableNumber || ""}`;
 
+        const activePlanchaSpecific = dishesToPrepare.some(i => i.station === 'plancha');
+        const activeCocinaSpecific = dishesToPrepare.some(i => i.station === 'cocina' || !i.station);
+
         if (userRole === 'kitchen') {
-          const relevantDishes = dishesToPrepare.filter(item => item.station === 'cocina' || !item.station || item.station === 'comun');
+          const relevantDishes = dishesToPrepare.filter(item => {
+            if (item.station === 'cocina' || !item.station) return true;
+            if (item.station === 'comun') {
+              return activeCocinaSpecific || !activePlanchaSpecific;
+            }
+            return false;
+          });
           shouldAlert = relevantDishes.length > 0;
           if (shouldAlert) {
             const listText = relevantDishes.map(item => `${item.quantity} ${item.name}`).join(", ");
             speakMsg = `Nuevo pedido ${destiny}. Preparar en cocina: ${listText}.`;
           }
         } else if (userRole === 'parrilla') {
-          const relevantDishes = dishesToPrepare.filter(item => item.station === 'plancha' || item.station === 'comun');
+          const relevantDishes = dishesToPrepare.filter(item => {
+            if (item.station === 'plancha') return true;
+            if (item.station === 'comun') {
+              return activePlanchaSpecific && !activeCocinaSpecific;
+            }
+            return false;
+          });
           shouldAlert = relevantDishes.length > 0;
           if (shouldAlert) {
             const listText = relevantDishes.map(item => `${item.quantity} ${item.name}`).join(", ");
@@ -356,6 +371,10 @@ export function PendingOrdersNotifier({ userRole = 'waiter' }: { userRole?: stri
       let totalPendingCount = 0;
 
       pendingOrders.forEach(order => {
+        const activeItemsInOrder = order.items.filter(i => i.status !== 'cancelled' && i.status !== 'completed');
+        const activePlanchaSpecific = activeItemsInOrder.some(i => i.station === 'plancha');
+        const activeCocinaSpecific = activeItemsInOrder.some(i => i.station === 'cocina' || !i.station);
+
         order.items.forEach(item => {
           const isCancelled = item.status === 'cancelled';
           const isCompleted = item.status === 'completed';
@@ -364,9 +383,17 @@ export function PendingOrdersNotifier({ userRole = 'waiter' }: { userRole?: stri
           // Check if this item matches the role's station or is a dish to prepare
           let matchesStation = false;
           if (userRole === 'kitchen') {
-            matchesStation = item.station === 'cocina' || !item.station || item.station === 'comun';
+            if (item.station === 'cocina' || !item.station) {
+              matchesStation = true;
+            } else if (item.station === 'comun') {
+              matchesStation = activeCocinaSpecific || !activePlanchaSpecific;
+            }
           } else if (userRole === 'parrilla') {
-            matchesStation = item.station === 'plancha' || item.station === 'comun';
+            if (item.station === 'plancha') {
+              matchesStation = true;
+            } else if (item.station === 'comun') {
+              matchesStation = activePlanchaSpecific && !activeCocinaSpecific;
+            }
           } else {
             // For admin/cashier, we include all items that need preparation
             matchesStation = true;

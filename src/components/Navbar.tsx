@@ -141,10 +141,21 @@ export const Navbar = ({
 
         // Only show kitchen alerts for pending or preparing orders
         if (order.status === 'pending' || order.status === 'preparing') {
-          order.items.forEach(item => {
-            if (item.status !== 'completed') {
-              if (item.station === 'plancha' || item.station === 'comun') hasPlancha = true;
-              if (item.station === 'cocina' || !item.station || item.station === 'comun') hasCocina = true;
+          const activeItems = order.items.filter(item => item.status !== 'cancelled' && item.status !== 'completed');
+          const activePlanchaSpecific = activeItems.some(i => i.station === 'plancha');
+          const activeCocinaSpecific = activeItems.some(i => i.station === 'cocina' || !i.station);
+
+          activeItems.forEach(item => {
+            if (item.station === 'plancha') {
+              hasPlancha = true;
+            } else if (item.station === 'cocina' || !item.station) {
+              hasCocina = true;
+            } else if (item.station === 'comun') {
+              if (activePlanchaSpecific && !activeCocinaSpecific) {
+                hasPlancha = true;
+              } else {
+                hasCocina = true;
+              }
             }
           });
         }
