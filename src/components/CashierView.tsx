@@ -54,6 +54,21 @@ interface CashierViewProps {
 }
 
 export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewProps) => {
+  const getLoggedUserName = () => {
+    try {
+      const posUserStr = localStorage.getItem('posUser');
+      if (posUserStr) {
+        const parsed = JSON.parse(posUserStr);
+        if (parsed && parsed.name) {
+          return parsed.name;
+        }
+      }
+    } catch (e) {
+      console.error(e);
+    }
+    return auth.currentUser?.displayName || auth.currentUser?.email || "Usuario";
+  };
+
   const [orders, setOrders] = useState<Order[]>([]);
   const [cashLogs, setCashLogs] = useState<CashLog[]>([]);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
@@ -823,7 +838,7 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
         status: 'pending',
         createdAt: new Date().toISOString(),
         userId: auth.currentUser.uid,
-        userName: auth.currentUser.displayName || 'Admin'
+        userName: getLoggedUserName()
       });
 
       const logRef = doc(collection(db, "cashLogs"));
@@ -833,7 +848,7 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
         reason: `PRÉSTAMO PROPINAS: ${loanReason}${loanBorrower ? ` (A: ${loanBorrower})` : ''}`,
         timestamp: new Date().toISOString(),
         userId: auth.currentUser.uid,
-        userName: auth.currentUser.displayName || 'Admin'
+        userName: getLoggedUserName()
       });
 
       await batch.commit();
@@ -871,7 +886,7 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
         reason: `DEVOLUCIÓN PRÉSTAMO PROPINAS: ${loan.reason}`,
         timestamp: new Date().toISOString(),
         userId: auth.currentUser.uid,
-        userName: auth.currentUser.displayName || 'Admin'
+        userName: getLoggedUserName()
       });
 
       await batch.commit();
@@ -965,7 +980,7 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
         reason: `Pago ${selectedGroup.displayTitle} (${reasonSuffix}) - Folios: ${selectedGroup.folios.join(', ')}`,
         timestamp: new Date().toISOString(),
         userId: auth.currentUser.uid,
-        userName: auth.currentUser.displayName || auth.currentUser.email,
+        userName: getLoggedUserName(),
         itemsSummary,
         disposableQuantity: paymentDisposableQuantity,
         transferReceiptUrl: paymentMethod === 'transfer' ? (transferReceipt || "") : null,
@@ -1040,7 +1055,7 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
         reason: reason,
         timestamp: new Date().toISOString(),
         userId: auth.currentUser.uid,
-        userName: auth.currentUser.displayName || auth.currentUser.email,
+        userName: getLoggedUserName(),
         transferReceiptUrl: creditPaymentMethod === 'transfer' ? (creditTransferReceipt || "") : null,
         orderIds: [selectedCreditOrder.id],
         cancelled: false,
@@ -1089,7 +1104,7 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
         reason: logForm.reason.trim(),
         timestamp: editingLog ? editingLog.timestamp : new Date().toISOString(),
         userId: auth.currentUser.uid,
-        userName: auth.currentUser.displayName || auth.currentUser.email
+        userName: getLoggedUserName()
       };
 
       if (logForm.type === 'income' || logForm.type === 'expense') {

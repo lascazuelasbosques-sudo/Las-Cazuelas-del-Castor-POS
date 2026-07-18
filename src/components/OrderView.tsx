@@ -347,11 +347,26 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
         const paddedConsecutive = consecutive.toString().padStart(3, '0');
         const tableStr = isTakeaway ? 'LL' : tableNumber;
 
+        let waiterName = "Mesero";
+        try {
+          const posUserStr = localStorage.getItem('posUser');
+          if (posUserStr) {
+            const parsed = JSON.parse(posUserStr);
+            if (parsed && parsed.name) {
+              waiterName = parsed.name;
+            }
+          } else {
+            waiterName = auth.currentUser.displayName || auth.currentUser.email || "Mesero";
+          }
+        } catch (e) {
+          waiterName = auth.currentUser.displayName || auth.currentUser.email || "Mesero";
+        }
+
         orderData.folio = `${dayLetter}${hours}${minutes}-${tableStr}-${paddedConsecutive}`;
         orderData.status = 'pending';
         orderData.createdAt = new Date().toISOString();
         orderData.waiterId = auth.currentUser.uid;
-        orderData.waiterName = auth.currentUser.displayName || auth.currentUser.email;
+        orderData.waiterName = waiterName;
         
         await addDoc(collection(db, "orders"), orderData);
         toast.success("Pedido enviado a cocina");
