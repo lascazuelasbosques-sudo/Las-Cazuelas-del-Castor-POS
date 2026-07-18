@@ -677,6 +677,50 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
     }
   }, [hasActiveAlerts, kitchenSoundEnabled]);
 
+  // Track preparation transition to trigger shuffle and random track selection
+  const wasPreparingRef = useRef<boolean>(false);
+
+  useEffect(() => {
+    if (isPreparing && !wasPreparingRef.current) {
+      // 1. Activar el shuffle primero
+      setIsShuffleEnabled(true);
+      localStorage.setItem("is_shuffle_enabled", "true");
+
+      // 2. Seleccionar la canción aleatoriamente según el tipo activo
+      if (prepSongType === 'file' && uploadedFiles.length > 0) {
+        const nextIndex = Math.floor(Math.random() * uploadedFiles.length);
+        setCurrentRandomFileIndex(nextIndex);
+        const nextSong = uploadedFiles[nextIndex];
+        if (nextSong) {
+          setPrepSongPreset(nextSong.id);
+          setPrepSongFileName(nextSong.name);
+          localStorage.setItem("prep_song_preset", nextSong.id);
+          localStorage.setItem("prep_song_file_name", nextSong.name);
+        }
+      } else if (prepSongType === 'preset') {
+        const nextIndex = Math.floor(Math.random() * PRESET_SONGS.length);
+        const nextSong = PRESET_SONGS[nextIndex];
+        if (nextSong) {
+          setPrepSongPreset(nextSong.id);
+          setPrepSongFileName(nextSong.name);
+          localStorage.setItem("prep_song_preset", nextSong.id);
+          localStorage.setItem("prep_song_file_name", nextSong.name);
+        }
+      } else if (prepSongType === 'url' && customLibrary.length > 0) {
+        const nextIndex = Math.floor(Math.random() * customLibrary.length);
+        const nextSong = customLibrary[nextIndex];
+        if (nextSong) {
+          setPrepSongPreset(nextSong.id);
+          setPrepSongFileName(nextSong.name);
+          localStorage.setItem("prep_song_preset", nextSong.id);
+          localStorage.setItem("prep_song_file_name", nextSong.name);
+        }
+      }
+      toast.success("🔀 ¡Preparación iniciada! Se activó el shuffle y se eligió canción aleatoria.");
+    }
+    wasPreparingRef.current = isPreparing;
+  }, [isPreparing, prepSongType, uploadedFiles, customLibrary]);
+
   // Persist song configuration values
   useEffect(() => {
     localStorage.setItem("prep_song_type", prepSongType);
