@@ -662,6 +662,11 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
         const disappeared = prevOrders.filter(po => !currentIds.includes(po.id));
 
         for (const dispOrder of disappeared) {
+          // Optimization: only check for cancellation if it was previously pending or preparing in the kitchen view
+          if (dispOrder.status !== 'pending' && dispOrder.status !== 'preparing') {
+            continue;
+          }
+
           try {
             const { doc, getDoc } = await import("firebase/firestore");
             const orderDocRef = doc(db, "orders", dispOrder.id);
@@ -919,6 +924,9 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
         updatedAt: new Date().toISOString()
       };
 
+      const activePlanchaSpecific = order.items.some(i => i.station === 'plancha' && i.status !== 'cancelled');
+      const activeCocinaSpecific = order.items.some(i => (i.station === 'cocina' || !i.station) && i.status !== 'cancelled');
+
       if (action === 'start_station') {
         // Silence this ticket immediately
         const ticketId = `${orderId}-${station}`;
@@ -930,8 +938,20 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
         });
 
         const updatedItems = order.items.map(item => {
-          const itemStation = item.station || 'cocina';
-          if (itemStation === station && item.status !== 'completed') {
+          let belongsToStation = false;
+          if (station === 'plancha') {
+            if (item.station === 'plancha') belongsToStation = true;
+            else if (item.station === 'comun') {
+              belongsToStation = activePlanchaSpecific && !activeCocinaSpecific;
+            }
+          } else if (station === 'cocina') {
+            if (item.station === 'cocina' || !item.station) belongsToStation = true;
+            else if (item.station === 'comun') {
+              belongsToStation = activeCocinaSpecific || !activePlanchaSpecific;
+            }
+          }
+
+          if (belongsToStation && item.status !== 'completed' && item.status !== 'cancelled') {
             return { ...item, status: 'preparing' as const };
           }
           return item;
@@ -945,8 +965,20 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
       } else if (action === 'finish_station') {
         // Mark items for this station as completed
         const updatedItems = order.items.map(item => {
-          const itemStation = item.station || 'cocina';
-          if (itemStation === station) {
+          let belongsToStation = false;
+          if (station === 'plancha') {
+            if (item.station === 'plancha') belongsToStation = true;
+            else if (item.station === 'comun') {
+              belongsToStation = activePlanchaSpecific && !activeCocinaSpecific;
+            }
+          } else if (station === 'cocina') {
+            if (item.station === 'cocina' || !item.station) belongsToStation = true;
+            else if (item.station === 'comun') {
+              belongsToStation = activeCocinaSpecific || !activePlanchaSpecific;
+            }
+          }
+
+          if (belongsToStation && item.status !== 'cancelled') {
             return { ...item, status: 'completed' as const };
           }
           return item;
@@ -954,8 +986,9 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
 
         updateData.items = sanitizeItemsForFirestore(updatedItems);
 
-        // Check if ALL items are now completed
-        const allCompleted = updatedItems.every(item => item.status === 'completed');
+        // Check if ALL remaining items (not cancelled) are now completed
+        const remainingItems = updatedItems.filter(item => item.status !== 'cancelled');
+        const allCompleted = remainingItems.every(item => item.status === 'completed');
         if (allCompleted) {
           updateData.status = 'ready';
         }

@@ -201,6 +201,11 @@ export function PendingOrdersNotifier({ userRole = 'waiter' }: { userRole?: stri
         const disappeared = prevOrders.filter(po => !currentIds.includes(po.id));
 
         for (const dispOrder of disappeared) {
+          // Optimization: only check for cancellation if it was previously pending or preparing
+          if (dispOrder.status !== 'pending' && dispOrder.status !== 'preparing') {
+            continue;
+          }
+
           try {
             const { doc, getDoc } = await import("firebase/firestore");
             const orderDocRef = doc(db, "orders", dispOrder.id);
