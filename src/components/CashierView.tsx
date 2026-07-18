@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardFooter } from "./Card";
 import { formatCurrency, cn, customRound } from "@/src/lib/utils";
 import { Order, CashLog, OrderStatus, TipLoan, OrderItem } from "@/src/types";
 import { db, auth } from "../firebase";
-import { collection, onSnapshot, query, where, orderBy, doc, updateDoc, addDoc, deleteDoc, writeBatch, getDocs, getDocsFromServer } from "firebase/firestore";
+import { collection, onSnapshot, query, where, orderBy, doc, updateDoc, addDoc, deleteDoc, writeBatch, getDocs, getDocsFromServer, arrayUnion } from "firebase/firestore";
 import { handleFirestoreError, OperationType } from "../lib/firestoreErrorHandler";
 import toast from "react-hot-toast";
 
@@ -67,6 +67,22 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
       console.error(e);
     }
     return auth.currentUser?.displayName || auth.currentUser?.email || "Usuario";
+  };
+
+  const getLoggedUserForLog = () => {
+    const userName = getLoggedUserName();
+    let roleLabel = "Cajero";
+    if (userRole === 'admin') roleLabel = "Administrador";
+    else if (userRole === 'waiter') roleLabel = "Mesero";
+    else if (userRole === 'kitchen') roleLabel = "Cocina";
+    else if (userRole === 'parrilla') roleLabel = "Parrilla";
+    else if (userRole === 'cashier') roleLabel = "Cajero";
+
+    return {
+      userId: auth.currentUser?.uid || 'unknown',
+      userName: userName,
+      userRole: roleLabel
+    };
   };
 
   const [orders, setOrders] = useState<Order[]>([]);
@@ -134,15 +150,26 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
       if (!orderToUpdate) return;
       
       const newItems = [...orderToUpdate.items];
+      const deletedItemName = newItems[itemIndex]?.name || "";
       newItems.splice(itemIndex, 1);
       
       // Recalculate total
       const newTotal = newItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
       
+      const userInfo = getLoggedUserForLog();
+      const deleteLog = {
+        action: `Eliminar artículo: '${deletedItemName}' (Caja)`,
+        timestamp: new Date().toISOString(),
+        userId: userInfo.userId,
+        userName: userInfo.userName,
+        userRole: userInfo.userRole
+      };
+
       await updateDoc(orderRef, {
         items: newItems,
         total: newTotal,
-        updatedAt: new Date().toISOString()
+        updatedAt: new Date().toISOString(),
+        movementLogs: arrayUnion(deleteLog)
       });
       
       // Update selectedGroup locally so total updates immediately
@@ -187,10 +214,20 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
       // Recalculate total
       const newTotal = newItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
       
+      const userInfo = getLoggedUserForLog();
+      const updateLog = {
+        action: `Modificar artículo: '${name}' x${quantity} (Caja)`,
+        timestamp: new Date().toISOString(),
+        userId: userInfo.userId,
+        userName: userInfo.userName,
+        userRole: userInfo.userRole
+      };
+
       await updateDoc(orderRef, {
         items: newItems,
         total: newTotal,
-        updatedAt: new Date().toISOString()
+        updatedAt: new Date().toISOString(),
+        movementLogs: arrayUnion(updateLog)
       });
       
       // Update selectedGroup locally
@@ -240,10 +277,20 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
       const newItems = [...orderToUpdate.items, newItem];
       const newTotal = newItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
       
+      const userInfo = getLoggedUserForLog();
+      const addLog = {
+        action: `Agregar artículo directo: '${name.trim()}' x${quantity} (Caja)`,
+        timestamp: new Date().toISOString(),
+        userId: userInfo.userId,
+        userName: userInfo.userName,
+        userRole: userInfo.userRole
+      };
+
       await updateDoc(orderRef, {
         items: newItems,
         total: newTotal,
-        updatedAt: new Date().toISOString()
+        updatedAt: new Date().toISOString(),
+        movementLogs: arrayUnion(addLog)
       });
       
       // Update selectedGroup locally
@@ -934,6 +981,16 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
     try {
       const batch = writeBatch(db);
       
+      const userInfo = getLoggedUserForLog();
+      const displayMethodName = paymentMethod === 'card' ? 'Tarjeta' : paymentMethod === 'transfer' ? 'Transferencia' : paymentMethod === 'credit' ? 'Crédito' : 'Efectivo';
+      const paymentLog = {
+        action: `Cobro registrado (${displayMethodName})`,
+        timestamp: new Date().toISOString(),
+        userId: userInfo.userId,
+        userName: userInfo.userName,
+        userRole: userInfo.userRole
+      };
+
       // Update all orders in the group to paid
       selectedGroup.orders.forEach(order => {
         const orderCardFee = paymentMethod === 'card' ? customRound(order.total * CARD_FEE_PERCENTAGE) : 0;
@@ -950,7 +1007,8 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
           transferReceiptUrl: paymentMethod === 'transfer' ? (transferReceipt || "") : null,
           clientName: paymentMethod === 'credit' ? clientName.trim() : null,
           creditStatus: paymentMethod === 'credit' ? 'pending' : null,
-          updatedAt: new Date().toISOString()
+          updatedAt: new Date().toISOString(),
+          movementLogs: arrayUnion(paymentLog)
         });
       });
 
@@ -1027,6 +1085,16 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
     try {
       const batch = writeBatch(db);
 
+      const userInfo = getLoggedUserForLog();
+      const creditDisplayMethod = creditPaymentMethod === 'card' ? 'Tarjeta' : creditPaymentMethod === 'transfer' ? 'Transferencia' : 'Efectivo';
+      const creditLog = {
+        action: `Adeudo liquidado (${creditDisplayMethod})`,
+        timestamp: new Date().toISOString(),
+        userId: userInfo.userId,
+        userName: userInfo.userName,
+        userRole: userInfo.userRole
+      };
+
       // 1. Update the creditOrder
       const totalPaid = selectedCreditOrder.total + creditTip + creditInterest + creditExtra;
       const orderRef = doc(db, "orders", selectedCreditOrder.id);
@@ -1038,7 +1106,8 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
         interest: creditInterest,
         extra: creditExtra,
         totalPaid: totalPaid,
-        updatedAt: new Date().toISOString()
+        updatedAt: new Date().toISOString(),
+        movementLogs: arrayUnion(creditLog)
       });
 
       // 2. Add cash log entry
@@ -1168,11 +1237,22 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
         const toastId = toast.loading("Cancelando pedidos...");
         try {
           const batch = writeBatch(db);
+          
+          const userInfo = getLoggedUserForLog();
+          const cancelLog = {
+            action: 'Cancelación de cuenta (Caja)',
+            timestamp: new Date().toISOString(),
+            userId: userInfo.userId,
+            userName: userInfo.userName,
+            userRole: userInfo.userRole
+          };
+
           group.orders.forEach(order => {
             const orderRef = doc(db, "orders", order.id);
             batch.update(orderRef, {
               status: "cancelled",
-              updatedAt: new Date().toISOString()
+              updatedAt: new Date().toISOString(),
+              movementLogs: arrayUnion(cancelLog)
             });
           });
           await batch.commit();
@@ -1193,11 +1273,22 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
     const toastId = toast.loading("Confirmando pedido...");
     try {
       const batch = writeBatch(db);
+      
+      const userInfo = getLoggedUserForLog();
+      const confirmLog = {
+        action: 'Pedido de WhatsApp aceptado (Caja)',
+        timestamp: new Date().toISOString(),
+        userId: userInfo.userId,
+        userName: userInfo.userName,
+        userRole: userInfo.userRole
+      };
+
       group.orders.forEach(order => {
         const orderRef = doc(db, "orders", order.id);
         batch.update(orderRef, {
           whatsAppConfirmed: true,
-          updatedAt: new Date().toISOString()
+          updatedAt: new Date().toISOString(),
+          movementLogs: arrayUnion(confirmLog)
         });
       });
       await batch.commit();
@@ -1256,11 +1347,21 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
 
           // 2. Mark associated orders as cancelled
           if (log.orderIds && log.orderIds.length > 0) {
+            const userInfo = getLoggedUserForLog();
+            const cancelLog = {
+              action: `Pedido cancelado por cancelación de cobro (${reason || 'Sin motivo'})`,
+              timestamp: new Date().toISOString(),
+              userId: userInfo.userId,
+              userName: userInfo.userName,
+              userRole: userInfo.userRole
+            };
+
             log.orderIds.forEach(orderId => {
               const orderRef = doc(db, "orders", orderId);
               batch.update(orderRef, {
                 status: "cancelled",
-                updatedAt: new Date().toISOString()
+                updatedAt: new Date().toISOString(),
+                movementLogs: arrayUnion(cancelLog)
               });
             });
           }
@@ -2585,6 +2686,31 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
                             ))
                           )}
                         </div>
+
+                        {/* Historial de Movimientos / Logs */}
+                        {group.orders.some(o => o.movementLogs && o.movementLogs.length > 0) && (
+                          <div className="mt-4 pt-3 border-t border-dashed border-stone-200">
+                            <p className="text-[10px] font-black text-stone-400 uppercase tracking-widest mb-2 flex items-center gap-1">
+                              <History size={12} className="text-stone-400 shrink-0" />
+                              Historial de Comanda:
+                            </p>
+                            <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
+                              {group.orders.flatMap(o => o.movementLogs || []).sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()).map((log, idx) => (
+                                <div key={idx} className="text-[10px] bg-stone-100/70 p-2 rounded-lg border border-stone-200/40 flex justify-between items-start gap-2">
+                                  <div>
+                                    <span className="font-extrabold text-stone-800">{log.action}</span>
+                                    <p className="text-stone-500 font-medium mt-0.5">
+                                      Por: <span className="font-bold text-stone-700">{log.userName}</span> ({log.userRole})
+                                    </p>
+                                  </div>
+                                  <span className="text-stone-400 font-mono text-[9px] shrink-0 font-medium">
+                                    {new Date(log.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit'})}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     )}
                   </Card>
@@ -4411,6 +4537,31 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
                       <p className="text-xs text-stone-400 font-medium">La cuenta no tiene artículos.</p>
                     </div>
                   )}
+
+                  {/* Historial de Movimientos in Payment Modal */}
+                  {selectedGroup.orders.some(o => o.movementLogs && o.movementLogs.length > 0) && (
+                    <div className="mt-4 pt-4 border-t border-dashed border-stone-200 bg-stone-50/50 p-3 rounded-2xl">
+                      <p className="text-[9px] font-black text-stone-400 uppercase tracking-widest mb-2 flex items-center gap-1">
+                        <History size={12} className="text-stone-400 shrink-0" />
+                        Historial de Comanda
+                      </p>
+                      <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
+                        {selectedGroup.orders.flatMap(o => o.movementLogs || []).sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()).map((log, idx) => (
+                          <div key={idx} className="text-[10px] bg-white p-2 rounded-xl border border-stone-150 flex justify-between items-start gap-2">
+                            <div>
+                              <span className="font-extrabold text-stone-800">{log.action}</span>
+                              <p className="text-stone-500 font-medium mt-0.5">
+                                Por: <span className="font-bold text-stone-700">{log.userName}</span> ({log.userRole})
+                              </p>
+                            </div>
+                            <span className="text-stone-400 font-mono text-[9px] shrink-0 font-medium">
+                              {new Date(log.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit'})}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -4783,6 +4934,17 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
                     ))
                   )}
                 </div>
+                {lastPaymentData.group.orders.some(o => o.movementLogs && o.movementLogs.length > 0) && (
+                  <div className="border-t border-stone-250 pt-2 space-y-1 text-[8px] text-stone-600 font-mono leading-tight">
+                    <p className="font-bold uppercase tracking-wider text-[7px] text-stone-500">Historial de Comanda:</p>
+                    {lastPaymentData.group.orders.flatMap(o => o.movementLogs || []).sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()).map((log, idx) => (
+                      <div key={idx} className="flex justify-between gap-2 border-b border-stone-100 pb-0.5 last:border-0">
+                        <span>{log.action} ({log.userName} - {log.userRole})</span>
+                        <span className="shrink-0">{new Date(log.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
                 <div className="border-t border-stone-200 pt-2 space-y-1 font-bold text-xs">
                   <div className="flex justify-between">
                     <span>Total</span>
@@ -4793,18 +4955,18 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
               </div>
 
               {createPortal(
-                <div id="print-ticket" className="print-only" style={{ fontFamily: 'monospace', fontSize: '12px', padding: '20px', width: '300px', margin: '0 auto' }}>
+                <div id="print-ticket" className="print-only" style={{ fontFamily: 'monospace', fontSize: '11px', padding: '15px', width: '280px', margin: '0 auto' }}>
                   <div style={{ textAlign: 'center', marginBottom: '10px' }}>
-                    <p style={{ fontWeight: 'bold', fontSize: '14px', margin: '2px 0' }}>LAS CAZUELAS DEL CASTOR</p>
+                    <p style={{ fontWeight: 'bold', fontSize: '13px', margin: '2px 0' }}>LAS CAZUELAS DEL CASTOR</p>
                     <p style={{ margin: '2px 0' }}>Ticket de Venta</p>
                     <p style={{ margin: '2px 0' }}>{new Date().toLocaleString()}</p>
                   </div>
-                  <div style={{ borderTop: '1px dashed #000', borderBottom: '1px dashed #000', padding: '10px 0', margin: '10px 0' }}>
+                  <div style={{ borderTop: '1px dashed #000', borderBottom: '1px dashed #000', padding: '8px 0', margin: '8px 0' }}>
                     <p style={{ margin: '2px 0' }}>Mesa: {lastPaymentData.group.displayTitle}</p>
                     <p style={{ margin: '2px 0' }}>Folios: {lastPaymentData.group.folios.join(", ")}</p>
                     <p style={{ margin: '2px 0' }}>Meseros: {lastPaymentData.group.waiterNames.join(", ")}</p>
                   </div>
-                  <div style={{ borderBottom: '1px dashed #000', paddingBottom: '10px', marginBottom: '10px' }}>
+                  <div style={{ borderBottom: '1px dashed #000', paddingBottom: '8px', marginBottom: '8px' }}>
                     {lastPaymentData.group.orders.map(order => 
                       order.items.map((item, idx) => (
                         <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', margin: '2px 0' }}>
@@ -4814,13 +4976,24 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
                       ))
                     )}
                   </div>
+                  {lastPaymentData.group.orders.some(o => o.movementLogs && o.movementLogs.length > 0) && (
+                    <div style={{ borderBottom: '1px dashed #000', paddingBottom: '8px', marginBottom: '8px', fontSize: '8px', color: '#333' }}>
+                      <p style={{ fontWeight: 'bold', margin: '2px 0', fontSize: '9px' }}>Historial de Comanda:</p>
+                      {lastPaymentData.group.orders.flatMap(o => o.movementLogs || []).sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()).map((log, idx) => (
+                        <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', margin: '2px 0' }}>
+                          <span>{log.action} ({log.userName} - {log.userRole})</span>
+                          <span>{new Date(log.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                   <div style={{ fontWeight: 'bold' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                       <span>Total</span>
                       <span>{formatCurrency(lastPaymentData.total)}</span>
                     </div>
                   </div>
-                  <p style={{ textAlign: 'center', marginTop: '20px', fontStyle: 'italic' }}>¡Gracias por su visita!</p>
+                  <p style={{ textAlign: 'center', marginTop: '15px', fontStyle: 'italic' }}>¡Gracias por su visita!</p>
                 </div>,
                 document.body
               )}

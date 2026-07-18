@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardFooter } from "./Card";
 import { formatCurrency, cn, customRound } from "@/src/lib/utils";
 import { Product, Category, OrderItem, Order, OrderStatus } from "@/src/types";
 import { db, auth } from "../firebase";
-import { collection, onSnapshot, query, orderBy, addDoc, updateDoc, doc, where, runTransaction } from "firebase/firestore";
+import { collection, onSnapshot, query, orderBy, addDoc, updateDoc, doc, where, runTransaction, arrayUnion } from "firebase/firestore";
 import toast from "react-hot-toast";
 import { useDraggable } from "../lib/useDraggable";
 
@@ -21,6 +21,36 @@ interface OrderViewProps {
 }
 
 export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }: OrderViewProps) => {
+  const getLoggedUserForLog = () => {
+    let waiterName = "Mesero";
+    try {
+      const posUserStr = localStorage.getItem('posUser');
+      if (posUserStr) {
+        const parsed = JSON.parse(posUserStr);
+        if (parsed && parsed.name) {
+          waiterName = parsed.name;
+        }
+      } else {
+        waiterName = auth.currentUser?.displayName || auth.currentUser?.email || "Mesero";
+      }
+    } catch (e) {
+      waiterName = auth.currentUser?.displayName || auth.currentUser?.email || "Mesero";
+    }
+
+    let roleLabel = "Mesero";
+    if (userRole === 'admin') roleLabel = "Administrador";
+    else if (userRole === 'waiter') roleLabel = "Mesero";
+    else if (userRole === 'kitchen') roleLabel = "Cocina";
+    else if (userRole === 'parrilla') roleLabel = "Parrilla";
+    else if (userRole === 'cashier') roleLabel = "Cajero";
+
+    return {
+      userId: auth.currentUser?.uid || 'unknown',
+      userName: waiterName,
+      userRole: roleLabel
+    };
+  };
+
   const dragCart = useDraggable();
   const [categories, setCategories] = useState<Category[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -316,6 +346,17 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
         // conservamos ese estado general de la orden. Cocina de todas maneras verá los nuevos 
         // platillos agregados con estado 'pending' e indicador visual de "NUEVO".
         orderData.status = editingOrderStatus === 'preparing' ? 'preparing' : (editingOrderStatus === 'ready' ? 'ready' : 'pending');
+        
+        const userInfo = getLoggedUserForLog();
+        const updateLog = {
+          action: 'Actualización de pedido',
+          timestamp: new Date().toISOString(),
+          userId: userInfo.userId,
+          userName: userInfo.userName,
+          userRole: userInfo.userRole
+        };
+        orderData.movementLogs = arrayUnion(updateLog);
+
         await updateDoc(doc(db, "orders", editingOrderId), orderData);
         toast.success("Pedido actualizado y enviado a cocina");
       } else {
@@ -347,26 +388,21 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
         const paddedConsecutive = consecutive.toString().padStart(3, '0');
         const tableStr = isTakeaway ? 'LL' : tableNumber;
 
-        let waiterName = "Mesero";
-        try {
-          const posUserStr = localStorage.getItem('posUser');
-          if (posUserStr) {
-            const parsed = JSON.parse(posUserStr);
-            if (parsed && parsed.name) {
-              waiterName = parsed.name;
-            }
-          } else {
-            waiterName = auth.currentUser.displayName || auth.currentUser.email || "Mesero";
-          }
-        } catch (e) {
-          waiterName = auth.currentUser.displayName || auth.currentUser.email || "Mesero";
-        }
+        const userInfo = getLoggedUserForLog();
+        const initialLog = {
+          action: 'Creación de pedido',
+          timestamp: new Date().toISOString(),
+          userId: userInfo.userId,
+          userName: userInfo.userName,
+          userRole: userInfo.userRole
+        };
 
         orderData.folio = `${dayLetter}${hours}${minutes}-${tableStr}-${paddedConsecutive}`;
         orderData.status = 'pending';
         orderData.createdAt = new Date().toISOString();
         orderData.waiterId = auth.currentUser.uid;
-        orderData.waiterName = waiterName;
+        orderData.waiterName = userInfo.userName;
+        orderData.movementLogs = [initialLog];
         
         await addDoc(collection(db, "orders"), orderData);
         toast.success("Pedido enviado a cocina");
@@ -390,9 +426,19 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
   const handleCancelActiveOrder = async () => {
     if (!editingOrderId) return;
     try {
+      const userInfo = getLoggedUserForLog();
+      const cancelLog = {
+        action: 'Cancelación de pedido (Mesero)',
+        timestamp: new Date().toISOString(),
+        userId: userInfo.userId,
+        userName: userInfo.userName,
+        userRole: userInfo.userRole
+      };
+
       await updateDoc(doc(db, "orders", editingOrderId), {
         status: 'cancelled',
-        updatedAt: new Date().toISOString()
+        updatedAt: new Date().toISOString(),
+        movementLogs: arrayUnion(cancelLog)
       });
       toast.success("Pedido cancelado correctamente");
       

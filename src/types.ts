@@ -47,6 +47,14 @@ export type OrderStatus = 'pending' | 'preparing' | 'ready' | 'served' | 'paid' 
 
 export type PaymentMethod = 'cash' | 'card' | 'transfer' | 'credit';
 
+export interface OrderMovementLog {
+  action: string;
+  timestamp: string;
+  userId: string;
+  userName: string;
+  userRole: string;
+}
+
 export interface Order {
   id: string;
   folio?: string;
@@ -72,6 +80,7 @@ export interface Order {
   waiterName: string;
   notes?: string;
   whatsAppConfirmed?: boolean;
+  movementLogs?: OrderMovementLog[];
 }
 
 export type CashLogType = 'opening' | 'closing' | 'expense' | 'income';

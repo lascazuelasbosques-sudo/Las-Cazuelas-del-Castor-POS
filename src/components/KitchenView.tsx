@@ -3,8 +3,8 @@ import { Card, CardContent, CardHeader, CardFooter } from "./Card";
 import { Button } from "./Button";
 import { Order, OrderStatus, OrderItem, Product } from "@/src/types";
 import { Clock, CheckCircle2, PlayCircle, ClipboardList, PlusCircle, Trash2, Ban, X, XCircle, Bell, BellOff, Volume2, VolumeX, Smartphone, Music, FileAudio, Search, Play, Pause, Plus, FolderOpen, ListMusic, Globe, Save } from "lucide-react";
-import { db } from "../firebase";
-import { collection, onSnapshot, query, where, orderBy, doc, updateDoc, addDoc } from "firebase/firestore";
+import { db, auth } from "../firebase";
+import { collection, onSnapshot, query, where, orderBy, doc, updateDoc, addDoc, arrayUnion } from "firebase/firestore";
 import { cn, customRound } from "@/src/lib/utils";
 import toast from "react-hot-toast";
 import { handleFirestoreError, OperationType } from "@/src/lib/firestoreErrorHandler";
@@ -129,6 +129,36 @@ function deleteSongFromDB(id: string): Promise<void> {
 }
 
 export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrders }: KitchenViewProps) => {
+  const getLoggedUserForLog = () => {
+    let waiterName = "Personal de Cocina";
+    try {
+      const posUserStr = localStorage.getItem('posUser');
+      if (posUserStr) {
+        const parsed = JSON.parse(posUserStr);
+        if (parsed && parsed.name) {
+          waiterName = parsed.name;
+        }
+      } else {
+        waiterName = auth.currentUser?.displayName || auth.currentUser?.email || "Personal de Cocina";
+      }
+    } catch (e) {
+      waiterName = auth.currentUser?.displayName || auth.currentUser?.email || "Personal de Cocina";
+    }
+
+    let roleLabel = "Cocina";
+    if (userRole === 'admin') roleLabel = "Administrador";
+    else if (userRole === 'waiter') roleLabel = "Mesero";
+    else if (userRole === 'kitchen') roleLabel = "Cocina";
+    else if (userRole === 'parrilla') roleLabel = "Parrilla";
+    else if (userRole === 'cashier') roleLabel = "Cajero";
+
+    return {
+      userId: auth.currentUser?.uid || 'unknown',
+      userName: waiterName,
+      userRole: roleLabel
+    };
+  };
+
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeStation, setActiveStation] = useState<'all' | 'plancha' | 'cocina'>(() => {
@@ -960,6 +990,16 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
         updateData.items = sanitizeItemsForFirestore(updatedItems);
         updateData.status = 'preparing';
 
+        const userInfo = getLoggedUserForLog();
+        const movementLog = {
+          action: `Inicia preparación en ${station === 'plancha' ? 'Parrilla' : 'Cocina'}`,
+          timestamp: new Date().toISOString(),
+          userId: userInfo.userId,
+          userName: userInfo.userName,
+          userRole: userInfo.userRole
+        };
+        updateData.movementLogs = arrayUnion(movementLog);
+
         await updateDoc(doc(db, "orders", orderId), updateData);
         toast.success(`Comanda de ${station === 'plancha' ? 'Parrilla' : 'Cocina'} en preparación`);
       } else if (action === 'finish_station') {
@@ -992,6 +1032,16 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
         if (allCompleted) {
           updateData.status = 'ready';
         }
+
+        const userInfo = getLoggedUserForLog();
+        const movementLog = {
+          action: `Termina preparación en ${station === 'plancha' ? 'Parrilla' : 'Cocina'}${allCompleted ? ' (Comanda Lista)' : ''}`,
+          timestamp: new Date().toISOString(),
+          userId: userInfo.userId,
+          userName: userInfo.userName,
+          userRole: userInfo.userRole
+        };
+        updateData.movementLogs = arrayUnion(movementLog);
 
         await updateDoc(doc(db, "orders", orderId), updateData);
         if (updateData.status === 'ready') {
@@ -1033,6 +1083,16 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
         // If an item is being marked completed, the order should at least be in 'preparing'
         updateData.status = 'preparing';
       }
+
+      const userInfo = getLoggedUserForLog();
+      const movementLog = {
+        action: `Artículo '${order.items[originalIndex].name}' marcado como ${newStatus === 'completed' ? 'Listo' : 'En preparación'}`,
+        timestamp: new Date().toISOString(),
+        userId: userInfo.userId,
+        userName: userInfo.userName,
+        userRole: userInfo.userRole
+      };
+      updateData.movementLogs = arrayUnion(movementLog);
 
       await updateDoc(doc(db, "orders", orderId), updateData);
       if (updateData.status === 'ready') {
@@ -1083,6 +1143,16 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
         }
       }
 
+      const userInfo = getLoggedUserForLog();
+      const movementLog = {
+        action: `Artículo '${itemToCancel.name}' cancelado de la comanda`,
+        timestamp: new Date().toISOString(),
+        userId: userInfo.userId,
+        userName: userInfo.userName,
+        userRole: userInfo.userRole
+      };
+      updateData.movementLogs = arrayUnion(movementLog);
+
       await updateDoc(doc(db, "orders", orderId), updateData);
       if (updateData.status === 'ready') {
         await notifyWhatsAppReady(orderId, order);
@@ -1110,6 +1180,16 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
         subtotal: 0,
         total: 0
       };
+
+      const userInfo = getLoggedUserForLog();
+      const movementLog = {
+        action: `Comanda cancelada por completo`,
+        timestamp: new Date().toISOString(),
+        userId: userInfo.userId,
+        userName: userInfo.userName,
+        userRole: userInfo.userRole
+      };
+      updateData.movementLogs = arrayUnion(movementLog);
 
       await updateDoc(doc(db, "orders", orderId), updateData);
       toast.success(`Comanda de Mesa ${order.tableNumber} ha sido cancelada por completo`);
@@ -1172,6 +1252,15 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
 
       const sanitizedItems = sanitizeItemsForFirestore(updatedItems);
 
+      const userInfo = getLoggedUserForLog();
+      const movementLog = {
+        action: `Agregado directo en cocina: ${quantity}x ${product.name}`,
+        timestamp: new Date().toISOString(),
+        userId: userInfo.userId,
+        userName: userInfo.userName,
+        userRole: userInfo.userRole
+      };
+
       // We update the order in Firestore.
       const orderRef = doc(db, "orders", latestOrder.id);
       await updateDoc(orderRef, {
@@ -1180,7 +1269,8 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
         total: newTotal,
         // Conservar 'preparing' si ya estaba en preparación, de lo contrario 'pending'
         status: latestOrder.status === 'preparing' ? 'preparing' : 'pending',
-        updatedAt: new Date().toISOString()
+        updatedAt: new Date().toISOString(),
+        movementLogs: arrayUnion(movementLog)
       });
 
       toast.success(`Agregado: ${quantity}x ${product.name}`);
