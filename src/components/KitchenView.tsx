@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardHeader, CardFooter } from "./Card";
 import { Button } from "./Button";
 import { Order, OrderStatus, OrderItem, Product } from "@/src/types";
-import { Clock, CheckCircle2, PlayCircle, ClipboardList, PlusCircle, Trash2, Ban, X, XCircle, Bell, BellOff, Volume2, VolumeX, Smartphone, Music, FileAudio, Search, Play, Pause, Plus, FolderOpen, ListMusic, Globe, Save } from "lucide-react";
+import { Clock, CheckCircle2, PlayCircle, ClipboardList, PlusCircle, Trash2, Ban, X, XCircle, Bell, BellOff, Volume2, VolumeX, Smartphone, Music, FileAudio, Search, Play, Pause, Plus, FolderOpen, ListMusic, Globe, Save, Shuffle } from "lucide-react";
 import { db, auth } from "../firebase";
 import { collection, onSnapshot, query, where, orderBy, doc, updateDoc, addDoc, arrayUnion } from "firebase/firestore";
 import { cn, customRound } from "@/src/lib/utils";
@@ -242,6 +242,20 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
 
   // Random track selection state for celular music play
   const [currentRandomFileIndex, setCurrentRandomFileIndex] = useState<number>(-1);
+
+  const [isShuffleEnabled, setIsShuffleEnabled] = useState<boolean>(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("is_shuffle_enabled") === "true";
+    }
+    return false;
+  });
+
+  const [flashlightEnabled, setFlashlightEnabled] = useState<boolean>(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("flashlight_enabled") === "true"; // Defaults to false per 'apaga la linterna' request, unless explicitly turned on
+    }
+    return false;
+  });
 
   // Music Explorer states
   const [musicSearchQuery, setMusicSearchQuery] = useState<string>("");
@@ -536,6 +550,11 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
   const getPrepAudioUrl = () => {
     if (prepSongType === 'file') {
       if (uploadedFiles.length > 0) {
+        // If shuffle is NOT enabled, try to find and play the specific selected song first
+        if (!isShuffleEnabled && prepSongPreset) {
+          const found = uploadedFiles.find(p => p.id === prepSongPreset);
+          if (found) return found.url;
+        }
         const idx = currentRandomFileIndex >= 0 && currentRandomFileIndex < uploadedFiles.length ? currentRandomFileIndex : 0;
         return uploadedFiles[idx]?.url || "";
       }
@@ -558,6 +577,10 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
 
   const getPrepSongFileName = () => {
     if (prepSongType === 'file' && uploadedFiles.length > 0) {
+      if (!isShuffleEnabled && prepSongPreset) {
+        const found = uploadedFiles.find(p => p.id === prepSongPreset);
+        if (found) return `📱 ${found.name}`;
+      }
       const idx = currentRandomFileIndex >= 0 && currentRandomFileIndex < uploadedFiles.length ? currentRandomFileIndex : 0;
       return `📱 [Aleatorio] ${uploadedFiles[idx]?.name || ""}`;
     }
@@ -930,9 +953,9 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
     }
   };
 
-  // Synchronize physical torch with high-speed flashState (turned off when preparation starts)
+  // Synchronize physical torch with high-speed flashState (turned off when preparation starts or flashlight is disabled)
   useEffect(() => {
-    if (isAlerting && kitchenSoundEnabled && !isPreparing) {
+    if (isAlerting && kitchenSoundEnabled && flashlightEnabled && !isPreparing) {
       togglePhysicalTorch(flashState);
     } else {
       togglePhysicalTorch(false);
@@ -940,7 +963,7 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
     return () => {
       togglePhysicalTorch(false);
     };
-  }, [flashState, isAlerting, kitchenSoundEnabled, isPreparing]);
+  }, [flashState, isAlerting, kitchenSoundEnabled, flashlightEnabled, isPreparing]);
 
   // Trigger test alerts
   const triggerTestAlert = () => {
@@ -1344,21 +1367,39 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
           } catch (e) {}
         }
         const audio = new Audio(audioUrl);
-        // Loop standard preset or url streams, but do not loop multiple loaded celular files
-        audio.loop = prepSongType !== 'file' || uploadedFiles.length <= 1;
+        // Loop ONLY if shuffle is disabled, or if we have fewer than 2 songs to shuffle
+        audio.loop = !isShuffleEnabled || (prepSongType === 'file' && uploadedFiles.length <= 1);
         audio.volume = 0.5;
 
-        if (prepSongType === 'file' && uploadedFiles.length > 1) {
-          audio.onended = () => {
-            let nextIndex = Math.floor(Math.random() * uploadedFiles.length);
-            let attempts = 0;
-            while (nextIndex === currentRandomFileIndex && attempts < 10) {
-              nextIndex = Math.floor(Math.random() * uploadedFiles.length);
-              attempts++;
+        audio.onended = () => {
+          if (isShuffleEnabled) {
+            if (prepSongType === 'file' && uploadedFiles.length > 1) {
+              let nextIndex = Math.floor(Math.random() * uploadedFiles.length);
+              let attempts = 0;
+              while (nextIndex === currentRandomFileIndex && attempts < 10) {
+                nextIndex = Math.floor(Math.random() * uploadedFiles.length);
+                attempts++;
+              }
+              const nextSong = uploadedFiles[nextIndex];
+              if (nextSong) {
+                setCurrentRandomFileIndex(nextIndex);
+                setPrepSongPreset(nextSong.id);
+                setPrepSongFileName(nextSong.name);
+                localStorage.setItem("prep_song_preset", nextSong.id);
+                localStorage.setItem("prep_song_file_name", nextSong.name);
+              }
+            } else if (prepSongType === 'preset') {
+              let nextIndex = Math.floor(Math.random() * PRESET_SONGS.length);
+              const nextSong = PRESET_SONGS[nextIndex];
+              if (nextSong) {
+                setPrepSongPreset(nextSong.id);
+                setPrepSongFileName(nextSong.name);
+                localStorage.setItem("prep_song_preset", nextSong.id);
+                localStorage.setItem("prep_song_file_name", nextSong.name);
+              }
             }
-            setCurrentRandomFileIndex(nextIndex);
-          };
-        }
+          }
+        };
 
         preparationAudioRef.current = audio;
       }
@@ -1374,7 +1415,7 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
         } catch (e) {}
       }
     }
-  }, [shouldPlayMusic, prepSongType, prepSongPreset, prepSongUrl, prepSongLocalUrl, kitchenSoundEnabled, prepMusicMuted, currentRandomFileIndex, uploadedFiles]);
+  }, [shouldPlayMusic, prepSongType, prepSongPreset, prepSongUrl, prepSongLocalUrl, kitchenSoundEnabled, prepMusicMuted, currentRandomFileIndex, uploadedFiles, isShuffleEnabled]);
 
   useEffect(() => {
     return () => {
@@ -1717,6 +1758,31 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
                 </button>
               </div>
 
+              {/* 2.5. PHYSICAL FLASHLIGHT TORCH TOGGLE */}
+              <div className="flex items-center justify-between p-3 rounded-2xl bg-stone-50 border border-stone-100">
+                <div className="space-y-0.5">
+                  <p className="text-xs font-black text-stone-800 uppercase tracking-wide">Linterna de Cámara (Física)</p>
+                  <p className="text-[9px] text-stone-500 font-medium">Usa la linterna LED física del celular en alertas</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const nextVal = !flashlightEnabled;
+                    setFlashlightEnabled(nextVal);
+                    localStorage.setItem("flashlight_enabled", String(nextVal));
+                    toast.success(nextVal ? "Linterna física activada para alertas" : "Linterna física desactivada");
+                  }}
+                  className={cn(
+                    "px-3 py-1.5 font-extrabold text-[9px] uppercase tracking-wider rounded-xl transition-all border flex items-center gap-1 cursor-pointer",
+                    flashlightEnabled 
+                      ? "bg-amber-500 text-white border-amber-600 hover:bg-amber-600" 
+                      : "bg-stone-100 text-stone-500 border-stone-200 hover:bg-stone-200"
+                  )}
+                >
+                  🔦 {flashlightEnabled ? "LINTERNA ACTIVADA" : "LINTERNA APAGADA"}
+                </button>
+              </div>
+
               {/* 3. TEST ALERT BUTTON */}
               <div className="flex items-center justify-between p-3 rounded-2xl bg-stone-50 border border-stone-100">
                 <div className="space-y-0.5">
@@ -1831,7 +1897,7 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
             </div>
 
             {/* Quick Playback & Mute Status Bar */}
-            <div className="mb-4 p-3 rounded-2xl bg-stone-50 border border-stone-150 flex flex-col gap-2 shrink-0">
+            <div className="mb-4 p-3 rounded-2xl bg-stone-50 border border-stone-150 flex flex-col gap-2.5 shrink-0">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <span className={cn(
@@ -1869,6 +1935,34 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
                       🔊 Sonando
                     </>
                   )}
+                </button>
+              </div>
+
+              {/* Shuffle / Reproducción Aleatoria Toggle */}
+              <div className="flex items-center justify-between border-t border-stone-200/60 pt-2.5 mt-0.5">
+                <div className="flex items-center gap-2">
+                  <Shuffle className={cn("text-stone-500", isShuffleEnabled && "text-amber-600 animate-pulse")} size={14} />
+                  <div>
+                    <span className="text-[10px] font-black uppercase tracking-wide text-stone-700 block">Modo Aleatorio (Shuffle)</span>
+                    <span className="text-[8px] text-stone-500 font-bold">Cambia de canción automáticamente</span>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const nextVal = !isShuffleEnabled;
+                    setIsShuffleEnabled(nextVal);
+                    localStorage.setItem("is_shuffle_enabled", String(nextVal));
+                    toast.success(nextVal ? "Reproducción aleatoria (Shuffle) activada" : "Reproducción aleatoria desactivada");
+                  }}
+                  className={cn(
+                    "px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-wider border transition-all cursor-pointer flex items-center gap-1",
+                    isShuffleEnabled 
+                      ? "bg-amber-500 text-white border-amber-600 hover:bg-amber-600 shadow-sm shadow-amber-500/10" 
+                      : "bg-white text-stone-600 border-stone-200 hover:bg-stone-100"
+                  )}
+                >
+                  {isShuffleEnabled ? "🔀 SHUFFLE ON" : "🔁 REPETIR SENCILLA"}
                 </button>
               </div>
             </div>
