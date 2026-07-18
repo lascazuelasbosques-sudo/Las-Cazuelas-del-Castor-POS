@@ -240,6 +240,9 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
     return false;
   });
 
+  // Random track selection state for celular music play
+  const [currentRandomFileIndex, setCurrentRandomFileIndex] = useState<number>(-1);
+
   // Music Explorer states
   const [musicSearchQuery, setMusicSearchQuery] = useState<string>("");
   const [selectedGenreTab, setSelectedGenreTab] = useState<string>("all");
@@ -302,6 +305,15 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
       });
     };
   }, []);
+
+  // Sync / randomize index for Celular music
+  useEffect(() => {
+    if (prepSongType === 'file' && uploadedFiles.length > 0) {
+      if (currentRandomFileIndex < 0 || currentRandomFileIndex >= uploadedFiles.length) {
+        setCurrentRandomFileIndex(Math.floor(Math.random() * uploadedFiles.length));
+      }
+    }
+  }, [prepSongType, uploadedFiles, currentRandomFileIndex]);
 
   // State to track a direct list item play/pause preview
   const [previewingSongId, setPreviewingSongId] = useState<string | null>(null);
@@ -523,6 +535,10 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
 
   const getPrepAudioUrl = () => {
     if (prepSongType === 'file') {
+      if (uploadedFiles.length > 0) {
+        const idx = currentRandomFileIndex >= 0 && currentRandomFileIndex < uploadedFiles.length ? currentRandomFileIndex : 0;
+        return uploadedFiles[idx]?.url || "";
+      }
       return prepSongLocalUrl || "";
     }
     if (prepSongType === 'url') {
@@ -538,6 +554,14 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
 
     const found = PRESET_SONGS.find(p => p.id === prepSongPreset);
     return found ? found.url : PRESET_SONGS[0].url;
+  };
+
+  const getPrepSongFileName = () => {
+    if (prepSongType === 'file' && uploadedFiles.length > 0) {
+      const idx = currentRandomFileIndex >= 0 && currentRandomFileIndex < uploadedFiles.length ? currentRandomFileIndex : 0;
+      return `📱 [Aleatorio] ${uploadedFiles[idx]?.name || ""}`;
+    }
+    return prepSongFileName;
   };
 
   const prevPendingTicketIdsRef = useRef<string[]>([]);
@@ -1320,8 +1344,22 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
           } catch (e) {}
         }
         const audio = new Audio(audioUrl);
-        audio.loop = true;
+        // Loop standard preset or url streams, but do not loop multiple loaded celular files
+        audio.loop = prepSongType !== 'file' || uploadedFiles.length <= 1;
         audio.volume = 0.5;
+
+        if (prepSongType === 'file' && uploadedFiles.length > 1) {
+          audio.onended = () => {
+            let nextIndex = Math.floor(Math.random() * uploadedFiles.length);
+            let attempts = 0;
+            while (nextIndex === currentRandomFileIndex && attempts < 10) {
+              nextIndex = Math.floor(Math.random() * uploadedFiles.length);
+              attempts++;
+            }
+            setCurrentRandomFileIndex(nextIndex);
+          };
+        }
+
         preparationAudioRef.current = audio;
       }
 
@@ -1336,7 +1374,7 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
         } catch (e) {}
       }
     }
-  }, [shouldPlayMusic, prepSongType, prepSongPreset, prepSongUrl, prepSongLocalUrl, kitchenSoundEnabled, prepMusicMuted]);
+  }, [shouldPlayMusic, prepSongType, prepSongPreset, prepSongUrl, prepSongLocalUrl, kitchenSoundEnabled, prepMusicMuted, currentRandomFileIndex, uploadedFiles]);
 
   useEffect(() => {
     return () => {
@@ -1803,7 +1841,7 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
                   <div className="text-[10px] leading-tight">
                     <span className="font-bold text-stone-500 uppercase tracking-wider block">Sonido Activo:</span>
                     <span className="font-black text-stone-850 uppercase max-w-[200px] truncate block">
-                      {prepSongFileName ? prepSongFileName : "Canción por Defecto"}
+                      {getPrepSongFileName() ? getPrepSongFileName() : "Canción por Defecto"}
                     </span>
                   </div>
                 </div>
