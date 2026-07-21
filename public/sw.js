@@ -67,17 +67,22 @@ self.addEventListener('push', (event) => {
     data = { title: 'Radio Las Cazuelas', body: event.data ? event.data.text() : 'Nuevo mensaje de radio' };
   }
 
-  const title = data.title || '📻 Radio Las Cazuelas';
+  const title = data.title || '🚨 ¡ALERTA LAS CAZUELAS!';
   const options = {
-    body: data.body || 'Nuevo mensaje o comanda recibida en segundo plano.',
+    body: data.body || 'Nueva comanda o transmisión de radio recibida.',
     icon: '/logo_las_cazuelas_del_castor.jpg',
     badge: '/logo_las_cazuelas_del_castor.jpg',
-    vibrate: [300, 100, 300, 100, 400],
+    vibrate: [800, 200, 800, 200, 1200, 300, 1200],
     renotify: true,
-    tag: data.tag || 'walkie-talkie-msg',
+    requireInteraction: true, // Mantener notificación visible en pantalla de bloqueo
+    silent: false,
+    tag: data.tag || 'cazuelas-alert-' + Date.now(),
     data: {
       url: data.url || self.registration.scope
-    }
+    },
+    actions: [
+      { action: 'open', title: '📲 Abrir Aplicación' }
+    ]
   };
 
   event.waitUntil(self.registration.showNotification(title, options));
@@ -91,14 +96,19 @@ self.addEventListener('message', (event) => {
       body: body || 'Alguien está transmitiendo en el Walkie-Talkie...',
       icon: icon || '/logo_las_cazuelas_del_castor.jpg',
       badge: '/logo_las_cazuelas_del_castor.jpg',
-      vibrate: [200, 100, 200, 100, 200],
-      tag: tag || 'walkie-talkie-msg',
+      vibrate: [800, 200, 800, 200, 1200, 300, 1200],
+      tag: tag || 'cazuelas-radio-' + Date.now(),
       renotify: true,
+      requireInteraction: true, // Forzar que no se apague la alerta en reposo
+      silent: false,
       data: {
         url: self.registration.scope
-      }
+      },
+      actions: [
+        { action: 'open', title: '📻 Abrir Radio' }
+      ]
     };
-    self.registration.showNotification(title || '📻 Transmisión de Radio', options);
+    self.registration.showNotification(title || '🚨 Transmisión de Radio', options);
   }
 });
 

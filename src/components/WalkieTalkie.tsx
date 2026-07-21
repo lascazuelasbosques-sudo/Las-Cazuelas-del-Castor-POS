@@ -504,6 +504,13 @@ export function WalkieTalkie({ posUser, isOpen, setIsOpen }: WalkieTalkieProps) 
     setIncomingActive(true);
     setActiveSpeaker({ name: msg.senderName, role: msg.senderRole, text: msg.text });
 
+    // Direct Device Physical Vibration to wake up smartphone in pocket/sleep mode
+    if (typeof window !== "undefined" && "vibrate" in navigator) {
+      try {
+        navigator.vibrate([600, 150, 600, 150, 1000]);
+      } catch (ve) {}
+    }
+
     // Background notification via Service Worker & Web Notifications
     if ('Notification' in window && Notification.permission === 'granted' && senderRole !== 'admin' && posUser?.role !== 'admin') {
       const title = `📻 Radio: ${msg.senderName}`;
@@ -516,9 +523,11 @@ export function WalkieTalkie({ posUser, isOpen, setIsOpen }: WalkieTalkieProps) 
             body,
             icon: '/logo_las_cazuelas_del_castor.jpg',
             badge: '/logo_las_cazuelas_del_castor.jpg',
-            tag: 'walkie-talkie-msg',
-            vibrate: [200, 100, 200, 100, 200],
+            tag: 'walkie-talkie-msg-' + Date.now(),
+            vibrate: [800, 200, 800, 200, 1200, 300, 1200],
             renotify: true,
+            requireInteraction: true, // Wake up screen in sleep mode
+            silent: false,
             data: { url: window.location.href }
           } as any).catch(err => console.warn('SW notification error:', err));
         }).catch(() => {
@@ -527,7 +536,8 @@ export function WalkieTalkie({ posUser, isOpen, setIsOpen }: WalkieTalkieProps) 
               body,
               icon: '/logo_las_cazuelas_del_castor.jpg',
               tag: 'walkie-talkie',
-              silent: false
+              silent: false,
+              requireInteraction: true
             });
             n.onclick = () => { window.focus(); n.close(); };
           }
@@ -537,7 +547,8 @@ export function WalkieTalkie({ posUser, isOpen, setIsOpen }: WalkieTalkieProps) 
           body,
           icon: '/logo_las_cazuelas_del_castor.jpg',
           tag: 'walkie-talkie',
-          silent: false
+          silent: false,
+          requireInteraction: true
         });
         n.onclick = () => { window.focus(); n.close(); };
       }

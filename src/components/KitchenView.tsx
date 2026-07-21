@@ -1601,6 +1601,13 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
               : `Mesa ${foundTicket.order.tableNumber || ""}`;
             
             try {
+              // Direct Device Physical Vibration to wake up smartphone in pocket/sleep mode
+              if (typeof window !== "undefined" && "vibrate" in navigator) {
+                try {
+                  navigator.vibrate([800, 200, 800, 200, 1200, 300, 1200]);
+                } catch (ve) {}
+              }
+
               const title = `🍳 ¡NUEVA COMANDA EN ${stationName.toUpperCase()}!`;
               const body = `Comanda de ${orderInfo}. Inicia preparación para silenciar el buzzer.`;
 
@@ -1611,8 +1618,10 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
                     icon: '/logo_las_cazuelas_del_castor.jpg',
                     badge: '/logo_las_cazuelas_del_castor.jpg',
                     tag: `new-ticket-${id}`,
-                    vibrate: [300, 100, 300, 100, 400],
+                    vibrate: [800, 200, 800, 200, 1200, 300, 1200],
                     renotify: true,
+                    requireInteraction: true, // Mantiene la notificación despertando la pantalla
+                    silent: false,
                     data: { url: window.location.href }
                   } as any).catch(err => console.warn("SW notification error:", err));
                 }).catch(() => {
