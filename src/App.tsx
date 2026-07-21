@@ -184,13 +184,13 @@ export default function App() {
     // Test Firestore connection
     const testConnection = async () => {
       try {
-        await getDoc(doc(db, 'test', 'connection'));
-        console.log("Conexión con Firestore verificada");
-      } catch (error: any) {
-        if (error?.message?.includes('offline') || error?.code === 'unavailable') {
-          console.warn("Modo Sin Conexión: Firestore funcionando en caché local offline.");
+        await getDocFromServer(doc(db, 'test', 'connection'));
+        console.log("Firestore connection successful");
+      } catch (error) {
+        if(error instanceof Error && error.message.includes('the client is offline')) {
+          console.error("Please check your Firebase configuration. The client is offline.");
         } else {
-          console.log("Comprobación de Firestore completada.");
+          console.log("Firestore connection test completed (expected missing doc error).");
         }
       }
     };
@@ -250,48 +250,22 @@ export default function App() {
         }
 
         const userRef = doc(db, 'users', user.uid);
-        let userDocSnap;
-        try {
-          userDocSnap = await getDoc(userRef);
-        } catch (fetchErr: any) {
-          console.warn("Offline user doc fetch fallback:", fetchErr?.message || fetchErr);
-        }
-
-        if (userDocSnap && userDocSnap.exists()) {
-          const data = userDocSnap.data();
-          if (!localStorage.getItem('posUser')) {
-            setUserRole(data.role || 'waiter');
-          }
-        } else if (!userDocSnap) {
-          // Offline fallback when network fails
-          const savedRole = localStorage.getItem('userRole') || 'waiter';
-          if (!localStorage.getItem('posUser')) {
-            setUserRole(savedRole);
-          }
-        } else {
+        const userDoc = await getDoc(userRef);
+        
+        if (!userDoc.exists()) {
           // Check if this is the first user to bootstrap admin
-          let isFirstUser = false;
-          try {
-            const usersSnap = await getDocs(query(collection(db, 'users'), limit(1)));
-            isFirstUser = usersSnap.empty;
-          } catch (snapErr) {
-            console.warn("Offline check for first user skipped:", snapErr);
-          }
-
+          const usersSnap = await getDocs(query(collection(db, 'users'), limit(1)));
+          const isFirstUser = usersSnap.empty;
+          
           const defaultRole = (user.email === 'lascazuelasbosques@gmail.com' || isFirstUser) ? 'admin' : 'waiter';
           
-          try {
-            await setDoc(userRef, {
-              name: user.displayName || user.email?.split('@')[0] || (isFirstUser ? 'Admin Inicial' : 'Usuario'),
-              email: user.email || '',
-              role: defaultRole,
-              active: true,
-              pin: '0000'
-            });
-          } catch (setErr) {
-            console.warn("Offline setDoc userRef skipped:", setErr);
-          }
-
+          await setDoc(userRef, {
+            name: user.displayName || user.email?.split('@')[0] || (isFirstUser ? 'Admin Inicial' : 'Usuario'),
+            email: user.email || '',
+            role: defaultRole,
+            active: true,
+            pin: '0000'
+          });
           // Only set role if not already set by POS user
           if (!localStorage.getItem('posUser')) {
             setUserRole(defaultRole);
@@ -299,26 +273,22 @@ export default function App() {
         }
 
         // Listen for role changes if this is the primary user
-        unsubUserDoc = onSnapshot(userRef, (docSnap) => {
-          if (docSnap.exists()) {
-            const data = docSnap.data();
+        unsubUserDoc = onSnapshot(userRef, (doc) => {
+          if (doc.exists()) {
+            const data = doc.data();
             // Only sync role if we don't have a POS user or if the POS user matches this UID
             if (!localStorage.getItem('posUser')) {
               setUserRole(data.role);
             }
           }
         }, (error) => {
-          console.warn("User doc snapshot notification (offline mode active):", error?.message || error);
+          console.error("Error in user doc snapshot:", error);
         });
 
         // Try to seed
-        try {
-          seedDatabase();
-        } catch (seedErr) {
-          console.warn("Seed skipped in offline mode:", seedErr);
-        }
+        seedDatabase();
       } catch (error) {
-        console.warn("Auth setup handled with offline fallback:", error);
+        console.error("Error in auth setup:", error);
       } finally {
         setLoading(false);
       }
