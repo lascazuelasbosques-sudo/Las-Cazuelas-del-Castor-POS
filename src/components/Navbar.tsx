@@ -6,6 +6,7 @@ import { auth, db } from "../firebase";
 import { collection, query, where, onSnapshot } from "firebase/firestore";
 import { Order } from "../types";
 import { useBranding } from "../lib/useBranding";
+import { PWAInstallBanner } from "./PWAInstallBanner";
 import toast from "react-hot-toast";
 
 interface NavbarProps {
@@ -321,6 +322,8 @@ export const Navbar = ({
 
         {/* Dynamic scroll indicators / Actions on mobile */}
         <div className="flex md:hidden items-center gap-1 pl-2 border-l border-stone-200 shrink-0">
+          <PWAInstallBanner compact />
+
           <button
             onClick={() => setIsWalkieOpen(!isWalkieOpen)}
             className={cn(

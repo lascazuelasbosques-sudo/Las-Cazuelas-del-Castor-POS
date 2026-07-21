@@ -6,6 +6,7 @@ import { Clock, CheckCircle2, PlayCircle, ClipboardList, PlusCircle, Trash2, Ban
 import { db, auth } from "../firebase";
 import { collection, onSnapshot, query, where, orderBy, doc, updateDoc, addDoc, arrayUnion } from "firebase/firestore";
 import { cn, customRound } from "@/src/lib/utils";
+import { PWAInstallBanner } from "./PWAInstallBanner";
 import toast from "react-hot-toast";
 import { handleFirestoreError, OperationType } from "@/src/lib/firestoreErrorHandler";
 
@@ -1600,11 +1601,26 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
               : `Mesa ${foundTicket.order.tableNumber || ""}`;
             
             try {
-              new Notification(`🍳 ¡NUEVA COMANDA EN ${stationName.toUpperCase()}!`, {
-                body: `Comanda de ${orderInfo}. Inicia preparación para silenciar el buzzer.`,
-                requireInteraction: true,
-                tag: `new-ticket-${id}`
-              });
+              const title = `🍳 ¡NUEVA COMANDA EN ${stationName.toUpperCase()}!`;
+              const body = `Comanda de ${orderInfo}. Inicia preparación para silenciar el buzzer.`;
+
+              if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.ready.then((reg) => {
+                  reg.showNotification(title, {
+                    body,
+                    icon: '/logo_las_cazuelas_del_castor.jpg',
+                    badge: '/logo_las_cazuelas_del_castor.jpg',
+                    tag: `new-ticket-${id}`,
+                    vibrate: [300, 100, 300, 100, 400],
+                    renotify: true,
+                    data: { url: window.location.href }
+                  } as any).catch(err => console.warn("SW notification error:", err));
+                }).catch(() => {
+                  new Notification(title, { body, tag: `new-ticket-${id}` });
+                });
+              } else {
+                new Notification(title, { body, tag: `new-ticket-${id}` });
+              }
             } catch (e) {
               console.error("Web Notification error on new ticket:", e);
             }
@@ -1861,6 +1877,9 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
             </div>
 
             <div className="space-y-4 overflow-y-auto flex-1 pr-1.5 scrollbar-thin pb-4">
+              {/* PWA Mobile App Install Section */}
+              <PWAInstallBanner />
+
               <p className="text-[10px] text-stone-500 font-bold uppercase tracking-widest leading-relaxed">
                 Control de vibrador, alarmas y destellos de luz para los nuevos pedidos de cocina.
               </p>

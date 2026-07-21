@@ -12,8 +12,10 @@ import {
   HelpCircle,
   AlertTriangle,
   Play,
-  Trash2
+  Trash2,
+  Smartphone
 } from "lucide-react";
+import { PWAInstallBanner } from "./PWAInstallBanner";
 import { 
   collection, 
   addDoc, 
@@ -502,16 +504,43 @@ export function WalkieTalkie({ posUser, isOpen, setIsOpen }: WalkieTalkieProps) 
     setIncomingActive(true);
     setActiveSpeaker({ name: msg.senderName, role: msg.senderRole, text: msg.text });
 
-    // Background notification if app is minimized
-    if (document.visibilityState === 'hidden' && 'Notification' in window && Notification.permission === 'granted' && senderRole !== 'admin' && posUser?.role !== 'admin') {
-      const n = new Notification(`Radio: ${msg.senderName}`, {
-        body: msg.text,
-        icon: '/logo_las_cazuelas_del_castor.jpg',
-        tag: 'walkie-talkie',
-        silent: false,
-        requireInteraction: true // Keep notification until user sees it
-      });
-      n.onclick = () => { window.focus(); n.close(); };
+    // Background notification via Service Worker & Web Notifications
+    if ('Notification' in window && Notification.permission === 'granted' && senderRole !== 'admin' && posUser?.role !== 'admin') {
+      const title = `📻 Radio: ${msg.senderName}`;
+      const body = msg.text;
+
+      // Try Service Worker registration first for background support on mobile
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.ready.then((reg) => {
+          reg.showNotification(title, {
+            body,
+            icon: '/logo_las_cazuelas_del_castor.jpg',
+            badge: '/logo_las_cazuelas_del_castor.jpg',
+            tag: 'walkie-talkie-msg',
+            vibrate: [200, 100, 200, 100, 200],
+            renotify: true,
+            data: { url: window.location.href }
+          } as any).catch(err => console.warn('SW notification error:', err));
+        }).catch(() => {
+          if (document.visibilityState === 'hidden') {
+            const n = new Notification(title, {
+              body,
+              icon: '/logo_las_cazuelas_del_castor.jpg',
+              tag: 'walkie-talkie',
+              silent: false
+            });
+            n.onclick = () => { window.focus(); n.close(); };
+          }
+        });
+      } else if (document.visibilityState === 'hidden') {
+        const n = new Notification(title, {
+          body,
+          icon: '/logo_las_cazuelas_del_castor.jpg',
+          tag: 'walkie-talkie',
+          silent: false
+        });
+        n.onclick = () => { window.focus(); n.close(); };
+      }
     }
 
     try {
@@ -853,6 +882,7 @@ export function WalkieTalkie({ posUser, isOpen, setIsOpen }: WalkieTalkieProps) 
               )}
             </div>
             <div className="flex items-center gap-2">
+              <PWAInstallBanner compact />
               <button 
                 onClick={() => setSoundEnabled(!soundEnabled)} 
                 className={`p-1 rounded-md transition-all active:scale-90 ${soundEnabled ? "text-emerald-400 hover:text-emerald-500" : "text-stone-600 hover:text-stone-500"}`}
