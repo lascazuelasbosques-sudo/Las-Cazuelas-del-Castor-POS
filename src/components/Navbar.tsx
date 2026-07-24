@@ -7,6 +7,7 @@ import { collection, query, where, onSnapshot } from "firebase/firestore";
 import { Order } from "../types";
 import { useBranding } from "../lib/useBranding";
 import { PWAInstallBanner } from "./PWAInstallBanner";
+import { WeatherClockWidget } from "./WeatherClockWidget";
 import toast from "react-hot-toast";
 
 interface NavbarProps {
@@ -322,6 +323,7 @@ export const Navbar = ({
 
         {/* Dynamic scroll indicators / Actions on mobile */}
         <div className="flex md:hidden items-center gap-1 pl-2 border-l border-stone-200 shrink-0">
+          <WeatherClockWidget compact />
           <PWAInstallBanner compact />
 
           <button
@@ -357,6 +359,14 @@ export const Navbar = ({
       </div>
 
       <div className="hidden md:mt-auto md:flex flex-col w-full gap-2 px-2 lg:px-4">
+        {/* Weather & Clock Widget for Desktop */}
+        <div className="hidden lg:block mb-1">
+          <WeatherClockWidget />
+        </div>
+        <div className="lg:hidden flex justify-center mb-1">
+          <WeatherClockWidget compact />
+        </div>
+
         <div className="p-2 lg:p-3 bg-stone-50 rounded-lg border border-stone-100 mb-2 flex items-center justify-center lg:justify-start">
           <div className="hidden lg:block w-full">
             <p className="text-xs text-stone-500">{getRoleLabel(userRole)}</p>

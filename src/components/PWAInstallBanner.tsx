@@ -98,6 +98,7 @@ export function PWAInstallBanner({ onDismiss, compact = false }: PWAInstallBanne
   };
 
   if (isStandalone) {
+    if (compact) return null;
     return (
       <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-950/80 text-emerald-300 border border-emerald-800/60 rounded-xl text-[10px] font-extrabold uppercase tracking-wide">
         <CheckCircle size={13} className="text-emerald-400" />
@@ -111,11 +112,11 @@ export function PWAInstallBanner({ onDismiss, compact = false }: PWAInstallBanne
       <>
         <button
           onClick={handleInstallClick}
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500 hover:bg-amber-600 active:scale-95 text-stone-950 font-black rounded-xl text-[10px] uppercase tracking-wider shadow-md transition-all cursor-pointer"
+          className="flex items-center gap-1 px-2 py-1 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 rounded-lg text-[10px] font-extrabold uppercase tracking-wider transition-all cursor-pointer shrink-0"
           title="Instalar App Móvil PWA"
         >
-          <Smartphone size={13} />
-          <span>Instalar App</span>
+          <Smartphone size={12} />
+          <span>App</span>
         </button>
 
         {showModal && (
