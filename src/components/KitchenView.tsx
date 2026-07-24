@@ -9,6 +9,7 @@ import { cn, customRound } from "@/src/lib/utils";
 import { PWAInstallBanner } from "./PWAInstallBanner";
 import toast from "react-hot-toast";
 import { handleFirestoreError, OperationType } from "@/src/lib/firestoreErrorHandler";
+import { checkIsBistec, analyzeMeatIngredients } from "@/src/lib/orderUtils";
 
 interface KitchenTicketItem extends OrderItem {
   originalIndex: number;
@@ -718,7 +719,8 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
 
     const planchaItems = itemsWithIndex.filter(i => {
       if (i.status === 'cancelled') return false;
-      if (i.station === 'plancha') return true;
+      const isBistec = checkIsBistec(i);
+      if (isBistec || i.station === 'plancha') return true;
       if (i.station === 'comun') {
         // Only route to plancha if plancha has active specific items and cocina does not
         return activePlanchaSpecific && !activeCocinaSpecific;
@@ -728,7 +730,15 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
 
     const cocinaItems = itemsWithIndex.filter(i => {
       if (i.status === 'cancelled') return false;
-      if (i.station === 'cocina' || !i.station) return true;
+      const isBistec = checkIsBistec(i);
+      if (i.station === 'plancha' && !isBistec) return false;
+
+      if (i.station === 'cocina' || !i.station || isBistec) {
+        if (i.station === 'plancha' && !i.name.toLowerCase().includes('chilaquiles') && !i.name.toLowerCase().includes('enchiladas') && !i.name.toLowerCase().includes('pambazo') && !i.name.toLowerCase().includes('gordita') && !i.name.toLowerCase().includes('comida') && !i.name.toLowerCase().includes('platillo') && !i.name.toLowerCase().includes('sopa') && !i.name.toLowerCase().includes('sopes')) {
+          return false;
+        }
+        return true;
+      }
       if (i.station === 'comun') {
         // Route to cocina if cocina has active specific items, or if both have active items (to avoid duplication), or if neither does
         return activeCocinaSpecific || !activePlanchaSpecific;
@@ -1179,12 +1189,15 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
         const updatedItems = order.items.map(item => {
           let belongsToStation = false;
           if (station === 'plancha') {
-            if (item.station === 'plancha') belongsToStation = true;
+            if (item.station === 'plancha' || checkIsBistec(item)) belongsToStation = true;
             else if (item.station === 'comun') {
               belongsToStation = activePlanchaSpecific && !activeCocinaSpecific;
             }
           } else if (station === 'cocina') {
             if (item.station === 'cocina' || !item.station) belongsToStation = true;
+            else if (checkIsBistec(item) && (item.name.toLowerCase().includes('chilaquiles') || item.name.toLowerCase().includes('enchiladas') || item.name.toLowerCase().includes('pambazo') || item.name.toLowerCase().includes('gordita') || item.name.toLowerCase().includes('comida') || item.name.toLowerCase().includes('platillo') || item.name.toLowerCase().includes('sopa') || item.name.toLowerCase().includes('sopes') || item.station === 'cocina')) {
+              belongsToStation = true;
+            }
             else if (item.station === 'comun') {
               belongsToStation = activeCocinaSpecific || !activePlanchaSpecific;
             }
@@ -1216,12 +1229,15 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
         const updatedItems = order.items.map(item => {
           let belongsToStation = false;
           if (station === 'plancha') {
-            if (item.station === 'plancha') belongsToStation = true;
+            if (item.station === 'plancha' || checkIsBistec(item)) belongsToStation = true;
             else if (item.station === 'comun') {
               belongsToStation = activePlanchaSpecific && !activeCocinaSpecific;
             }
           } else if (station === 'cocina') {
             if (item.station === 'cocina' || !item.station) belongsToStation = true;
+            else if (checkIsBistec(item) && (item.name.toLowerCase().includes('chilaquiles') || item.name.toLowerCase().includes('enchiladas') || item.name.toLowerCase().includes('pambazo') || item.name.toLowerCase().includes('gordita') || item.name.toLowerCase().includes('comida') || item.name.toLowerCase().includes('platillo') || item.name.toLowerCase().includes('sopa') || item.name.toLowerCase().includes('sopes') || item.station === 'cocina')) {
+              belongsToStation = true;
+            }
             else if (item.station === 'comun') {
               belongsToStation = activeCocinaSpecific || !activePlanchaSpecific;
             }
@@ -1422,13 +1438,14 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
       const latestOrder = orders.find(o => o.id === order.id) || order;
 
       const trimmedNotes = notes.trim();
+      const isBistec = checkIsBistec({ name: product.name, notes: trimmedNotes });
       const newItem: OrderItem = {
         productId: product.id,
         name: product.name,
         price: Number(product.price),
         quantity: Number(quantity),
         status: itemStatus,
-        station: station || product.station || 'cocina',
+        station: isBistec ? 'plancha' : (station || product.station || 'cocina'),
         hasExtraCheese: false
       };
 
@@ -2600,6 +2617,40 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
                               NUEVO
                             </span>
                           )}
+                          {(() => {
+                            const meatInfo = analyzeMeatIngredients(item);
+                            if (!meatInfo.isMeat) return null;
+
+                            if (meatInfo.isCampechano) {
+                              return (
+                                <span className="bg-red-700 text-white text-[7.5px] font-black uppercase px-1.5 py-0.5 rounded-md leading-none tracking-wider flex items-center gap-1 shrink-0 shadow-3xs border border-red-800 animate-pulse">
+                                  {meatInfo.badgeText}
+                                </span>
+                              );
+                            }
+                            if (meatInfo.isBistec) {
+                              return (
+                                <span className="bg-orange-600 text-white text-[7.5px] font-black uppercase px-1.5 py-0.5 rounded-md leading-none tracking-wider flex items-center gap-1 shrink-0 shadow-3xs">
+                                  🥩 BISTEC EN PARRILLA
+                                </span>
+                              );
+                            }
+                            if (meatInfo.isLonganiza) {
+                              return (
+                                <span className="bg-amber-700 text-white text-[7.5px] font-black uppercase px-1.5 py-0.5 rounded-md leading-none tracking-wider flex items-center gap-1 shrink-0 shadow-3xs">
+                                  🌭 LONGANIZA EN PARRILLA
+                                </span>
+                              );
+                            }
+                            if (meatInfo.isPollo) {
+                              return (
+                                <span className="bg-emerald-700 text-white text-[7.5px] font-black uppercase px-1.5 py-0.5 rounded-md leading-none tracking-wider flex items-center gap-1 shrink-0 shadow-3xs">
+                                  🍗 POLLO
+                                </span>
+                              );
+                            }
+                            return null;
+                          })()}
                         </div>
 
                         {/* HIGH CONTRAST NOTES ALERT BANNER */}

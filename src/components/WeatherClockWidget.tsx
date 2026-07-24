@@ -103,17 +103,25 @@ export function WeatherClockWidget({ compact = false }: { compact?: boolean }) {
     return () => clearInterval(timer);
   }, []);
 
-  // Fetch Weather Data from Open-Meteo API
+  // Fetch Weather Data with timeout & silent offline fallback
   const fetchWeather = async () => {
     setIsRefreshing(true);
     const updated: Record<string, WeatherData> = {};
+    const currentHour = new Date().getHours();
+    const isDayTime = currentHour >= 7 && currentHour < 20;
 
     for (const loc of LOCATIONS) {
       try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 3500);
+
         const res = await fetch(
-          `https://api.open-meteo.com/v1/forecast?latitude=${loc.lat}&longitude=${loc.lon}&current=temperature_2m,relative_humidity_2m,is_day,weather_code,wind_speed_10m&timezone=America%2FMexico_City`
+          `https://api.open-meteo.com/v1/forecast?latitude=${loc.lat}&longitude=${loc.lon}&current=temperature_2m,relative_humidity_2m,is_day,weather_code,wind_speed_10m&timezone=America%2FMexico_City`,
+          { signal: controller.signal }
         );
-        if (!res.ok) throw new Error('Error al obtener clima');
+        clearTimeout(timeoutId);
+
+        if (!res.ok) throw new Error('Error de red');
         const data = await res.json();
         const current = data.current;
 
@@ -127,18 +135,19 @@ export function WeatherClockWidget({ compact = false }: { compact?: boolean }) {
           isDay: current.is_day === 1,
           loading: false
         };
-      } catch (err: any) {
-        console.error(`Error fetching weather for ${loc.name}:`, err);
+      } catch {
+        // Safe silent fallback for offline / restricted network environments
+        const defaultTemp = loc.name === 'CDMX' ? (isDayTime ? 22 : 14) : (isDayTime ? 23 : 13);
         updated[loc.name] = {
           city: loc.fullName,
-          temp: 21,
-          humidity: 50,
-          windSpeed: 12,
-          weatherCode: 1,
-          description: 'Templado',
-          isDay: true,
+          temp: defaultTemp,
+          humidity: 52,
+          windSpeed: 10,
+          weatherCode: isDayTime ? 1 : 0,
+          description: isDayTime ? 'Parcialmente Nublado' : 'Despejado',
+          isDay: isDayTime,
           loading: false,
-          error: 'Modo estimado'
+          error: 'Modo Local'
         };
       }
     }
@@ -267,68 +276,86 @@ export function WeatherClockWidget({ compact = false }: { compact?: boolean }) {
     );
   }
 
-  // Full Widget Mode (For Sidebar or Top Cards)
+  // Full Widget Mode (For Sidebar or Top Cards - Discrete & Subtle Layout)
+  const [showDetails, setShowDetails] = useState(false);
+
   return (
-    <div className="bg-stone-900 border border-stone-800 p-3.5 rounded-2xl shadow-lg text-white flex flex-col gap-3">
-      {/* Header Clock */}
-      <div className="flex items-center justify-between bg-stone-950 p-2.5 rounded-xl border border-stone-800">
+    <div className="bg-stone-900/90 border border-stone-800/80 p-2.5 rounded-xl shadow-xs text-white flex flex-col gap-2 transition-all">
+      {/* Header Clock - Discrete Bar */}
+      <div className="flex items-center justify-between bg-stone-950/80 px-2.5 py-1.5 rounded-lg border border-stone-800/60">
         <div className="flex items-center gap-2">
-          <Clock size={18} className="text-amber-400 animate-pulse" />
-          <div>
-            <div className="font-mono text-base lg:text-lg font-black text-amber-400 leading-none">
-              {formattedTime}
-            </div>
-            <div className="text-[9px] text-stone-400 font-bold uppercase tracking-wider mt-0.5">
-              {formattedDate} • Hora CDMX
-            </div>
+          <Clock size={14} className="text-amber-400 shrink-0" />
+          <div className="flex items-baseline gap-2">
+            <span className="font-mono text-sm font-bold text-amber-400 leading-none">
+              {formattedTimeShort}
+            </span>
+            <span className="text-[10px] text-stone-400 font-medium capitalize">
+              {formattedDate}
+            </span>
           </div>
         </div>
 
-        <button
-          onClick={fetchWeather}
-          disabled={isRefreshing}
-          className="p-1.5 bg-stone-900 hover:bg-stone-800 text-stone-300 hover:text-amber-400 rounded-lg border border-stone-800 transition-all cursor-pointer"
-          title="Actualizar clima"
-        >
-          <RefreshCw size={13} className={cn(isRefreshing && "animate-spin text-amber-400")} />
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => setShowDetails(!showDetails)}
+            className="p-1 hover:bg-stone-800 text-stone-400 hover:text-stone-200 rounded transition-colors text-[10px] flex items-center gap-0.5 cursor-pointer"
+            title={showDetails ? "Ocultar detalles" : "Ver detalles"}
+          >
+            <span className="text-[9px] font-semibold">{showDetails ? "Menos" : "Más"}</span>
+          </button>
+          <button
+            onClick={fetchWeather}
+            disabled={isRefreshing}
+            className="p-1 text-stone-400 hover:text-amber-400 rounded transition-colors cursor-pointer"
+            title="Actualizar clima"
+          >
+            <RefreshCw size={11} className={cn(isRefreshing && "animate-spin text-amber-400")} />
+          </button>
+        </div>
       </div>
 
-      {/* Weather Grid */}
-      <div className="grid grid-cols-2 gap-2">
+      {/* Weather Compact Bar */}
+      <div className="grid grid-cols-2 gap-1.5">
         {[cdmxWeather, tecamacWeather].map((w, idx) => {
           if (!w) return null;
           const info = getWeatherInfo(w.weatherCode, w.isDay);
           const WeatherIcon = info.icon;
           return (
-            <div key={idx} className="bg-stone-950/90 p-2.5 rounded-xl border border-stone-800/80 flex flex-col gap-1.5">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1">
-                  <MapPin size={11} className="text-amber-400 shrink-0" />
-                  <span className="text-[10px] font-black text-stone-200 uppercase truncate">
-                    {idx === 0 ? 'CDMX' : 'Tecámac'}
-                  </span>
-                </div>
-                <WeatherIcon size={16} className={info.color} />
-              </div>
-
-              <div className="flex items-baseline gap-1">
-                <span className="text-xl font-black text-white">{w.temp}°C</span>
-                <span className="text-[9px] text-stone-400 font-medium truncate">{info.description}</span>
-              </div>
-
-              <div className="flex items-center justify-between text-[8px] text-stone-400 font-bold pt-1 border-t border-stone-800/60">
-                <span className="flex items-center gap-1" title="Humedad relativa">
-                  <Droplets size={10} className="text-blue-400" /> {w.humidity}%
+            <div key={idx} className="bg-stone-950/60 px-2 py-1.5 rounded-lg border border-stone-800/50 flex items-center justify-between">
+              <div className="flex items-center gap-1 min-w-0">
+                <span className="text-[10px] font-bold text-stone-300 uppercase truncate">
+                  {idx === 0 ? 'CDMX' : 'Tecámac'}
                 </span>
-                <span className="flex items-center gap-1" title="Viento">
-                  <Wind size={10} className="text-sky-400" /> {w.windSpeed} km/h
-                </span>
+                <span className="text-xs font-black text-amber-300">{w.temp}°</span>
               </div>
+              <WeatherIcon size={13} className={`${info.color} shrink-0`} />
             </div>
           );
         })}
       </div>
+
+      {/* Expanded Details when toggled */}
+      {showDetails && (
+        <div className="grid grid-cols-2 gap-1.5 pt-1.5 border-t border-stone-800/60 animate-in fade-in duration-150">
+          {[cdmxWeather, tecamacWeather].map((w, idx) => {
+            if (!w) return null;
+            const info = getWeatherInfo(w.weatherCode, w.isDay);
+            return (
+              <div key={idx} className="text-[9px] text-stone-400 flex flex-col gap-0.5 px-1">
+                <span className="text-stone-300 font-medium truncate">{info.description}</span>
+                <div className="flex items-center justify-between text-[8px] text-stone-500">
+                  <span className="flex items-center gap-0.5">
+                    <Droplets size={8} className="text-blue-400" /> {w.humidity}%
+                  </span>
+                  <span className="flex items-center gap-0.5">
+                    <Wind size={8} className="text-sky-400" /> {w.windSpeed}k/h
+                  </span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

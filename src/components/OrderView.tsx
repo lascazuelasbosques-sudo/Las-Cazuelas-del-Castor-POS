@@ -13,6 +13,7 @@ const Utensils = UtensilsIcon;
 
 import { handleFirestoreError, OperationType } from "../lib/firestoreErrorHandler";
 import { getFallbackProductImage } from "../lib/presetImages";
+import { checkIsBistec } from "../lib/orderUtils";
 
 interface OrderViewProps {
   orderToEdit?: Order | null;
@@ -216,13 +217,15 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
       finalName += " (Para Llevar)";
     }
 
+    const isBistec = checkIsBistec({ name: finalName });
+
     const newItem: OrderItem = {
       productId: `custom_${Date.now()}`,
       name: finalName,
       price: priceNum,
       quantity: 1,
       status: 'pending',
-      station: customItemStation,
+      station: isBistec ? 'plancha' : customItemStation,
       hasExtraCheese: false
     };
 
@@ -259,8 +262,29 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
   }, [orderToEdit]);
 
   const handleProductClick = (product: Product) => {
-    if (product.name.toLowerCase().includes('quesadilla') || product.allowsExtraCheese) {
-      setSelectedFilling('Queso');
+    const nameLower = product.name.toLowerCase();
+    const isCustomizable = 
+      nameLower.includes('quesadilla') || 
+      nameLower.includes('huarache') || 
+      nameLower.includes('taco') || 
+      nameLower.includes('chilaquil') || 
+      nameLower.includes('gordita') || 
+      nameLower.includes('enchilada') || 
+      nameLower.includes('flauta') || 
+      nameLower.includes('burrito') || 
+      nameLower.includes('comida') || 
+      product.allowsExtraCheese;
+
+    if (isCustomizable) {
+      if (nameLower.includes('bistec')) {
+        setSelectedFilling('Bistec');
+      } else if (nameLower.includes('pollo')) {
+        setSelectedFilling('Pollo');
+      } else if (nameLower.includes('longaniza')) {
+        setSelectedFilling('Longaniza');
+      } else {
+        setSelectedFilling('Bistec');
+      }
       setHasExtraCheeseOpt(false);
       setProductToCustomize(product);
     } else {
@@ -279,16 +303,35 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
 
   const addToCart = (product: Product, hasExtraCheese: boolean = false, filling?: string) => {
     setCart(prev => {
-      const isQuesadilla = product.name.toLowerCase().includes('quesadilla');
-      const finalName = isQuesadilla 
-        ? `Quesadilla de ${filling || 'Queso'}` + (hasExtraCheese ? ' (Queso Extra)' : '')
-        : product.name + (hasExtraCheese ? ' (Queso Extra)' : '');
+      const nameLower = product.name.toLowerCase();
+      let baseName = product.name;
+
+      if (filling) {
+        if (nameLower.includes('quesadilla')) {
+          baseName = `Quesadilla de ${filling}`;
+        } else if (nameLower.includes('huarache')) {
+          baseName = `Huarache de ${filling}`;
+        } else if (nameLower.includes('tacos') || nameLower.includes('taco')) {
+          baseName = `Tacos de ${filling}`;
+        } else if (nameLower.includes('chilaquiles') || nameLower.includes('chilaquil')) {
+          baseName = `Chilaquiles con ${filling}`;
+        } else if (nameLower.includes('gordita')) {
+          baseName = `Gordita de ${filling}`;
+        } else if (nameLower.includes('enchilada')) {
+          baseName = `Enchiladas con ${filling}`;
+        } else {
+          const cleanProd = product.name.replace(/\s*\([^)]*\)/g, '');
+          baseName = `${cleanProd} (${filling})`;
+        }
+      }
+
+      const finalName = baseName + (hasExtraCheese ? ' (Queso Extra)' : '');
 
       const existingPending = prev.find(item => 
         item.productId === product.id && 
         item.status !== 'completed' && 
         item.hasExtraCheese === hasExtraCheese &&
-        (!isQuesadilla || item.name === finalName)
+        item.name === finalName
       );
       
       if (existingPending) {
@@ -298,13 +341,15 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
             : item
         );
       }
+      const isBistec = checkIsBistec({ name: finalName, notes: (filling || '') });
+
       return [...prev, { 
         productId: product.id, 
         name: finalName, 
         price: product.price + (hasExtraCheese ? 8 : 0), 
         quantity: 1,
         status: 'pending',
-        station: product.station || 'cocina',
+        station: isBistec ? 'plancha' : (product.station || 'cocina'),
         hasExtraCheese
       }];
     });
@@ -1227,125 +1272,92 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
               </button>
             </CardHeader>
 
-            <CardContent className="p-5 space-y-5 bg-stone-50">
-              {productToCustomize.name.toLowerCase().includes('quesadilla') ? (
-                <>
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold text-stone-500 uppercase tracking-wider block">
-                      Selecciona el Relleno (Obligatorio)
-                    </label>
-                    <div className="grid grid-cols-2 gap-2">
-                      {[
-                        { id: 'Queso', label: 'Queso', icon: '🧀' },
-                        { id: 'Pollo', label: 'Pollo', icon: '🍗' },
-                        { id: 'Chicharrón', label: 'Chicharrón', icon: '🥓' },
-                        { id: 'Tinga de Pollo', label: 'Tinga de Pollo', icon: '🍗' },
-                        { id: 'Tinga de Res', label: 'Tinga de Res', icon: '🥩' },
-                        { id: 'Papas con Longaniza', label: 'Papas con Longaniza', icon: '🌭' },
-                        { id: 'Champiñones', label: 'Champiñones', icon: '🍄' },
-                        { id: 'Bistec', label: 'Bistec', icon: '🥩' }
-                      ].map((filling) => {
-                        const isSelected = selectedFilling.toLowerCase() === filling.id.toLowerCase();
-                        return (
-                          <button
-                            key={filling.id}
-                            type="button"
-                            onClick={() => setSelectedFilling(filling.id)}
-                            className={`p-3 rounded-xl border flex items-center gap-3 transition-all duration-150 text-left ${
-                              isSelected
-                                ? 'bg-mex-gold/10 border-mex-gold text-mex-gold font-bold shadow-xs'
-                                : 'bg-white border-stone-200 text-stone-700 hover:border-stone-300'
-                            }`}
-                          >
-                            <span className="text-2xl">{filling.icon}</span>
-                            <span className="text-sm leading-tight">{filling.label}</span>
-                          </button>
-                        );
-                      })}
+            <CardContent className="p-5 space-y-5 bg-stone-50 max-h-[70vh] overflow-y-auto">
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-stone-500 uppercase tracking-wider block">
+                  Selecciona la Proteína / Ingrediente
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { id: 'Bistec', label: 'Bistec', icon: '🥩' },
+                    { id: 'Pollo', label: 'Pollo', icon: '🍗' },
+                    { id: 'Longaniza', label: 'Longaniza', icon: '🌭' },
+                    { id: 'Campechano (Bistec, Longaniza)', label: 'Campechano (Bistec y Longaniza)', icon: '🔥' },
+                    { id: 'Campechano (Bistec, Pollo)', label: 'Campechano (Bistec y Pollo)', icon: '🔥' },
+                    { id: 'Campechano (Bistec, Longaniza, Pollo)', label: 'Campechano (3 Carnes)', icon: '🔥' },
+                    { id: 'Queso', label: 'Queso', icon: '🧀' },
+                    { id: 'Chicharrón', label: 'Chicharrón', icon: '🥓' },
+                    { id: 'Tinga de Pollo', label: 'Tinga de Pollo', icon: '🍗' },
+                    { id: 'Tinga de Res', label: 'Tinga de Res', icon: '🥩' },
+                    { id: 'Papas con Longaniza', label: 'Papas con Longaniza', icon: '🌭' },
+                    { id: 'Champiñones', label: 'Champiñones', icon: '🍄' },
+                    { id: 'Huevo', label: 'Huevo', icon: '🍳' },
+                  ].map((filling) => {
+                    const isSelected = selectedFilling.toLowerCase() === filling.id.toLowerCase();
+                    return (
+                      <button
+                        key={filling.id}
+                        type="button"
+                        onClick={() => setSelectedFilling(filling.id)}
+                        className={`p-3 rounded-xl border flex items-center gap-3 transition-all duration-150 text-left ${
+                          isSelected
+                            ? 'bg-mex-gold/10 border-mex-gold text-mex-gold font-bold shadow-xs ring-2 ring-mex-gold/30'
+                            : 'bg-white border-stone-200 text-stone-700 hover:border-stone-300'
+                        }`}
+                      >
+                        <span className="text-2xl">{filling.icon}</span>
+                        <span className="text-xs font-bold leading-tight">{filling.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="border-t border-stone-200/60 pt-4 space-y-3">
+                <label className="text-xs font-bold text-stone-500 uppercase tracking-wider block">
+                  Extras
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setHasExtraCheeseOpt(!hasExtraCheeseOpt)}
+                  className={`w-full p-4 rounded-xl border flex items-center justify-between transition-all ${
+                    hasExtraCheeseOpt
+                      ? 'bg-yellow-50/80 border-amber-400 text-amber-900 font-bold shadow-xs'
+                      : 'bg-white border-stone-200 text-stone-700 hover:border-stone-300'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="text-2xl">🧀</span>
+                    <div className="text-left">
+                      <p className="text-sm font-semibold">Queso / Quesillo Extra</p>
+                      <p className="text-[10px] text-stone-500 font-normal">Agrega doble queso fundido</p>
                     </div>
                   </div>
-
-                  <div className="border-t border-stone-200/60 pt-4 space-y-3">
-                    <label className="text-xs font-bold text-stone-500 uppercase tracking-wider block">
-                      Extras
-                    </label>
-                    <button
-                      type="button"
-                      onClick={() => setHasExtraCheeseOpt(!hasExtraCheeseOpt)}
-                      className={`w-full p-4 rounded-xl border flex items-center justify-between transition-all ${
-                        hasExtraCheeseOpt
-                          ? 'bg-yellow-50/80 border-amber-400 text-amber-900 font-bold shadow-xs'
-                          : 'bg-white border-stone-200 text-stone-700 hover:border-stone-300'
-                      }`}
-                    >
-                      <div className="flex items-center gap-3">
-                        <span className="text-2xl">🧀</span>
-                        <div className="text-left">
-                          <p className="text-sm font-semibold">Queso Extra</p>
-                          <p className="text-[10px] text-stone-500 font-normal">Agrega doble quesillo fundido</p>
-                        </div>
-                      </div>
-                      <span className="text-sm bg-amber-100 text-amber-800 px-2.5 py-1 rounded-lg font-bold">
-                        +$8 pesos
-                      </span>
-                    </button>
-                  </div>
-                </>
-              ) : (
-                <div className="text-center space-y-4 py-2">
-                  <div className="mx-auto w-16 h-16 bg-yellow-50 text-mex-gold rounded-full flex items-center justify-center">
-                    <span className="text-3xl">🧀</span>
-                  </div>
-                  <p className="text-stone-700 font-medium">¿Deseas agregar queso extra a este platillo?</p>
-                </div>
-              )}
+                  <span className="text-sm bg-amber-100 text-amber-800 px-2.5 py-1 rounded-lg font-bold">
+                    +$8 pesos
+                  </span>
+                </button>
+              </div>
             </CardContent>
 
             <CardFooter className="flex gap-3 bg-white p-4 border-t border-stone-100">
-              {productToCustomize.name.toLowerCase().includes('quesadilla') ? (
-                <>
-                  <Button 
-                    variant="outline" 
-                    className="flex-1" 
-                    onClick={() => setProductToCustomize(null)}
-                  >
-                    Cancelar
-                  </Button>
-                  <Button 
-                    variant="primary" 
-                    className="flex-1 bg-mex-gold hover:bg-yellow-600 border-mex-gold text-white font-bold" 
-                    onClick={() => {
-                      addToCart(productToCustomize, hasExtraCheeseOpt, selectedFilling);
-                      setProductToCustomize(null);
-                    }}
-                  >
-                    Agregar ${productToCustomize.price + (hasExtraCheeseOpt ? 8 : 0)}
-                  </Button>
-                </>
-              ) : (
-                <>
-                  <Button 
-                    variant="outline" 
-                    className="flex-1" 
-                    onClick={() => {
-                      addToCart(productToCustomize, false);
-                      setProductToCustomize(null);
-                    }}
-                  >
-                    Normal
-                  </Button>
-                  <Button 
-                    variant="primary" 
-                    className="flex-1 gap-2 bg-mex-gold hover:bg-yellow-600 border-mex-gold text-white font-bold" 
-                    onClick={() => {
-                      addToCart(productToCustomize, true);
-                      setProductToCustomize(null);
-                    }}
-                  >
-                    + Extra ($8)
-                  </Button>
-                </>
-              )}
+              <Button 
+                variant="outline" 
+                className="flex-1" 
+                onClick={() => setProductToCustomize(null)}
+              >
+                Cancelar
+              </Button>
+              <Button 
+                variant="primary" 
+                className="flex-1 bg-mex-gold hover:bg-yellow-600 border-mex-gold text-white font-bold" 
+                onClick={() => {
+                  addToCart(productToCustomize, hasExtraCheeseOpt, selectedFilling);
+                  setProductToCustomize(null);
+                }}
+              >
+                Agregar ${productToCustomize.price + (hasExtraCheeseOpt ? 8 : 0)}
+              </Button>
             </CardFooter>
           </Card>
         </div>
