@@ -8,6 +8,7 @@ import { Order } from "../types";
 import { useBranding } from "../lib/useBranding";
 import { PWAInstallBanner } from "./PWAInstallBanner";
 import { WeatherClockWidget } from "./WeatherClockWidget";
+import { FullScreenLockControl } from "./FullScreenLockControl";
 import toast from "react-hot-toast";
 
 interface NavbarProps {
@@ -325,6 +326,7 @@ export const Navbar = ({
         <div className="flex md:hidden items-center gap-1 pl-2 border-l border-stone-200 shrink-0">
           <WeatherClockWidget compact />
           <PWAInstallBanner compact />
+          <FullScreenLockControl compact />
 
           <button
             onClick={() => setIsWalkieOpen(!isWalkieOpen)}
@@ -403,6 +405,9 @@ export const Navbar = ({
           {isFullscreen ? <Minimize2 size={18} className="text-mex-gold" /> : <Maximize2 size={18} className="text-mex-green" />}
           <span className="hidden lg:inline">{isFullscreen ? "Ventana Normal" : "Pantalla Completa"}</span>
         </Button>
+
+        {/* Lock Screen Button */}
+        <FullScreenLockControl />
 
         <Button 
           variant="ghost" 
