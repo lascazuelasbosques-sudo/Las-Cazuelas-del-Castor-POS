@@ -9,7 +9,6 @@ import { useBranding } from "../lib/useBranding";
 import { PWAInstallBanner } from "./PWAInstallBanner";
 import { WeatherClockWidget } from "./WeatherClockWidget";
 import { FullScreenLockControl } from "./FullScreenLockControl";
-import { ChromeIcon } from "./DesktopBrowserWidget";
 import toast from "react-hot-toast";
 
 interface NavbarProps {
@@ -351,10 +350,10 @@ export const Navbar = ({
               "flex flex-col items-center gap-1 p-2 rounded-xl shrink-0 transition-all",
               isBrowserOpen ? "text-amber-500 bg-amber-50" : "text-stone-600 hover:bg-stone-50"
             )}
-            title="Navegador Web Chrome"
+            title="Navegador Web Flotante"
           >
-            <ChromeIcon size={21} />
-            <span className="text-[9px] font-extrabold whitespace-nowrap">Chrome</span>
+            <Globe size={21} className={isBrowserOpen ? "text-amber-600 animate-pulse" : "text-amber-500"} />
+            <span className="text-[9px] font-extrabold whitespace-nowrap">Navegador</span>
           </button>
 
           <button
@@ -412,7 +411,7 @@ export const Navbar = ({
           <span className="hidden lg:inline">Walkie-Talkie</span>
         </Button>
 
-        {/* Navegador Web Chrome PC Button for Desktop */}
+        {/* Navegador Web PC Button for Desktop */}
         <Button 
           variant={isBrowserOpen ? "default" : "outline"}
           className={cn(
@@ -421,11 +420,11 @@ export const Navbar = ({
               ? "bg-amber-500 hover:bg-amber-600 text-stone-950 border-amber-500" 
               : "border-stone-200 bg-white text-stone-600 hover:bg-stone-50"
           )}
-          title="Navegador Web Chrome Flotante PC"
+          title="Navegador Web Flotante PC"
           onClick={() => setIsBrowserOpen && setIsBrowserOpen(!isBrowserOpen)}
         >
-          <ChromeIcon size={18} />
-          <span className="hidden lg:inline">Navegador Chrome</span>
+          <Globe size={18} className={cn(isBrowserOpen ? "animate-pulse text-stone-950" : "text-amber-500")} />
+          <span className="hidden lg:inline">Navegador Web</span>
         </Button>
 
         {/* Fullscreen Button for Desktop */}

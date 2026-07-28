@@ -1,17 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Globe, Minus, Square, Maximize2, X, RotateCw, ExternalLink, Search, ShieldCheck, GripHorizontal, Move } from 'lucide-react';
 
-export const ChromeIcon: React.FC<{ className?: string; size?: number }> = ({ className = "w-4 h-4", size = 16 }) => (
-  <svg width={size} height={size} className={className} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <circle cx="12" cy="12" r="10" fill="#4285F4"/>
-    <circle cx="12" cy="12" r="4.2" fill="#FFFFFF"/>
-    <circle cx="12" cy="12" r="3" fill="#1A73E8"/>
-    <path d="M12 7.8A4.2 4.2 0 0 1 15.64 9.9H21.9A10 10 0 0 0 12 2v5.8z" fill="#EA4335"/>
-    <path d="M15.64 9.9A4.2 4.2 0 0 1 12 16.2l3.64 6.3A10 10 0 0 0 21.9 9.9h-6.26z" fill="#FBBC05"/>
-    <path d="M12 16.2a4.2 4.2 0 0 1-3.64-2.1L2.1 20.4A10 10 0 0 0 15.64 22.5L12 16.2z" fill="#34A853"/>
-  </svg>
-);
-
 interface DesktopBrowserWidgetProps {
   isOpen: boolean;
   setIsOpen: (open: boolean) => void;
@@ -167,11 +156,11 @@ export const DesktopBrowserWidget: React.FC<DesktopBrowserWidgetProps> = ({
         <div className="bg-stone-900/95 text-white border-2 border-amber-500/80 rounded-2xl p-1.5 shadow-2xl flex items-center gap-2 backdrop-blur-md hover:scale-105 transition-all">
           <button
             onClick={() => setIsMinimized(false)}
-            className="flex items-center gap-2.5 px-3 py-1.5 bg-stone-800 hover:bg-stone-700 text-white font-bold text-xs rounded-xl transition-all cursor-pointer"
-            title="Maximizar Ventana de Navegador Web Chrome"
+            className="flex items-center gap-2.5 px-3 py-1.5 bg-stone-800 hover:bg-stone-700 text-amber-400 font-bold text-xs rounded-xl transition-all cursor-pointer"
+            title="Maximizar Ventana de Navegador Web"
           >
-            <ChromeIcon size={18} className="shrink-0" />
-            <span className="truncate max-w-[150px]">Navegador Chrome</span>
+            <Globe size={16} className="animate-spin-slow text-amber-400" />
+            <span className="truncate max-w-[150px]">Navegador Activo</span>
             <span className="bg-amber-500 text-stone-950 text-[9px] px-1.5 py-0.2 rounded-md font-black uppercase">
               Minimizado
             </span>
@@ -233,12 +222,12 @@ export const DesktopBrowserWidget: React.FC<DesktopBrowserWidgetProps> = ({
       >
         <div className="flex items-center gap-2">
           <GripHorizontal size={16} className="text-stone-500 hover:text-amber-400" />
-          <div className="p-1 bg-white/10 rounded-lg border border-white/20">
-            <ChromeIcon size={16} />
+          <div className="p-1 bg-amber-500/10 text-amber-400 rounded-lg border border-amber-500/20">
+            <Globe size={15} />
           </div>
           <div>
             <span className="text-xs font-black uppercase tracking-wider text-amber-400 flex items-center gap-1.5">
-              Navegador Chrome PC
+              Navegador Web PC
               <span className="bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-[8px] px-1.5 py-0.2 rounded font-bold hidden sm:inline-block">
                 Arrastra para Mover
               </span>
