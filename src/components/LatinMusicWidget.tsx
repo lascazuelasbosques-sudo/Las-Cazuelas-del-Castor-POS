@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Music, Play, Pause, Volume2, VolumeX, Radio, Disc, Sparkles, X, Minus, Move, GripHorizontal, ListMusic, Heart, RefreshCw } from 'lucide-react';
+import { Music, Play, Pause, Volume2, VolumeX, Radio, Disc, Sparkles, X, Minus, Move, GripHorizontal, ListMusic, Heart, RefreshCw, Search, Maximize2, Square, Lock, Unlock, ExternalLink } from 'lucide-react';
 
 interface LatinMusicWidgetProps {
   isOpen: boolean;
@@ -9,7 +9,7 @@ interface LatinMusicWidgetProps {
 export interface Station {
   id: string;
   name: string;
-  genre: 'Salsa' | 'Pop Latino' | 'Rock en Español' | 'Cumbia' | 'Bachata & Merengue' | 'Regional Mexicano' | 'Urbana & Reggaeton';
+  genre: 'CDMX & México' | 'Salsa' | 'Pop Latino' | 'Rock en Español' | 'Cumbia' | 'Bachata & Merengue' | 'Regional Mexicano' | 'Urbana & Reggaeton' | 'Jazz & Chill' | 'Retro & Clásicos';
   streamUrl: string;
   backupUrl?: string;
   description: string;
@@ -19,14 +19,74 @@ export interface Station {
 
 const LATIN_STATIONS: Station[] = [
   {
+    id: 'joya-937-cdmx',
+    name: 'Joya 93.7 FM (CDMX)',
+    genre: 'CDMX & México',
+    streamUrl: 'https://stream.zeno.fm/381y91v5euvv',
+    backupUrl: 'https://stream.zeno.fm/3sghq4z5euvv',
+    description: 'Música que te llena de amor. Estación de Ciudad de México (Emisoras CDMX).',
+    icon: '📻',
+    color: 'from-pink-600 to-rose-700'
+  },
+  {
+    id: 'la-z-1073-cdmx',
+    name: 'La Z 107.3 FM (CDMX)',
+    genre: 'CDMX & México',
+    streamUrl: 'https://stream.zeno.fm/3sghq4z5euvv',
+    backupUrl: 'https://stream.zeno.fm/381y91v5euvv',
+    description: 'La número 1 en música grupera, banda y norteño en la CDMX.',
+    icon: '🎺',
+    color: 'from-amber-600 to-red-700'
+  },
+  {
+    id: 'w-radio-cdmx',
+    name: 'W Radio 96.9 FM (CDMX)',
+    genre: 'CDMX & México',
+    streamUrl: 'https://stream.zeno.fm/u9v3xbrfbeuvv',
+    backupUrl: 'https://stream.zeno.fm/q5b3f11z5euvv',
+    description: 'Noticias, entrevistas, deportes y opinión en vivo desde México.',
+    icon: '🎙️',
+    color: 'from-blue-700 to-indigo-900'
+  },
+  {
+    id: 'los-40-cdmx',
+    name: 'Los 40 101.7 FM (CDMX)',
+    genre: 'CDMX & México',
+    streamUrl: 'https://stream.zeno.fm/3sghq4z5euvv',
+    backupUrl: 'https://stream.zeno.fm/1r2s3v4fbeuvv',
+    description: 'Todos los éxitos pop del momento en la Ciudad de México.',
+    icon: '🔥',
+    color: 'from-orange-500 to-amber-600'
+  },
+  {
+    id: 'radio-formula-cdmx',
+    name: 'Radio Fórmula 104.1 (CDMX)',
+    genre: 'CDMX & México',
+    streamUrl: 'https://stream.zeno.fm/q5b3f11z5euvv',
+    backupUrl: 'https://stream.zeno.fm/u9v3xbrfbeuvv',
+    description: 'Noticias al momento y la mejor barra de comentaristas en México.',
+    icon: '📡',
+    color: 'from-stone-800 to-neutral-950'
+  },
+  {
     id: 'salsa-hits',
-    name: 'Radio Salsa Brava',
+    name: 'Radio Salsa Brava CDMX',
     genre: 'Salsa',
     streamUrl: 'https://stream.zeno.fm/f3wvbbqmdg8uv',
     backupUrl: 'https://stream.zeno.fm/6s81a03fbeuvv',
-    description: 'Los mejores clasicos y éxitos de Salsa dura, brava y romántica.',
+    description: 'Éxitos de Salsa dura, brava, fania y romántica.',
     icon: '🎺',
     color: 'from-red-600 to-amber-600'
+  },
+  {
+    id: 'salsa-romantica',
+    name: 'Salsa Romántica FM',
+    genre: 'Salsa',
+    streamUrl: 'https://stream.zeno.fm/6s81a03fbeuvv',
+    backupUrl: 'https://stream.zeno.fm/f3wvbbqmdg8uv',
+    description: 'Marc Anthony, Gilberto Santa Rosa, Frankie Ruiz y más.',
+    icon: '💃',
+    color: 'from-rose-600 to-red-800'
   },
   {
     id: 'pop-latino',
@@ -39,14 +99,34 @@ const LATIN_STATIONS: Station[] = [
     color: 'from-pink-500 to-rose-600'
   },
   {
+    id: 'pop-baladas',
+    name: 'Amor FM - Baladas & Pop',
+    genre: 'Pop Latino',
+    streamUrl: 'https://stream.zeno.fm/381y91v5euvv',
+    backupUrl: 'https://stream.zeno.fm/3sghq4z5euvv',
+    description: 'Las canciones más románticas y del recuerdo en español.',
+    icon: '💖',
+    color: 'from-fuchsia-600 to-pink-700'
+  },
+  {
     id: 'rock-espanol',
     name: 'Rock en Español 80/90s',
     genre: 'Rock en Español',
     streamUrl: 'https://stream.zeno.fm/u9v3xbrfbeuvv',
     backupUrl: 'https://stream.zeno.fm/q5b3f11z5euvv',
-    description: 'Soda Stereo, Caifanes, Mana, Enanitos Verdes y leyendas del rock.',
+    description: 'Soda Stereo, Caifanes, Maná, Enanitos Verdes y leyendas.',
     icon: '🎸',
     color: 'from-purple-700 to-indigo-900'
+  },
+  {
+    id: 'rock-clasico',
+    name: 'Pop Rock & Alt Latino',
+    genre: 'Rock en Español',
+    streamUrl: 'https://stream.zeno.fm/q5b3f11z5euvv',
+    backupUrl: 'https://stream.zeno.fm/u9v3xbrfbeuvv',
+    description: 'Rock hispano, ska, reggae en español y clásicos de garage.',
+    icon: '⚡',
+    color: 'from-slate-800 to-amber-900'
   },
   {
     id: 'cumbia-sonidera',
@@ -54,9 +134,19 @@ const LATIN_STATIONS: Station[] = [
     genre: 'Cumbia',
     streamUrl: 'https://stream.zeno.fm/xbb1u53fbeuvv',
     backupUrl: 'https://stream.zeno.fm/f8z0p53fbeuvv',
-    description: 'Cumbia colombiana, mexicana, sonidera y tropical para alegrar el día.',
+    description: 'Cumbia colombiana, mexicana, sonidera y tropical alegre.',
     icon: '🪗',
     color: 'from-amber-500 to-yellow-600'
+  },
+  {
+    id: 'cumbia-df',
+    name: 'Sonidero CDMX Mix',
+    genre: 'Cumbia',
+    streamUrl: 'https://stream.zeno.fm/f8z0p53fbeuvv',
+    backupUrl: 'https://stream.zeno.fm/xbb1u53fbeuvv',
+    description: 'Cumbia sonidera del D.F. con saludos y ritmos de barrio.',
+    icon: '🪘',
+    color: 'from-yellow-600 to-orange-700'
   },
   {
     id: 'bachata-merengue',
@@ -64,7 +154,7 @@ const LATIN_STATIONS: Station[] = [
     genre: 'Bachata & Merengue',
     streamUrl: 'https://stream.zeno.fm/0545s41z5euvv',
     backupUrl: 'https://stream.zeno.fm/1r2s3v4fbeuvv',
-    description: 'Ritmos caribeños, Romeo Santos, Juan Luis Guerra y merengue bailable.',
+    description: 'Romeo Santos, Juan Luis Guerra y merengue bailable 24/7.',
     icon: '🌴',
     color: 'from-blue-600 to-cyan-600'
   },
@@ -74,7 +164,7 @@ const LATIN_STATIONS: Station[] = [
     genre: 'Regional Mexicano',
     streamUrl: 'https://stream.zeno.fm/381y91v5euvv',
     backupUrl: 'https://stream.zeno.fm/3sghq4z5euvv',
-    description: 'Mariachi, Norteño, Banda y Corridos tradicionales.',
+    description: 'Norteño, Banda, Mariachi y Corridos de tradición.',
     icon: '🎺',
     color: 'from-emerald-600 to-teal-800'
   },
@@ -84,9 +174,29 @@ const LATIN_STATIONS: Station[] = [
     genre: 'Urbana & Reggaeton',
     streamUrl: 'https://stream.zeno.fm/1r2s3v4fbeuvv',
     backupUrl: 'https://stream.zeno.fm/f3wvbbqmdg8uv',
-    description: 'Reggaetón, Trap latino y ritmos urbanos del momento.',
+    description: 'Reggaetón clásico y nuevo, Trap latino y dembow.',
     icon: '🔥',
     color: 'from-orange-600 to-red-700'
+  },
+  {
+    id: 'jazz-bossa',
+    name: 'Jazz & Bossa Relax',
+    genre: 'Jazz & Chill',
+    streamUrl: 'https://stream.zeno.fm/u9v3xbrfbeuvv',
+    backupUrl: 'https://stream.zeno.fm/3sghq4z5euvv',
+    description: 'Jazz latino, Bossa Nova suave para concentración y ambiente.',
+    icon: '🎷',
+    color: 'from-teal-800 to-cyan-900'
+  },
+  {
+    id: 'retro-clasicos',
+    name: 'Retro 80s & 90s Hits',
+    genre: 'Retro & Clásicos',
+    streamUrl: 'https://stream.zeno.fm/q5b3f11z5euvv',
+    backupUrl: 'https://stream.zeno.fm/f8z0p53fbeuvv',
+    description: 'Clásicos retro en español e inglés para cantar e inspirar.',
+    icon: '📻',
+    color: 'from-violet-700 to-purple-900'
   }
 ];
 
@@ -98,7 +208,10 @@ export const LatinMusicWidget: React.FC<LatinMusicWidgetProps> = ({ isOpen, setI
   const [isMuted, setIsMuted] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
   const [selectedGenre, setSelectedGenre] = useState<string>('Todos');
+  const [searchQuery, setSearchQuery] = useState('');
   const [hasError, setHasError] = useState(false);
+  const [isMaximized, setIsMaximized] = useState(false);
+  const [isLocked, setIsLocked] = useState(false);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
@@ -107,11 +220,12 @@ export const LatinMusicWidget: React.FC<LatinMusicWidgetProps> = ({ isOpen, setI
   const [isDragging, setIsDragging] = useState(false);
   const dragStartRef = useRef<{ x: number; y: number; posX: number; posY: number }>({ x: 0, y: 0, posX: 0, posY: 0 });
 
-  // Default position
+  // Default position: Centered at top of screen
   useEffect(() => {
     if (typeof window !== 'undefined' && position === null) {
-      const initialX = Math.max(16, window.innerWidth - 440);
-      const initialY = Math.max(20, window.innerHeight - 560);
+      const cardWidth = Math.min(420, window.innerWidth - 24);
+      const initialX = Math.max(12, (window.innerWidth - cardWidth) / 2);
+      const initialY = 16; // Top-centered
       setPosition({ x: initialX, y: initialY });
     }
   }, [position]);
@@ -229,7 +343,8 @@ export const LatinMusicWidget: React.FC<LatinMusicWidgetProps> = ({ isOpen, setI
 
   // Dragging logic
   const handleMouseDownDrag = (e: React.MouseEvent) => {
-    if ((e.target as HTMLElement).closest('button, input')) return;
+    if (isLocked || isMaximized) return;
+    if ((e.target as HTMLElement).closest('button, input, a')) return;
     setIsDragging(true);
     dragStartRef.current = {
       x: e.clientX,
@@ -241,7 +356,7 @@ export const LatinMusicWidget: React.FC<LatinMusicWidgetProps> = ({ isOpen, setI
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
-      if (!isDragging) return;
+      if (!isDragging || isLocked || isMaximized) return;
       const deltaX = e.clientX - dragStartRef.current.x;
       const deltaY = e.clientY - dragStartRef.current.y;
       const newX = Math.max(-100, Math.min(window.innerWidth - 120, dragStartRef.current.posX + deltaX));
@@ -262,15 +377,21 @@ export const LatinMusicWidget: React.FC<LatinMusicWidgetProps> = ({ isOpen, setI
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [isDragging]);
+  }, [isDragging, isLocked, isMaximized]);
 
   if (!isOpen) return null;
 
-  const genres = ['Todos', 'Salsa', 'Pop Latino', 'Rock en Español', 'Cumbia', 'Bachata & Merengue', 'Regional Mexicano', 'Urbana & Reggaeton'];
+  const genres = ['Todos', 'CDMX & México', 'Salsa', 'Pop Latino', 'Rock en Español', 'Cumbia', 'Bachata & Merengue', 'Regional Mexicano', 'Urbana & Reggaeton', 'Jazz & Chill', 'Retro & Clásicos'];
 
-  const filteredStations = selectedGenre === 'Todos'
-    ? LATIN_STATIONS
-    : LATIN_STATIONS.filter(s => s.genre === selectedGenre);
+  const filteredStations = LATIN_STATIONS.filter(s => {
+    const matchesGenre = selectedGenre === 'Todos' || s.genre === selectedGenre;
+    const query = searchQuery.trim().toLowerCase();
+    const matchesSearch = !query || 
+      s.name.toLowerCase().includes(query) || 
+      s.genre.toLowerCase().includes(query) || 
+      s.description.toLowerCase().includes(query);
+    return matchesGenre && matchesSearch;
+  });
 
   // Minimized Bar State
   if (isMinimized) {
@@ -334,51 +455,117 @@ export const LatinMusicWidget: React.FC<LatinMusicWidgetProps> = ({ isOpen, setI
 
   return (
     <div
-      style={{
-        position: 'fixed',
-        top: position ? `${position.y}px` : '5rem',
-        left: position ? `${position.x}px` : 'auto',
-        right: position ? 'auto' : '2rem',
-      }}
-      className={`z-50 w-[92vw] sm:w-[400px] bg-stone-900 text-white rounded-3xl shadow-2xl border border-stone-800 overflow-hidden transition-shadow select-none ${
-        isDragging ? 'shadow-amber-500/20 border-amber-500/60' : ''
-      }`}
+      style={
+        isMaximized
+          ? {
+              position: 'fixed',
+              top: '12px',
+              left: '12px',
+              right: '12px',
+              bottom: '12px',
+              width: 'calc(100vw - 24px)',
+              height: 'calc(100vh - 24px)',
+              zIndex: 9999,
+            }
+          : {
+              position: 'fixed',
+              top: position ? `${position.y}px` : '1rem',
+              left: position ? `${position.x}px` : 'auto',
+              right: position ? 'auto' : '1rem',
+            }
+      }
+      className={`z-50 ${
+        isMaximized ? 'w-full h-full' : 'w-[92vw] sm:w-[440px]'
+      } bg-stone-900 text-white rounded-3xl shadow-2xl border-2 ${
+        isMaximized
+          ? 'border-amber-500/80'
+          : isLocked
+          ? 'border-indigo-500/60'
+          : isDragging
+          ? 'shadow-amber-500/20 border-amber-500/60'
+          : 'border-stone-800'
+      } overflow-hidden transition-all select-none flex flex-col`}
     >
-      {/* Draggable Titlebar */}
+      {/* Draggable & Control Titlebar */}
       <div
         onMouseDown={handleMouseDownDrag}
-        className="bg-stone-950 px-4 py-3 border-b border-stone-800 flex items-center justify-between cursor-grab active:cursor-grabbing"
+        className={`bg-stone-950 px-3.5 py-2.5 border-b border-stone-800 flex items-center justify-between ${
+          isLocked || isMaximized ? 'cursor-default' : 'cursor-grab active:cursor-grabbing'
+        }`}
       >
-        <div className="flex items-center gap-2.5">
-          <GripHorizontal size={16} className="text-stone-500 hover:text-amber-400" />
+        <div className="flex items-center gap-2">
+          {!isLocked && !isMaximized && (
+            <GripHorizontal size={16} className="text-stone-500 hover:text-amber-400" />
+          )}
           <div className="p-1.5 bg-amber-500/10 text-amber-400 rounded-xl border border-amber-500/20">
             <Radio size={18} />
           </div>
           <div>
             <h3 className="text-xs font-black uppercase tracking-wider text-amber-400 flex items-center gap-1.5">
-              Música Latina FM
+              Radio CDMX & Latina FM
               <span className="bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[8px] px-1.5 py-0.2 rounded font-bold">
-                Gratis
+                En Vivo
               </span>
             </h3>
-            <p className="text-[10px] text-stone-400">Salsa, Pop, Rock, Cumbia & más</p>
+            <p className="text-[10px] text-stone-400">Joya, La Z, W Radio, Salsa, Cumbia & Pop</p>
           </div>
         </div>
 
+        {/* Window Action Buttons */}
         <div className="flex items-center gap-1">
+          {/* Link to Emisoras CDMX */}
+          <a
+            href="https://emisoras.com.mx/region/ciudad-de-mexico/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="p-1.5 hover:bg-stone-800 text-stone-400 hover:text-amber-400 rounded-xl transition-colors cursor-pointer"
+            title="Abrir Emisoras.com.mx (Ciudad de México)"
+          >
+            <ExternalLink size={15} />
+          </a>
+
+          {/* Screen Lock Toggle */}
+          <button
+            onClick={() => setIsLocked(!isLocked)}
+            className={`p-1.5 rounded-xl transition-colors cursor-pointer ${
+              isLocked
+                ? 'bg-indigo-500/20 text-indigo-400 border border-indigo-500/40'
+                : 'hover:bg-stone-800 text-stone-400 hover:text-indigo-400'
+            }`}
+            title={isLocked ? 'Bloqueo de pantalla activado (Desbloquear posición)' : 'Bloquear posición en pantalla'}
+          >
+            {isLocked ? <Lock size={15} /> : <Unlock size={15} />}
+          </button>
+
+          {/* Maximize / Restore Toggle */}
+          <button
+            onClick={() => setIsMaximized(!isMaximized)}
+            className={`p-1.5 rounded-xl transition-colors cursor-pointer ${
+              isMaximized
+                ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40'
+                : 'hover:bg-stone-800 text-stone-400 hover:text-amber-400'
+            }`}
+            title={isMaximized ? 'Restaurar tamaño normal' : 'Maximizar pantalla completa'}
+          >
+            {isMaximized ? <Square size={15} /> : <Maximize2 size={15} />}
+          </button>
+
+          {/* Minimize Button */}
           <button
             onClick={() => setIsMinimized(true)}
             className="p-1.5 hover:bg-stone-800 text-stone-400 hover:text-amber-400 rounded-xl transition-colors cursor-pointer"
             title="Minimizar reproductor"
           >
-            <Minus size={16} />
+            <Minus size={15} />
           </button>
+
+          {/* Close Button */}
           <button
             onClick={() => setIsOpen(false)}
             className="p-1.5 hover:bg-rose-900/80 text-stone-400 hover:text-rose-200 rounded-xl transition-colors cursor-pointer"
             title="Cerrar reproductor"
           >
-            <X size={16} />
+            <X size={15} />
           </button>
         </div>
       </div>
@@ -472,6 +659,28 @@ export const LatinMusicWidget: React.FC<LatinMusicWidgetProps> = ({ isOpen, setI
         )}
       </div>
 
+      {/* Search Input Bar */}
+      <div className="bg-stone-950 px-3 py-2 border-b border-stone-800">
+        <div className="flex items-center gap-2 bg-stone-900 px-3 py-1.5 rounded-xl border border-stone-800 focus-within:border-amber-500/60 transition-colors">
+          <Search size={14} className="text-stone-400 shrink-0" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Buscar radio online (género, artista o estación)..."
+            className="w-full bg-transparent text-xs text-stone-200 placeholder-stone-500 focus:outline-none"
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery('')}
+              className="text-stone-500 hover:text-stone-300 text-xs font-bold"
+            >
+              ×
+            </button>
+          )}
+        </div>
+      </div>
+
       {/* Genre Filter Tabs */}
       <div className="bg-stone-950 px-3 py-2 border-b border-stone-800 flex items-center gap-1.5 overflow-x-auto no-scrollbar">
         {genres.map(g => (
@@ -490,8 +699,15 @@ export const LatinMusicWidget: React.FC<LatinMusicWidgetProps> = ({ isOpen, setI
       </div>
 
       {/* Stations List */}
-      <div className="p-2 max-h-[220px] overflow-y-auto space-y-1.5 bg-stone-900 scrollbar-thin scrollbar-thumb-stone-700">
-        {filteredStations.map(station => {
+      <div className={`p-2 ${isMaximized ? 'flex-1 overflow-y-auto min-h-0' : 'max-h-[220px] overflow-y-auto'} space-y-1.5 bg-stone-900 scrollbar-thin scrollbar-thumb-stone-700`}>
+        {filteredStations.length === 0 ? (
+          <div className="p-6 text-center text-stone-400">
+            <Radio size={24} className="mx-auto text-amber-500/60 mb-2 animate-pulse" />
+            <p className="text-xs font-bold text-stone-300">No se encontraron emisoras</p>
+            <p className="text-[10px] text-stone-500 mt-1">Prueba buscando "salsa", "pop", "cumbia" o selecciona "Todos"</p>
+          </div>
+        ) : (
+          filteredStations.map(station => {
           const isCurrent = currentStation.id === station.id;
           return (
             <div
@@ -529,7 +745,7 @@ export const LatinMusicWidget: React.FC<LatinMusicWidgetProps> = ({ isOpen, setI
               </div>
             </div>
           );
-        })}
+        }))}
       </div>
 
       {/* Footer Info */}
