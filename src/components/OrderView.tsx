@@ -99,7 +99,7 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
   const handleIncrementProduct = (product: Product, e: React.MouseEvent) => {
     e.stopPropagation();
     if (product.name.toLowerCase().includes('quesadilla') || product.allowsExtraCheese) {
-      setSelectedFilling('Queso');
+      setSelectedFillings([]);
       setHasExtraCheeseOpt(false);
       setProductToCustomize(product);
     } else {
@@ -164,7 +164,7 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
   }, []);
 
   const [productToCustomize, setProductToCustomize] = useState<Product | null>(null);
-  const [selectedFilling, setSelectedFilling] = useState<string>('Queso');
+  const [selectedFillings, setSelectedFillings] = useState<string[]>([]);
   const [hasExtraCheeseOpt, setHasExtraCheeseOpt] = useState<boolean>(false);
   const [showConfirmCancel, setShowConfirmCancel] = useState(false);
 
@@ -261,6 +261,60 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
     }
   }, [orderToEdit]);
 
+  const formatFillings = (fillings: string | string[]): string => {
+    if (!fillings) return '';
+    const arr = (typeof fillings === 'string' ? [fillings] : fillings).filter(f => f !== 'Queso Extra');
+    if (arr.length === 0) return '';
+    if (arr.length === 1) return arr[0];
+    if (arr.length === 2) return `${arr[0]} y ${arr[1]}`;
+    return `${arr.slice(0, -1).join(', ')} y ${arr[arr.length - 1]}`;
+  };
+
+  const toggleFilling = (fillingId: string) => {
+    if (fillingId === 'Queso Extra') {
+      const isSelected = selectedFillings.includes('Queso Extra');
+      if (isSelected) {
+        setSelectedFillings(prev => prev.filter(f => f !== 'Queso Extra'));
+        setHasExtraCheeseOpt(false);
+      } else {
+        setSelectedFillings(prev => [...prev.filter(f => f !== 'Sencillo'), 'Queso Extra']);
+        setHasExtraCheeseOpt(true);
+      }
+      return;
+    }
+
+    if (fillingId === 'Sencillo' || fillingId === 'Tradicional') {
+      if (selectedFillings.includes(fillingId)) {
+        setSelectedFillings([]);
+      } else {
+        setSelectedFillings([fillingId]);
+        setHasExtraCheeseOpt(false);
+      }
+      return;
+    }
+
+    setSelectedFillings(prev => {
+      const withoutExclusives = prev.filter(f => f !== 'Sencillo' && f !== 'Tradicional');
+      if (withoutExclusives.includes(fillingId)) {
+        return withoutExclusives.filter(f => f !== fillingId);
+      } else {
+        return [...withoutExclusives, fillingId];
+      }
+    });
+  };
+
+  const toggleExtraCheeseButton = () => {
+    if (hasExtraCheeseOpt) {
+      setHasExtraCheeseOpt(false);
+      setSelectedFillings(prev => prev.filter(f => f !== 'Queso Extra'));
+    } else {
+      setHasExtraCheeseOpt(true);
+      if (!selectedFillings.includes('Queso Extra')) {
+        setSelectedFillings(prev => [...prev.filter(f => f !== 'Sencillo'), 'Queso Extra']);
+      }
+    }
+  };
+
   const handleProductClick = (product: Product) => {
     const nameLower = product.name.toLowerCase();
     const isCustomizable = 
@@ -276,15 +330,7 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
       product.allowsExtraCheese;
 
     if (isCustomizable) {
-      if (nameLower.includes('bistec')) {
-        setSelectedFilling('Bistec');
-      } else if (nameLower.includes('pollo')) {
-        setSelectedFilling('Pollo');
-      } else if (nameLower.includes('longaniza')) {
-        setSelectedFilling('Longaniza');
-      } else {
-        setSelectedFilling('Bistec');
-      }
+      setSelectedFillings([]);
       setHasExtraCheeseOpt(false);
       setProductToCustomize(product);
     } else {
@@ -301,27 +347,29 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
     return undefined;
   };
 
-  const addToCart = (product: Product, hasExtraCheese: boolean = false, filling?: string) => {
+  const addToCart = (product: Product, hasExtraCheese: boolean = false, filling?: string | string[]) => {
     setCart(prev => {
       const nameLower = product.name.toLowerCase();
       let baseName = product.name;
 
-      if (filling) {
+      const fillingStr = formatFillings(filling || '');
+
+      if (fillingStr) {
         if (nameLower.includes('quesadilla')) {
-          baseName = `Quesadilla de ${filling}`;
+          baseName = `Quesadilla de ${fillingStr}`;
         } else if (nameLower.includes('huarache')) {
-          baseName = `Huarache de ${filling}`;
+          baseName = `Huarache de ${fillingStr}`;
         } else if (nameLower.includes('tacos') || nameLower.includes('taco')) {
-          baseName = `Tacos de ${filling}`;
+          baseName = `Tacos de ${fillingStr}`;
         } else if (nameLower.includes('chilaquiles') || nameLower.includes('chilaquil')) {
-          baseName = `Chilaquiles con ${filling}`;
+          baseName = `Chilaquiles con ${fillingStr}`;
         } else if (nameLower.includes('gordita')) {
-          baseName = `Gordita de ${filling}`;
+          baseName = `Gordita de ${fillingStr}`;
         } else if (nameLower.includes('enchilada')) {
-          baseName = `Enchiladas con ${filling}`;
+          baseName = `Enchiladas con ${fillingStr}`;
         } else {
           const cleanProd = product.name.replace(/\s*\([^)]*\)/g, '');
-          baseName = `${cleanProd} (${filling})`;
+          baseName = `${cleanProd} (${fillingStr})`;
         }
       }
 
@@ -341,7 +389,7 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
             : item
         );
       }
-      const isBistec = checkIsBistec({ name: finalName, notes: (filling || '') });
+      const isBistec = checkIsBistec({ name: finalName, notes: (fillingStr || '') });
 
       return [...prev, { 
         productId: product.id, 
@@ -1273,19 +1321,37 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
             </CardHeader>
 
             <CardContent className="p-5 space-y-5 bg-stone-50 max-h-[70vh] overflow-y-auto">
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-stone-500 uppercase tracking-wider block">
-                  Selecciona la Proteína / Ingrediente
-                </label>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-black text-stone-600 uppercase tracking-wider block">
+                    Selecciona Ingredientes (Opción Múltiple)
+                  </label>
+                  <span className="text-[10px] bg-mex-gold/20 text-stone-800 font-bold px-2 py-0.5 rounded-full">
+                    {selectedFillings.length} seleccionado{selectedFillings.length !== 1 ? 's' : ''}
+                  </span>
+                </div>
+
+                {/* Live selection preview banner */}
+                {selectedFillings.length > 0 && (
+                  <div className="bg-white p-2.5 rounded-xl border border-stone-200 shadow-2xs flex flex-wrap gap-1.5 items-center">
+                    <span className="text-[10px] font-bold text-stone-400 uppercase mr-1">Relleno:</span>
+                    {selectedFillings.map(f => (
+                      <span key={f} className="inline-flex items-center gap-1 bg-amber-100 text-amber-900 text-xs font-bold px-2.5 py-1 rounded-lg border border-amber-300">
+                        ✓ {f}
+                      </span>
+                    ))}
+                  </div>
+                )}
+
                 <div className="grid grid-cols-2 gap-2">
                   {[
-                    { id: 'Bistec', label: 'Bistec', icon: '🥩' },
+                    { id: 'Sencillo', label: 'Sencillo', icon: '🍽️' },
+                    { id: 'Tradicional', label: 'Tradicional', icon: '🌮' },
+                    { id: 'Bistec (Res)', label: 'Bistec (Res)', icon: '🥩' },
                     { id: 'Pollo', label: 'Pollo', icon: '🍗' },
                     { id: 'Longaniza', label: 'Longaniza', icon: '🌭' },
-                    { id: 'Campechano (Bistec, Longaniza)', label: 'Campechano (Bistec y Longaniza)', icon: '🔥' },
-                    { id: 'Campechano (Bistec, Pollo)', label: 'Campechano (Bistec y Pollo)', icon: '🔥' },
-                    { id: 'Campechano (Bistec, Longaniza, Pollo)', label: 'Campechano (3 Carnes)', icon: '🔥' },
-                    { id: 'Queso', label: 'Queso', icon: '🧀' },
+                    { id: 'Campechano (Bistec y Longaniza)', label: 'Campechano (Bistec y Longaniza)', icon: '🔥' },
+                    { id: 'Queso Extra', label: 'Queso Extra (+$8)', icon: '🧀' },
                     { id: 'Chicharrón', label: 'Chicharrón', icon: '🥓' },
                     { id: 'Tinga de Pollo', label: 'Tinga de Pollo', icon: '🍗' },
                     { id: 'Tinga de Res', label: 'Tinga de Res', icon: '🥩' },
@@ -1293,20 +1359,27 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
                     { id: 'Champiñones', label: 'Champiñones', icon: '🍄' },
                     { id: 'Huevo', label: 'Huevo', icon: '🍳' },
                   ].map((filling) => {
-                    const isSelected = selectedFilling.toLowerCase() === filling.id.toLowerCase();
+                    const isSelected = selectedFillings.includes(filling.id);
                     return (
                       <button
                         key={filling.id}
                         type="button"
-                        onClick={() => setSelectedFilling(filling.id)}
-                        className={`p-3 rounded-xl border flex items-center gap-3 transition-all duration-150 text-left ${
+                        onClick={() => toggleFilling(filling.id)}
+                        className={`p-3 rounded-xl border flex items-center justify-between transition-all duration-150 text-left relative ${
                           isSelected
-                            ? 'bg-mex-gold/10 border-mex-gold text-mex-gold font-bold shadow-xs ring-2 ring-mex-gold/30'
-                            : 'bg-white border-stone-200 text-stone-700 hover:border-stone-300'
+                            ? 'bg-mex-gold/15 border-mex-gold text-stone-900 font-black shadow-xs ring-2 ring-mex-gold/40'
+                            : 'bg-white border-stone-200 text-stone-700 hover:border-stone-300 hover:bg-stone-50'
                         }`}
                       >
-                        <span className="text-2xl">{filling.icon}</span>
-                        <span className="text-xs font-bold leading-tight">{filling.label}</span>
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <span className="text-xl shrink-0">{filling.icon}</span>
+                          <span className="text-xs font-bold leading-tight truncate">{filling.label}</span>
+                        </div>
+                        <div className={`w-5 h-5 rounded-md flex items-center justify-center shrink-0 text-xs font-bold transition-all ${
+                          isSelected ? 'bg-mex-gold text-white shadow-3xs' : 'border border-stone-300 bg-stone-100 text-transparent'
+                        }`}>
+                          ✓
+                        </div>
                       </button>
                     );
                   })}
@@ -1319,9 +1392,9 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
                 </label>
                 <button
                   type="button"
-                  onClick={() => setHasExtraCheeseOpt(!hasExtraCheeseOpt)}
+                  onClick={toggleExtraCheeseButton}
                   className={`w-full p-4 rounded-xl border flex items-center justify-between transition-all ${
-                    hasExtraCheeseOpt
+                    (hasExtraCheeseOpt || selectedFillings.includes('Queso Extra'))
                       ? 'bg-yellow-50/80 border-amber-400 text-amber-900 font-bold shadow-xs'
                       : 'bg-white border-stone-200 text-stone-700 hover:border-stone-300'
                   }`}
@@ -1350,13 +1423,15 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
               </Button>
               <Button 
                 variant="primary" 
-                className="flex-1 bg-mex-gold hover:bg-yellow-600 border-mex-gold text-white font-bold" 
+                disabled={selectedFillings.length === 0}
+                className="flex-1 bg-mex-gold hover:bg-yellow-600 border-mex-gold text-white font-bold disabled:opacity-50" 
                 onClick={() => {
-                  addToCart(productToCustomize, hasExtraCheeseOpt, selectedFilling);
+                  const effectiveHasExtra = hasExtraCheeseOpt || selectedFillings.includes('Queso Extra');
+                  addToCart(productToCustomize, effectiveHasExtra, selectedFillings);
                   setProductToCustomize(null);
                 }}
               >
-                Agregar ${productToCustomize.price + (hasExtraCheeseOpt ? 8 : 0)}
+                Agregar ${productToCustomize.price + ((hasExtraCheeseOpt || selectedFillings.includes('Queso Extra')) ? 8 : 0)}
               </Button>
             </CardFooter>
           </Card>

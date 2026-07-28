@@ -10,6 +10,7 @@ import { CustomerPortal } from './components/CustomerPortal';
 import { Login } from './components/Login';
 import { PendingOrdersNotifier } from './components/PendingOrdersNotifier';
 import { WalkieTalkie } from './components/WalkieTalkie';
+import { DesktopBrowserWidget } from './components/DesktopBrowserWidget';
 import { auth } from './firebase';
 import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
 import { doc, getDoc, setDoc, onSnapshot, collection, getDocs, query, limit } from 'firebase/firestore';
@@ -28,6 +29,7 @@ export default function App() {
   const dragExitPortal = useDraggable();
   const [activeTab, setActiveTab] = useState('orders');
   const [isWalkieOpen, setIsWalkieOpen] = useState(false);
+  const [isBrowserOpen, setIsBrowserOpen] = useState(false);
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
   const [posUser, setPosUser] = useState<POSUser | null>(null);
   const [userRole, setUserRole] = useState<string>('waiter');
@@ -440,6 +442,8 @@ export default function App() {
           toggleFullscreen={toggleFullscreen}
           isWalkieOpen={isWalkieOpen}
           setIsWalkieOpen={setIsWalkieOpen}
+          isBrowserOpen={isBrowserOpen}
+          setIsBrowserOpen={setIsBrowserOpen}
         />
       
       <main className="flex-1 overflow-hidden relative pb-16 md:pb-0">
@@ -451,6 +455,8 @@ export default function App() {
       <PendingOrdersNotifier userRole={userRole} />
 
       <WalkieTalkie posUser={posUser} isOpen={isWalkieOpen} setIsOpen={setIsWalkieOpen} />
+
+      <DesktopBrowserWidget isOpen={isBrowserOpen} setIsOpen={setIsBrowserOpen} />
 
       <Toaster position="top-right" />
       </div>

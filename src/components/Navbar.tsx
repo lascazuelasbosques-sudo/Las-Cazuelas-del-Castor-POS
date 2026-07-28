@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Utensils, ClipboardList, Package, CreditCard, Settings, LogOut, Menu, ChefHat, MessageSquare, Bell, Maximize2, Minimize2, Radio } from "lucide-react";
+import { Utensils, ClipboardList, Package, CreditCard, Settings, LogOut, Menu, ChefHat, MessageSquare, Bell, Maximize2, Minimize2, Radio, Globe } from "lucide-react";
 import { Button } from "./Button";
 import { cn, getRoleLabel } from "@/src/lib/utils";
 import { auth, db } from "../firebase";
@@ -9,6 +9,7 @@ import { useBranding } from "../lib/useBranding";
 import { PWAInstallBanner } from "./PWAInstallBanner";
 import { WeatherClockWidget } from "./WeatherClockWidget";
 import { FullScreenLockControl } from "./FullScreenLockControl";
+import { ChromeIcon } from "./DesktopBrowserWidget";
 import toast from "react-hot-toast";
 
 interface NavbarProps {
@@ -21,6 +22,8 @@ interface NavbarProps {
   toggleFullscreen?: () => void;
   isWalkieOpen: boolean;
   setIsWalkieOpen: (open: boolean) => void;
+  isBrowserOpen?: boolean;
+  setIsBrowserOpen?: (open: boolean) => void;
 }
 
 export const Navbar = ({ 
@@ -32,7 +35,9 @@ export const Navbar = ({
   isFullscreen: propIsFullscreen,
   toggleFullscreen: propToggleFullscreen,
   isWalkieOpen,
-  setIsWalkieOpen
+  setIsWalkieOpen,
+  isBrowserOpen = false,
+  setIsBrowserOpen
 }: NavbarProps) => {
   const [pendingStations, setPendingStations] = useState<{plancha: boolean, cocina: boolean}>({ plancha: false, cocina: false });
   const [unpaidPaymentsCount, setUnpaidPaymentsCount] = useState(0);
@@ -341,6 +346,18 @@ export const Navbar = ({
           </button>
 
           <button
+            onClick={() => setIsBrowserOpen && setIsBrowserOpen(!isBrowserOpen)}
+            className={cn(
+              "flex flex-col items-center gap-1 p-2 rounded-xl shrink-0 transition-all",
+              isBrowserOpen ? "text-amber-500 bg-amber-50" : "text-stone-600 hover:bg-stone-50"
+            )}
+            title="Navegador Web Chrome"
+          >
+            <ChromeIcon size={21} />
+            <span className="text-[9px] font-extrabold whitespace-nowrap">Chrome</span>
+          </button>
+
+          <button
             onClick={toggleFullscreen}
             className="flex flex-col items-center gap-1 p-2 rounded-xl text-stone-600 hover:bg-stone-50 shrink-0"
             title={isFullscreen ? "Salir de Pantalla Completa" : "Pantalla Completa"}
@@ -393,6 +410,22 @@ export const Navbar = ({
         >
           <Radio size={18} className={cn(isWalkieOpen ? "animate-pulse" : "text-orange-500")} />
           <span className="hidden lg:inline">Walkie-Talkie</span>
+        </Button>
+
+        {/* Navegador Web Chrome PC Button for Desktop */}
+        <Button 
+          variant={isBrowserOpen ? "default" : "outline"}
+          className={cn(
+            "justify-center lg:justify-start gap-3 w-full px-0 lg:px-4 h-[40px] rounded-xl text-xs font-bold transition-all",
+            isBrowserOpen 
+              ? "bg-amber-500 hover:bg-amber-600 text-stone-950 border-amber-500" 
+              : "border-stone-200 bg-white text-stone-600 hover:bg-stone-50"
+          )}
+          title="Navegador Web Chrome Flotante PC"
+          onClick={() => setIsBrowserOpen && setIsBrowserOpen(!isBrowserOpen)}
+        >
+          <ChromeIcon size={18} />
+          <span className="hidden lg:inline">Navegador Chrome</span>
         </Button>
 
         {/* Fullscreen Button for Desktop */}
