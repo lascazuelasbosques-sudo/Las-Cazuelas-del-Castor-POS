@@ -22,9 +22,9 @@ const LATIN_STATIONS: Station[] = [
     id: 'joya-937-cdmx',
     name: 'Joya 93.7 FM (CDMX)',
     genre: 'CDMX & México',
-    streamUrl: 'https://stream.zeno.fm/381y91v5euvv',
-    backupUrl: 'https://stream.zeno.fm/3sghq4z5euvv',
-    description: 'Música que te llena de amor. Estación de Ciudad de México (Emisoras CDMX).',
+    streamUrl: 'https://18493.live.streamtheworld.com/XERC_FM.mp3',
+    backupUrl: 'https://stream.zeno.fm/f8z0p53fbeuvv',
+    description: 'Música que te llena de amor. Estación oficial de la Ciudad de México.',
     icon: '📻',
     color: 'from-pink-600 to-rose-700'
   },
@@ -32,8 +32,8 @@ const LATIN_STATIONS: Station[] = [
     id: 'la-z-1073-cdmx',
     name: 'La Z 107.3 FM (CDMX)',
     genre: 'CDMX & México',
-    streamUrl: 'https://stream.zeno.fm/3sghq4z5euvv',
-    backupUrl: 'https://stream.zeno.fm/381y91v5euvv',
+    streamUrl: 'https://18493.live.streamtheworld.com/XEQ_FM.mp3',
+    backupUrl: 'https://26263.live.streamtheworld.com/KEBUENA_MEXICO.mp3',
     description: 'La número 1 en música grupera, banda y norteño en la CDMX.',
     icon: '🎺',
     color: 'from-amber-600 to-red-700'
@@ -42,8 +42,8 @@ const LATIN_STATIONS: Station[] = [
     id: 'w-radio-cdmx',
     name: 'W Radio 96.9 FM (CDMX)',
     genre: 'CDMX & México',
-    streamUrl: 'https://stream.zeno.fm/u9v3xbrfbeuvv',
-    backupUrl: 'https://stream.zeno.fm/q5b3f11z5euvv',
+    streamUrl: 'https://22223.live.streamtheworld.com/WRADIO_MEXICO.mp3',
+    backupUrl: 'https://stream.zeno.fm/u9v3xbrfbeuvv',
     description: 'Noticias, entrevistas, deportes y opinión en vivo desde México.',
     icon: '🎙️',
     color: 'from-blue-700 to-indigo-900'
@@ -52,18 +52,38 @@ const LATIN_STATIONS: Station[] = [
     id: 'los-40-cdmx',
     name: 'Los 40 101.7 FM (CDMX)',
     genre: 'CDMX & México',
-    streamUrl: 'https://stream.zeno.fm/3sghq4z5euvv',
-    backupUrl: 'https://stream.zeno.fm/1r2s3v4fbeuvv',
+    streamUrl: 'https://26263.live.streamtheworld.com/LOS40_MEXICO.mp3',
+    backupUrl: 'https://stream.zeno.fm/3sghq4z5euvv',
     description: 'Todos los éxitos pop del momento en la Ciudad de México.',
     icon: '🔥',
     color: 'from-orange-500 to-amber-600'
   },
   {
+    id: 'alfa-913-cdmx',
+    name: 'Alfa 91.3 FM (CDMX)',
+    genre: 'CDMX & México',
+    streamUrl: 'https://18493.live.streamtheworld.com/XHFAJ_FM.mp3',
+    backupUrl: 'https://stream.zeno.fm/381y91v5euvv',
+    description: 'Donde vive la música en inglés y pop internacional en la CDMX.',
+    icon: '⚡',
+    color: 'from-cyan-600 to-blue-700'
+  },
+  {
+    id: 'ke-buena-cdmx',
+    name: 'La Ke Buena 92.9 FM (CDMX)',
+    genre: 'CDMX & México',
+    streamUrl: 'https://26263.live.streamtheworld.com/KEBUENA_MEXICO.mp3',
+    backupUrl: 'https://18493.live.streamtheworld.com/XEQ_FM.mp3',
+    description: '¡Aquí suena la Ke Buena! Los mejores éxitos de banda y rancheras.',
+    icon: '🤠',
+    color: 'from-emerald-600 to-teal-800'
+  },
+  {
     id: 'radio-formula-cdmx',
     name: 'Radio Fórmula 104.1 (CDMX)',
     genre: 'CDMX & México',
-    streamUrl: 'https://stream.zeno.fm/q5b3f11z5euvv',
-    backupUrl: 'https://stream.zeno.fm/u9v3xbrfbeuvv',
+    streamUrl: 'https://19003.live.streamtheworld.com/XERFR_AM.mp3',
+    backupUrl: 'https://stream.zeno.fm/q5b3f11z5euvv',
     description: 'Noticias al momento y la mejor barra de comentaristas en México.',
     icon: '📡',
     color: 'from-stone-800 to-neutral-950'
@@ -93,7 +113,7 @@ const LATIN_STATIONS: Station[] = [
     name: 'Exa Pop Latino FM',
     genre: 'Pop Latino',
     streamUrl: 'https://stream.zeno.fm/3sghq4z5euvv',
-    backupUrl: 'https://stream.zeno.fm/381y91v5euvv',
+    backupUrl: 'https://26263.live.streamtheworld.com/LOS40_MEXICO.mp3',
     description: 'Pop en español, baladas y hits del momento en Latinoamérica.',
     icon: '🎙️',
     color: 'from-pink-500 to-rose-600'
@@ -102,8 +122,8 @@ const LATIN_STATIONS: Station[] = [
     id: 'pop-baladas',
     name: 'Amor FM - Baladas & Pop',
     genre: 'Pop Latino',
-    streamUrl: 'https://stream.zeno.fm/381y91v5euvv',
-    backupUrl: 'https://stream.zeno.fm/3sghq4z5euvv',
+    streamUrl: 'https://18493.live.streamtheworld.com/XERC_FM.mp3',
+    backupUrl: 'https://stream.zeno.fm/f8z0p53fbeuvv',
     description: 'Las canciones más románticas y del recuerdo en español.',
     icon: '💖',
     color: 'from-fuchsia-600 to-pink-700'
@@ -162,8 +182,8 @@ const LATIN_STATIONS: Station[] = [
     id: 'regional-mexicano',
     name: 'La Banda & Regional Mexicano',
     genre: 'Regional Mexicano',
-    streamUrl: 'https://stream.zeno.fm/381y91v5euvv',
-    backupUrl: 'https://stream.zeno.fm/3sghq4z5euvv',
+    streamUrl: 'https://26263.live.streamtheworld.com/KEBUENA_MEXICO.mp3',
+    backupUrl: 'https://18493.live.streamtheworld.com/XEQ_FM.mp3',
     description: 'Norteño, Banda, Mariachi y Corridos de tradición.',
     icon: '🎺',
     color: 'from-emerald-600 to-teal-800'
@@ -173,7 +193,7 @@ const LATIN_STATIONS: Station[] = [
     name: 'Urban Hits Latino',
     genre: 'Urbana & Reggaeton',
     streamUrl: 'https://stream.zeno.fm/1r2s3v4fbeuvv',
-    backupUrl: 'https://stream.zeno.fm/f3wvbbqmdg8uv',
+    backupUrl: 'https://stream.zeno.fm/3sghq4z5euvv',
     description: 'Reggaetón clásico y nuevo, Trap latino y dembow.',
     icon: '🔥',
     color: 'from-orange-600 to-red-700'
@@ -182,8 +202,8 @@ const LATIN_STATIONS: Station[] = [
     id: 'jazz-bossa',
     name: 'Jazz & Bossa Relax',
     genre: 'Jazz & Chill',
-    streamUrl: 'https://stream.zeno.fm/u9v3xbrfbeuvv',
-    backupUrl: 'https://stream.zeno.fm/3sghq4z5euvv',
+    streamUrl: 'https://cast3.asurahosting.com/proxy/jazz/stream',
+    backupUrl: 'https://stream.zeno.fm/u9v3xbrfbeuvv',
     description: 'Jazz latino, Bossa Nova suave para concentración y ambiente.',
     icon: '🎷',
     color: 'from-teal-800 to-cyan-900'
@@ -244,9 +264,24 @@ export const LatinMusicWidget: React.FC<LatinMusicWidgetProps> = ({ isOpen, setI
     };
 
     const handleError = () => {
-      setIsLoading(false);
-      setIsPlaying(false);
-      setHasError(true);
+      // If error on current source, try backup automatically
+      if (currentStation.backupUrl && audio.src === currentStation.streamUrl) {
+        audio.src = currentStation.backupUrl;
+        audio.load();
+        audio.play().then(() => {
+          setIsPlaying(true);
+          setIsLoading(false);
+          setHasError(false);
+        }).catch(() => {
+          setIsLoading(false);
+          setIsPlaying(false);
+          setHasError(true);
+        });
+      } else {
+        setIsLoading(false);
+        setIsPlaying(false);
+        setHasError(true);
+      }
     };
 
     audio.addEventListener('canplay', handleCanPlay);
@@ -256,7 +291,7 @@ export const LatinMusicWidget: React.FC<LatinMusicWidgetProps> = ({ isOpen, setI
       audio.removeEventListener('canplay', handleCanPlay);
       audio.removeEventListener('error', handleError);
     };
-  }, [volume, isMuted]);
+  }, [volume, isMuted, currentStation]);
 
   // Handle station change or playback toggle
   const changeStation = (station: Station) => {
@@ -266,6 +301,8 @@ export const LatinMusicWidget: React.FC<LatinMusicWidgetProps> = ({ isOpen, setI
 
     if (audioRef.current) {
       audioRef.current.pause();
+      // Remove crossOrigin restriction to allow direct stream audio playback
+      audioRef.current.removeAttribute('crossorigin');
       audioRef.current.src = station.streamUrl;
       audioRef.current.load();
       audioRef.current.play()
@@ -274,7 +311,7 @@ export const LatinMusicWidget: React.FC<LatinMusicWidgetProps> = ({ isOpen, setI
           setIsLoading(false);
         })
         .catch(() => {
-          // If primary stream fails, try backup
+          // If primary stream fails to autoplay, try backup immediately
           if (station.backupUrl && audioRef.current) {
             audioRef.current.src = station.backupUrl;
             audioRef.current.load();
@@ -306,7 +343,7 @@ export const LatinMusicWidget: React.FC<LatinMusicWidgetProps> = ({ isOpen, setI
     } else {
       setIsLoading(true);
       setHasError(false);
-      if (!audioRef.current.src || audioRef.current.src === '') {
+      if (!audioRef.current.src || audioRef.current.src === '' || audioRef.current.src === 'about:blank') {
         audioRef.current.src = currentStation.streamUrl;
       }
       audioRef.current.play()
@@ -315,9 +352,24 @@ export const LatinMusicWidget: React.FC<LatinMusicWidgetProps> = ({ isOpen, setI
           setIsLoading(false);
         })
         .catch(() => {
-          setIsLoading(false);
-          setIsPlaying(false);
-          setHasError(true);
+          if (currentStation.backupUrl && audioRef.current) {
+            audioRef.current.src = currentStation.backupUrl;
+            audioRef.current.load();
+            audioRef.current.play()
+              .then(() => {
+                setIsPlaying(true);
+                setIsLoading(false);
+              })
+              .catch(() => {
+                setIsLoading(false);
+                setIsPlaying(false);
+                setHasError(true);
+              });
+          } else {
+            setIsLoading(false);
+            setIsPlaying(false);
+            setHasError(true);
+          }
         });
     }
   };
