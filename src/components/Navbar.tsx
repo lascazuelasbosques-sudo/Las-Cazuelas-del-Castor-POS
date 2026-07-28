@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Utensils, ClipboardList, Package, CreditCard, Settings, LogOut, Menu, ChefHat, MessageSquare, Bell, Maximize2, Minimize2, Radio, Globe } from "lucide-react";
+import { Utensils, ClipboardList, Package, CreditCard, Settings, LogOut, Menu, ChefHat, MessageSquare, Bell, Maximize2, Minimize2, Radio, Music } from "lucide-react";
 import { Button } from "./Button";
 import { cn, getRoleLabel } from "@/src/lib/utils";
 import { auth, db } from "../firebase";
@@ -21,8 +21,8 @@ interface NavbarProps {
   toggleFullscreen?: () => void;
   isWalkieOpen: boolean;
   setIsWalkieOpen: (open: boolean) => void;
-  isBrowserOpen?: boolean;
-  setIsBrowserOpen?: (open: boolean) => void;
+  isMusicOpen?: boolean;
+  setIsMusicOpen?: (open: boolean) => void;
 }
 
 export const Navbar = ({ 
@@ -35,8 +35,8 @@ export const Navbar = ({
   toggleFullscreen: propToggleFullscreen,
   isWalkieOpen,
   setIsWalkieOpen,
-  isBrowserOpen = false,
-  setIsBrowserOpen
+  isMusicOpen = false,
+  setIsMusicOpen
 }: NavbarProps) => {
   const [pendingStations, setPendingStations] = useState<{plancha: boolean, cocina: boolean}>({ plancha: false, cocina: false });
   const [unpaidPaymentsCount, setUnpaidPaymentsCount] = useState(0);
@@ -345,15 +345,15 @@ export const Navbar = ({
           </button>
 
           <button
-            onClick={() => setIsBrowserOpen && setIsBrowserOpen(!isBrowserOpen)}
+            onClick={() => setIsMusicOpen && setIsMusicOpen(!isMusicOpen)}
             className={cn(
               "flex flex-col items-center gap-1 p-2 rounded-xl shrink-0 transition-all",
-              isBrowserOpen ? "text-amber-500 bg-amber-50" : "text-stone-600 hover:bg-stone-50"
+              isMusicOpen ? "text-amber-600 bg-amber-50" : "text-stone-600 hover:bg-stone-50"
             )}
-            title="Navegador Web Flotante"
+            title="Música Latina (Salsa, Pop, Rock, Cumbia)"
           >
-            <Globe size={21} className={isBrowserOpen ? "text-amber-600 animate-pulse" : "text-amber-500"} />
-            <span className="text-[9px] font-extrabold whitespace-nowrap">Navegador</span>
+            <Music size={21} className={isMusicOpen ? "text-amber-600 animate-bounce" : "text-amber-500"} />
+            <span className="text-[9px] font-extrabold whitespace-nowrap">Música</span>
           </button>
 
           <button
@@ -411,20 +411,20 @@ export const Navbar = ({
           <span className="hidden lg:inline">Walkie-Talkie</span>
         </Button>
 
-        {/* Navegador Web PC Button for Desktop */}
+        {/* Música Latina Button for Desktop */}
         <Button 
-          variant={isBrowserOpen ? "default" : "outline"}
+          variant={isMusicOpen ? "default" : "outline"}
           className={cn(
             "justify-center lg:justify-start gap-3 w-full px-0 lg:px-4 h-[40px] rounded-xl text-xs font-bold transition-all",
-            isBrowserOpen 
-              ? "bg-amber-500 hover:bg-amber-600 text-stone-950 border-amber-500" 
+            isMusicOpen 
+              ? "bg-amber-500 hover:bg-amber-600 text-stone-950 border-amber-500 shadow-md" 
               : "border-stone-200 bg-white text-stone-600 hover:bg-stone-50"
           )}
-          title="Navegador Web Flotante PC"
-          onClick={() => setIsBrowserOpen && setIsBrowserOpen(!isBrowserOpen)}
+          title="Música Latina (Salsa, Pop, Rock, Cumbia)"
+          onClick={() => setIsMusicOpen && setIsMusicOpen(!isMusicOpen)}
         >
-          <Globe size={18} className={cn(isBrowserOpen ? "animate-pulse text-stone-950" : "text-amber-500")} />
-          <span className="hidden lg:inline">Navegador Web</span>
+          <Music size={18} className={cn(isMusicOpen ? "animate-bounce text-stone-950" : "text-amber-500")} />
+          <span className="hidden lg:inline">Música Latina</span>
         </Button>
 
         {/* Fullscreen Button for Desktop */}
