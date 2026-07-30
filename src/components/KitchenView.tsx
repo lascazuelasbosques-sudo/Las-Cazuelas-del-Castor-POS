@@ -1195,7 +1195,7 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
             }
           } else if (station === 'cocina') {
             if (item.station === 'cocina' || !item.station) belongsToStation = true;
-            else if (checkIsBistec(item) && (item.name.toLowerCase().includes('chilaquiles') || item.name.toLowerCase().includes('enchiladas') || item.name.toLowerCase().includes('pambazo') || item.name.toLowerCase().includes('gordita') || item.name.toLowerCase().includes('comida') || item.name.toLowerCase().includes('platillo') || item.name.toLowerCase().includes('sopa') || item.name.toLowerCase().includes('sopes') || item.station === 'cocina')) {
+            else if (checkIsBistec(item) && (item.name.toLowerCase().includes('chilaquiles') || item.name.toLowerCase().includes('enchiladas') || item.name.toLowerCase().includes('pambazo') || item.name.toLowerCase().includes('gordita') || item.name.toLowerCase().includes('comida') || item.name.toLowerCase().includes('platillo') || item.name.toLowerCase().includes('sopa') || item.name.toLowerCase().includes('sopes') || (item.station as string) === 'cocina')) {
               belongsToStation = true;
             }
             else if (item.station === 'comun') {
@@ -1235,7 +1235,7 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
             }
           } else if (station === 'cocina') {
             if (item.station === 'cocina' || !item.station) belongsToStation = true;
-            else if (checkIsBistec(item) && (item.name.toLowerCase().includes('chilaquiles') || item.name.toLowerCase().includes('enchiladas') || item.name.toLowerCase().includes('pambazo') || item.name.toLowerCase().includes('gordita') || item.name.toLowerCase().includes('comida') || item.name.toLowerCase().includes('platillo') || item.name.toLowerCase().includes('sopa') || item.name.toLowerCase().includes('sopes') || item.station === 'cocina')) {
+            else if (checkIsBistec(item) && (item.name.toLowerCase().includes('chilaquiles') || item.name.toLowerCase().includes('enchiladas') || item.name.toLowerCase().includes('pambazo') || item.name.toLowerCase().includes('gordita') || item.name.toLowerCase().includes('comida') || item.name.toLowerCase().includes('platillo') || item.name.toLowerCase().includes('sopa') || item.name.toLowerCase().includes('sopes') || (item.station as string) === 'cocina')) {
               belongsToStation = true;
             }
             else if (item.station === 'comun') {

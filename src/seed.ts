@@ -116,8 +116,12 @@ export const seedDatabase = async (force = false) => {
     }
 
     console.log("Database seeded successfully");
-  } catch (error) {
-    console.error("Error seeding database:", error);
+  } catch (error: any) {
+    if (error?.message && (error.message.includes("Quota") || error.message.includes("resource-exhausted"))) {
+      console.warn("Firestore quota exceeded during seeding. Skipping seed.");
+    } else {
+      console.error("Error seeding database:", error);
+    }
   }
 };
 

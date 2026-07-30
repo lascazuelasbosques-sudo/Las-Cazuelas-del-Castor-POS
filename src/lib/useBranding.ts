@@ -47,8 +47,12 @@ export const useBranding = () => {
         }
       }
       setLoading(false);
-    }, (error) => {
-        console.error("Error fetching branding:", error);
+    }, (error: any) => {
+        if (error?.message && (error.message.includes("Quota") || error.message.includes("resource-exhausted") || error.message.includes("unavailable"))) {
+          console.warn("Firestore quota/offline reached for branding. Using local cache.");
+        } else {
+          console.error("Error fetching branding:", error);
+        }
         setLoading(false);
     });
 

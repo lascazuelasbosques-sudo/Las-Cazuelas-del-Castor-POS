@@ -132,7 +132,7 @@ export default function WhatsAppInternoView({ userRole, mode = 'staff' }: WhatsA
         const isOngoing = mostRecentOrder && !(
           mostRecentOrder.status === 'cancelled' ||
           mostRecentOrder.status === 'paid' ||
-          mostRecentOrder.status === 'finished' ||
+          (mostRecentOrder.status as string) === 'finished' ||
           mostRecentOrder.isPaid ||
           (mostRecentOrder.isDelivered && mostRecentOrder.isPaid)
         );
@@ -227,20 +227,16 @@ export default function WhatsAppInternoView({ userRole, mode = 'staff' }: WhatsA
       query(collection(db, "chats", selectedChatId, "messages"), orderBy("timestamp", "asc")),
       (snapshot) => {
         setMessages(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ChatMessage)));
-        
-        // Auto mark as read (clear unread count on staff open)
-        // We also check against the database directly if needed, but here we do it based on the document
-        const chatInList = chats.find(c => c.id === selectedChatId);
-        if (chatInList && chatInList.unreadCount > 0) {
-          updateDoc(doc(db, "chats", selectedChatId), {
-            unreadCount: 0
-          }).catch(err => console.error("Error resetting unreadCount:", err));
-        }
       },
       (error) => {
         handleFirestoreError(error, OperationType.LIST, `chats/${selectedChatId}/messages`);
       }
     );
+
+    // Reset unread count once when selectedChatId changes
+    updateDoc(doc(db, "chats", selectedChatId), {
+      unreadCount: 0
+    }).catch(() => {});
 
     return () => unsubMessages();
   }, [selectedChatId]);
@@ -514,7 +510,7 @@ export default function WhatsAppInternoView({ userRole, mode = 'staff' }: WhatsA
       const isOngoing = mostRecentOrder && !(
         mostRecentOrder.status === 'cancelled' ||
         mostRecentOrder.status === 'paid' ||
-        mostRecentOrder.status === 'finished' ||
+        (mostRecentOrder.status as string) === 'finished' ||
         mostRecentOrder.isPaid ||
         (mostRecentOrder.isDelivered && mostRecentOrder.isPaid)
       );

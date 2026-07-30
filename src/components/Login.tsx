@@ -3,7 +3,7 @@ import { doc, getDoc, setDoc, collection, query, where, getDocs, writeBatch } fr
 import { signInWithPopup, GoogleAuthProvider, signInAnonymously } from "firebase/auth";
 import { Button } from "./Button";
 import { Card, CardContent } from "./Card";
-import { User } from "../types";
+import { User, DEFAULT_USERS } from "../types";
 import { auth, db } from "../firebase";
 import { LogIn, User as UserIcon, Lock, RefreshCw, MessageCircle, Shield, ChefHat, Flame, ChevronRight, ArrowLeft } from "lucide-react";
 import toast from "react-hot-toast";
@@ -45,34 +45,44 @@ export const Login = ({ onLogin, onEnterPortal }: LoginProps) => {
       const usernameLower = username.trim().toLowerCase();
       console.log("Buscando usuario en Firestore:", usernameLower);
       
-      const q = query(
-        collection(db, "users"), 
-        where("username", "==", usernameLower)
-      );
-      
-      const querySnapshot = await getDocs(q);
-      console.log("Usuarios encontrados con ese nombre:", querySnapshot.size);
+      let querySnapshot: any = null;
+      try {
+        const q = query(
+          collection(db, "users"), 
+          where("username", "==", usernameLower)
+        );
+        querySnapshot = await getDocs(q);
+      } catch (err: any) {
+        console.warn("Firestore query failed, falling back to local users:", err);
+      }
 
-      if (querySnapshot.empty) {
-        toast.error("Usuario no encontrado");
+      let userData: User | null = null;
+
+      if (querySnapshot && !querySnapshot.empty) {
+        const userDoc = querySnapshot.docs.find((doc: any) => {
+          const data = doc.data();
+          return data.password === password;
+        });
+        if (userDoc) {
+          userData = { id: userDoc.id, ...userDoc.data() } as User;
+        }
+      }
+
+      if (!userData) {
+        // Check fallback DEFAULT_USERS
+        const fallback = DEFAULT_USERS.find(u => u.username?.toLowerCase() === usernameLower && u.password === password);
+        if (fallback) {
+          userData = fallback;
+          console.log("Login exitoso con usuario por defecto:", userData.name);
+        }
+      }
+
+      if (!userData) {
+        toast.error("Usuario o contraseña incorrectos");
         setLoading(false);
         return;
       }
 
-      // 3. Find the user with the matching password in JS
-      const userDoc = querySnapshot.docs.find(doc => {
-        const data = doc.data();
-        return data.password === password;
-      });
-
-      if (!userDoc) {
-        console.log("Contraseña incorrecta para el usuario encontrado");
-        toast.error("Contraseña incorrecta");
-        setLoading(false);
-        return;
-      }
-
-      const userData = { id: userDoc.id, ...userDoc.data() } as User;
       console.log("Login exitoso para:", userData.name, "Rol:", userData.role);
 
       if (!userData.active) {

@@ -8,6 +8,7 @@ import { Order } from "../types";
 import { useBranding } from "../lib/useBranding";
 import { PWAInstallBanner } from "./PWAInstallBanner";
 import { WeatherClockWidget } from "./WeatherClockWidget";
+import { DiscreteMiniPlayer } from "./DiscreteMiniPlayer";
 import { FullScreenLockControl } from "./FullScreenLockControl";
 import toast from "react-hot-toast";
 
@@ -21,8 +22,6 @@ interface NavbarProps {
   toggleFullscreen?: () => void;
   isWalkieOpen: boolean;
   setIsWalkieOpen: (open: boolean) => void;
-  isMusicOpen?: boolean;
-  setIsMusicOpen?: (open: boolean) => void;
 }
 
 export const Navbar = ({ 
@@ -34,9 +33,7 @@ export const Navbar = ({
   isFullscreen: propIsFullscreen,
   toggleFullscreen: propToggleFullscreen,
   isWalkieOpen,
-  setIsWalkieOpen,
-  isMusicOpen = false,
-  setIsMusicOpen
+  setIsWalkieOpen
 }: NavbarProps) => {
   const [pendingStations, setPendingStations] = useState<{plancha: boolean, cocina: boolean}>({ plancha: false, cocina: false });
   const [unpaidPaymentsCount, setUnpaidPaymentsCount] = useState(0);
@@ -175,70 +172,91 @@ export const Navbar = ({
     return () => unsubscribe();
   }, []);
 
-  // Monitor WhatsApp Chats
+  // Monitor WhatsApp Chats & Orders efficiently without nesting
   useEffect(() => {
-    // We need to mirror the logic from WhatsAppInternoView to only count "Active" chats
-    const unsubChats = onSnapshot(collection(db, "chats"), (chatSnapshot) => {
-      const unsubOrders = onSnapshot(collection(db, "orders"), (orderSnapshot) => {
-        const activeOrdersMap = new Map();
-        orderSnapshot.forEach(doc => {
-          const data = doc.data();
-          if (data.isTakeaway) {
-            activeOrdersMap.set(doc.id, data);
-          }
-        });
+    let chatDocs: any[] = [];
+    let activeOrdersMap = new Map();
 
-        let count = 0;
-        chatSnapshot.forEach(doc => {
-          const data = doc.data();
-          if (!data.unreadCount || data.unreadCount <= 0) return;
-
-          // Check if this chat would be filtered out
-          let isVisible = true;
-          if (data.activeOrderId) {
-            const orderDoc = activeOrdersMap.get(data.activeOrderId);
-            if (orderDoc) {
-              const isCancelled = orderDoc.status === 'cancelled';
-              const isCompleted = (orderDoc.isDelivered || orderDoc.status === 'served') && 
-                                 (orderDoc.isPaid || orderDoc.status === 'paid');
-              if (isCancelled || isCompleted) {
-                isVisible = false; 
-              }
+    const recalculateUnread = () => {
+      let count = 0;
+      chatDocs.forEach(data => {
+        if (!data.unreadCount || data.unreadCount <= 0) return;
+        let isVisible = true;
+        if (data.activeOrderId) {
+          const orderDoc = activeOrdersMap.get(data.activeOrderId);
+          if (orderDoc) {
+            const isCancelled = orderDoc.status === 'cancelled';
+            const isCompleted = (orderDoc.isDelivered || orderDoc.status === 'served') && 
+                               (orderDoc.isPaid || orderDoc.status === 'paid');
+            if (isCancelled || isCompleted) {
+              isVisible = false; 
             }
           }
-
-          if (isVisible) {
-            count += data.unreadCount;
-          }
-        });
-
-        setTotalUnreadChats(count);
-        
-        // Play sound if count increased
-        if (count > prevUnreadRef.current) {
-          audioRef.current?.play().catch(e => console.log("Audio play blocked by browser", e));
         }
-        prevUnreadRef.current = count;
-      }, (err) => {
-        console.warn("Error listening to orders:", err);
+        if (isVisible) {
+          count += data.unreadCount;
+        }
       });
 
-      return () => unsubOrders();
+      setTotalUnreadChats(count);
+      if (count > prevUnreadRef.current) {
+        audioRef.current?.play().catch(e => console.log("Audio play blocked by browser", e));
+      }
+      prevUnreadRef.current = count;
+    };
+
+    const unsubOrders = onSnapshot(collection(db, "orders"), (orderSnapshot) => {
+      activeOrdersMap.clear();
+      orderSnapshot.forEach(doc => {
+        const data = doc.data();
+        if (data.isTakeaway) {
+          activeOrdersMap.set(doc.id, data);
+        }
+      });
+      recalculateUnread();
     }, (err) => {
-      console.warn("Error listening to chats:", err);
+      console.warn("Orders snapshot error:", err);
     });
 
-    return () => unsubChats();
+    const unsubChats = onSnapshot(collection(db, "chats"), (chatSnapshot) => {
+      chatDocs = [];
+      chatSnapshot.forEach(doc => {
+        chatDocs.push(doc.data());
+      });
+      recalculateUnread();
+    }, (err) => {
+      console.warn("Chats snapshot error:", err);
+    });
+
+    return () => {
+      unsubChats();
+      unsubOrders();
+    };
   }, []);
 
   const [imageError, setImageError] = useState(false);
+  const [isPC, setIsPC] = useState(false);
   const logoUrl = branding.logoUrl;
+
+  useEffect(() => {
+    const checkDevice = () => {
+      const isWideScreen = window.innerWidth >= 1024;
+      const userAgentMobile = /Mobi|Android|iPhone|iPad|iPod|Windows Phone/i.test(navigator.userAgent);
+      setIsPC(isWideScreen && !userAgentMobile);
+    };
+
+    checkDevice();
+    window.addEventListener('resize', checkDevice);
+    return () => window.removeEventListener('resize', checkDevice);
+  }, []);
+
   const navItems = [
     { id: 'orders', label: 'Pedidos', icon: Utensils, roles: ['admin', 'waiter', 'cashier', 'kitchen', 'parrilla'] },
     { id: 'whatsapp', label: 'WhatsApp', icon: MessageSquare, roles: ['admin', 'cashier', 'waiter'] },
     { id: 'kitchen', label: userRole === 'parrilla' ? 'Parrilla' : 'Cocina', icon: ClipboardList, roles: ['admin', 'kitchen', 'parrilla'] },
     { id: 'inventory', label: 'Comidas', icon: ChefHat, roles: ['admin'] },
     { id: 'cash', label: 'Caja', icon: CreditCard, roles: ['admin', 'cashier', 'waiter'] },
+    ...(isPC ? [{ id: 'music', label: 'Música', icon: Music, roles: ['admin', 'waiter', 'cashier', 'kitchen', 'parrilla'] }] : []),
     { id: 'admin', label: 'Admin', icon: Settings, roles: ['admin'] },
   ];
 
@@ -345,18 +363,6 @@ export const Navbar = ({
           </button>
 
           <button
-            onClick={() => setIsMusicOpen && setIsMusicOpen(!isMusicOpen)}
-            className={cn(
-              "flex flex-col items-center gap-1 p-2 rounded-xl shrink-0 transition-all",
-              isMusicOpen ? "text-amber-600 bg-amber-50" : "text-stone-600 hover:bg-stone-50"
-            )}
-            title="Música Latina (Salsa, Pop, Rock, Cumbia)"
-          >
-            <Music size={21} className={isMusicOpen ? "text-amber-600 animate-bounce" : "text-amber-500"} />
-            <span className="text-[9px] font-extrabold whitespace-nowrap">Música</span>
-          </button>
-
-          <button
             onClick={toggleFullscreen}
             className="flex flex-col items-center gap-1 p-2 rounded-xl text-stone-600 hover:bg-stone-50 shrink-0"
             title={isFullscreen ? "Salir de Pantalla Completa" : "Pantalla Completa"}
@@ -378,11 +384,13 @@ export const Navbar = ({
 
       <div className="hidden md:mt-auto md:flex flex-col w-full gap-2 px-2 lg:px-4">
         {/* Weather & Clock Widget for Desktop */}
-        <div className="hidden lg:block mb-1">
+        <div className="hidden lg:flex flex-col gap-2 mb-1">
           <WeatherClockWidget />
+          <DiscreteMiniPlayer onNavigateToMusic={() => setActiveTab('music')} />
         </div>
-        <div className="lg:hidden flex justify-center mb-1">
+        <div className="lg:hidden flex flex-col items-center gap-1 mb-1">
           <WeatherClockWidget compact />
+          <DiscreteMiniPlayer compact onNavigateToMusic={() => setActiveTab('music')} />
         </div>
 
         <div className="p-2 lg:p-3 bg-stone-50 rounded-lg border border-stone-100 mb-2 flex items-center justify-center lg:justify-start">
@@ -397,7 +405,7 @@ export const Navbar = ({
 
         {/* Walkie-Talkie Button for Desktop */}
         <Button 
-          variant={isWalkieOpen ? "default" : "outline"}
+          variant={isWalkieOpen ? "primary" : "outline"}
           className={cn(
             "justify-center lg:justify-start gap-3 w-full px-0 lg:px-4 h-[40px] rounded-xl text-xs font-bold transition-all",
             isWalkieOpen 
@@ -409,22 +417,6 @@ export const Navbar = ({
         >
           <Radio size={18} className={cn(isWalkieOpen ? "animate-pulse" : "text-orange-500")} />
           <span className="hidden lg:inline">Walkie-Talkie</span>
-        </Button>
-
-        {/* Música Latina Button for Desktop */}
-        <Button 
-          variant={isMusicOpen ? "default" : "outline"}
-          className={cn(
-            "justify-center lg:justify-start gap-3 w-full px-0 lg:px-4 h-[40px] rounded-xl text-xs font-bold transition-all",
-            isMusicOpen 
-              ? "bg-amber-500 hover:bg-amber-600 text-stone-950 border-amber-500 shadow-md" 
-              : "border-stone-200 bg-white text-stone-600 hover:bg-stone-50"
-          )}
-          title="Música Latina (Salsa, Pop, Rock, Cumbia)"
-          onClick={() => setIsMusicOpen && setIsMusicOpen(!isMusicOpen)}
-        >
-          <Music size={18} className={cn(isMusicOpen ? "animate-bounce text-stone-950" : "text-amber-500")} />
-          <span className="hidden lg:inline">Música Latina</span>
         </Button>
 
         {/* Fullscreen Button for Desktop */}

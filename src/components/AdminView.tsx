@@ -25,7 +25,7 @@ import { collection, getDocs, deleteDoc, doc, writeBatch, updateDoc, addDoc, get
 import toast from "react-hot-toast";
 import { seedDatabase, restoreDeletedProducts } from "../seed";
 import { handleFirestoreError, OperationType } from "../lib/firestoreErrorHandler";
-import { User, UserRole, CashLog } from "../types";
+import { User, UserRole, CashLog, DEFAULT_USERS } from "../types";
 import { formatCurrency, cn, getRoleLabel } from "@/src/lib/utils";
 import { auth } from "../firebase";
 
@@ -300,7 +300,11 @@ export const AdminView = () => {
   const fetchUsers = async () => {
     try {
       const snap = await getDocs(collection(db, "users"));
-      const fetchedUsers = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as User));
+      let fetchedUsers = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as User));
+      
+      if (fetchedUsers.length === 0) {
+        fetchedUsers = DEFAULT_USERS;
+      }
       
       // Cleanup: Delete Admins that are NOT Google Users (and not the Super Admin email)
       const invalidAdmins = fetchedUsers.filter(u => u.role === 'admin' && !u.isGoogleUser && u.email !== SUPER_ADMIN_EMAIL);
@@ -308,11 +312,15 @@ export const AdminView = () => {
       let baseUsers = fetchedUsers;
       if (invalidAdmins.length > 0) {
         toast.error(`Se detectaron y eliminaron ${invalidAdmins.length} administradores sin cuenta de Google vinculada.`);
-        const batch = writeBatch(db);
-        invalidAdmins.forEach(u => {
-          batch.delete(doc(db, "users", u.id));
-        });
-        await batch.commit();
+        try {
+          const batch = writeBatch(db);
+          invalidAdmins.forEach(u => {
+            batch.delete(doc(db, "users", u.id));
+          });
+          await batch.commit();
+        } catch (e) {
+          console.warn("Could not delete invalid admins due to quota/offline:", e);
+        }
         baseUsers = fetchedUsers.filter(u => !invalidAdmins.some(ia => ia.id === u.id));
       }
 
@@ -359,19 +367,23 @@ export const AdminView = () => {
 
       if (toDelete.length > 0) {
         console.log("Detectados duplicados para eliminar:", toDelete.map(u => `${u.name} (${u.id})`));
-        const batch = writeBatch(db);
-        toDelete.forEach(u => {
-          batch.delete(doc(db, "users", u.id));
-        });
-        await batch.commit();
-        toast.success(`Se limpiaron ${toDelete.length} cuentas duplicadas automáticamente.`, { id: "dedup-toast" });
+        try {
+          const batch = writeBatch(db);
+          toDelete.forEach(u => {
+            batch.delete(doc(db, "users", u.id));
+          });
+          await batch.commit();
+          toast.success(`Se limpiaron ${toDelete.length} cuentas duplicadas automáticamente.`, { id: "dedup-toast" });
+        } catch (e) {
+          console.warn("Could not delete duplicates due to quota/offline:", e);
+        }
         setUsers(baseUsers.filter(u => !toDelete.some(td => td.id === u.id)));
       } else {
         setUsers(baseUsers);
       }
     } catch (error) {
-      console.error("Error fetching users:", error);
-      handleFirestoreError(error, OperationType.GET, "users");
+      console.warn("Error fetching users from Firestore, using defaults:", error);
+      setUsers(DEFAULT_USERS);
     }
   };
 

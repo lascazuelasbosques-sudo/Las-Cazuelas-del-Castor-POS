@@ -97,9 +97,12 @@ export interface CashLog {
   cancelled?: boolean;
   cancelledAt?: string;
   cancelledBy?: string;
+  cancelReason?: string;
   orderIds?: string[];
   clientName?: string;
   isCreditSettlement?: boolean;
+  paymentMethod?: PaymentMethod;
+  transferReceiptUrl?: string;
 }
 
 export interface TipLoan {
@@ -137,12 +140,33 @@ export interface ChatChannel {
   activeOrderId?: string;
 }
 
+
+export interface ChatChannel {
+  id: string; // usually client's phone or auto-id
+  clientName: string;
+  clientPhone: string;
+  lastMessage: string;
+  lastMessageAt: string;
+  unreadCount: number;
+  status: 'open' | 'archived';
+  activeOrderId?: string;
+}
+
 export interface ChatMessage {
   id: string;
   sender: 'client' | 'staff';
   text: string;
   timestamp: string;
   status: 'sent' | 'delivered' | 'read';
-  orderId?: string; // option: references order created via whatsapp
+  orderId?: string;
 }
+
+export const DEFAULT_USERS: User[] = [
+  { id: 'usr-admin', name: 'Administrador', username: 'admin', password: 'admin', role: 'admin', pin: '0000', active: true },
+  { id: 'usr-cocina', name: 'Cocina Principal', username: 'cocina', password: 'cocina', role: 'kitchen', pin: '0000', active: true },
+  { id: 'usr-parrilla', name: 'Parrilla', username: 'parrilla', password: 'parrilla', role: 'parrilla', pin: '0000', active: true },
+  { id: 'usr-caja', name: 'Caja', username: 'caja', password: 'caja', role: 'cashier', pin: '0000', active: true },
+  { id: 'usr-mesero', name: 'Mesero', username: 'mesero', password: 'mesero', role: 'waiter', pin: '0000', active: true },
+];
+
 

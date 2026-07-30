@@ -5,12 +5,13 @@ import { KitchenView } from './components/KitchenView';
 import { CashierView } from './components/CashierView';
 import { InventoryView } from './components/InventoryView';
 import { AdminView } from './components/AdminView';
+import { MusicPlayerView } from './components/MusicPlayerView';
 import WhatsAppInternoView from './components/WhatsAppInternoView';
 import { CustomerPortal } from './components/CustomerPortal';
 import { Login } from './components/Login';
 import { PendingOrdersNotifier } from './components/PendingOrdersNotifier';
 import { WalkieTalkie } from './components/WalkieTalkie';
-import { LatinMusicWidget } from './components/LatinMusicWidget';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { auth } from './firebase';
 import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
 import { doc, getDoc, setDoc, onSnapshot, collection, getDocs, query, limit } from 'firebase/firestore';
@@ -29,7 +30,6 @@ export default function App() {
   const dragExitPortal = useDraggable();
   const [activeTab, setActiveTab] = useState('orders');
   const [isWalkieOpen, setIsWalkieOpen] = useState(false);
-  const [isMusicOpen, setIsMusicOpen] = useState(false);
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
   const [posUser, setPosUser] = useState<POSUser | null>(null);
   const [userRole, setUserRole] = useState<string>('waiter');
@@ -188,11 +188,13 @@ export default function App() {
       try {
         await getDocFromServer(doc(db, 'test', 'connection'));
         console.log("Firestore connection successful");
-      } catch (error) {
+      } catch (error: any) {
         if(error instanceof Error && error.message.includes('the client is offline')) {
-          console.error("Please check your Firebase configuration. The client is offline.");
+          console.warn("Please check your Firebase configuration. The client is offline.");
+        } else if (error?.message && (error.message.includes("Quota") || error.message.includes("resource-exhausted"))) {
+          console.warn("Firestore quota exceeded. Operating in offline/cached mode.");
         } else {
-          console.log("Firestore connection test completed (expected missing doc error).");
+          console.log("Firestore connection test completed.");
         }
       }
     };
@@ -245,52 +247,76 @@ export default function App() {
       // If we have a firebase user, ensure they have a document in 'users'
       try {
         if (user.isAnonymous) {
-          // Do not create a Firestore document for anonymous users.
-          // They are authenticated just to read their actual POS user document.
           setLoading(false);
           return;
         }
 
         const userRef = doc(db, 'users', user.uid);
-        const userDoc = await getDoc(userRef);
+        let userDoc;
+        try {
+          userDoc = await getDoc(userRef);
+        } catch (dbErr: any) {
+          if (dbErr?.message && (dbErr.message.includes("Quota") || dbErr.message.includes("resource-exhausted"))) {
+            console.warn("Firestore quota exceeded during auth user get. Using local fallback.");
+            setLoading(false);
+            return;
+          }
+          throw dbErr;
+        }
         
         if (!userDoc.exists()) {
-          // Check if this is the first user to bootstrap admin
-          const usersSnap = await getDocs(query(collection(db, 'users'), limit(1)));
-          const isFirstUser = usersSnap.empty;
-          
-          const defaultRole = (user.email === 'lascazuelasbosques@gmail.com' || isFirstUser) ? 'admin' : 'waiter';
-          
-          await setDoc(userRef, {
-            name: user.displayName || user.email?.split('@')[0] || (isFirstUser ? 'Admin Inicial' : 'Usuario'),
-            email: user.email || '',
-            role: defaultRole,
-            active: true,
-            pin: '0000'
-          });
-          // Only set role if not already set by POS user
-          if (!localStorage.getItem('posUser')) {
-            setUserRole(defaultRole);
+          try {
+            const usersSnap = await getDocs(query(collection(db, 'users'), limit(1)));
+            const isFirstUser = usersSnap.empty;
+            
+            const defaultRole = (user.email === 'lascazuelasbosques@gmail.com' || isFirstUser) ? 'admin' : 'waiter';
+            
+            await setDoc(userRef, {
+              name: user.displayName || user.email?.split('@')[0] || (isFirstUser ? 'Admin Inicial' : 'Usuario'),
+              email: user.email || '',
+              role: defaultRole,
+              active: true,
+              pin: '0000'
+            });
+            if (!localStorage.getItem('posUser')) {
+              setUserRole(defaultRole);
+            }
+          } catch (createErr: any) {
+            console.warn("Could not create user doc due to quota/offline:", createErr);
           }
         }
 
         // Listen for role changes if this is the primary user
-        unsubUserDoc = onSnapshot(userRef, (doc) => {
-          if (doc.exists()) {
-            const data = doc.data();
-            // Only sync role if we don't have a POS user or if the POS user matches this UID
-            if (!localStorage.getItem('posUser')) {
-              setUserRole(data.role);
+        try {
+          unsubUserDoc = onSnapshot(userRef, (doc) => {
+            if (doc.exists()) {
+              const data = doc.data();
+              if (!localStorage.getItem('posUser')) {
+                setUserRole(data.role);
+              }
             }
-          }
-        }, (error) => {
-          console.error("Error in user doc snapshot:", error);
-        });
+          }, (error: any) => {
+            if (error?.message && (error.message.includes("Quota") || error.message.includes("resource-exhausted"))) {
+              console.warn("Quota exceeded in user doc snapshot.");
+            } else {
+              console.error("Error in user doc snapshot:", error);
+            }
+          });
+        } catch (snapErr) {
+          console.warn("Snapshot subscription failed:", snapErr);
+        }
 
-        // Try to seed
-        seedDatabase();
-      } catch (error) {
-        console.error("Error in auth setup:", error);
+        try {
+          seedDatabase();
+        } catch (e) {
+          // ignore
+        }
+      } catch (error: any) {
+        if (error?.message && (error.message.includes("Quota") || error.message.includes("resource-exhausted"))) {
+          console.warn("Firestore quota exceeded in auth setup.");
+        } else {
+          console.error("Error in auth setup:", error);
+        }
       } finally {
         setLoading(false);
       }
@@ -422,6 +448,8 @@ export default function App() {
         return <CashierView onEditOrder={handleEditOrder} userRole={userRole} />;
       case 'inventory':
         return <InventoryView userRole={userRole} />;
+      case 'music':
+        return null;
       case 'admin':
         return <AdminView />;
       default:
@@ -442,21 +470,24 @@ export default function App() {
           toggleFullscreen={toggleFullscreen}
           isWalkieOpen={isWalkieOpen}
           setIsWalkieOpen={setIsWalkieOpen}
-          isMusicOpen={isMusicOpen}
-          setIsMusicOpen={setIsMusicOpen}
         />
       
       <main className="flex-1 overflow-hidden relative pb-16 md:pb-0">
         <div className="absolute inset-0 overflow-hidden">
-          {renderView()}
+          <ErrorBoundary>
+            {renderView()}
+            <MusicPlayerView 
+              userRole={userRole} 
+              activeTab={activeTab} 
+              onNavigateToMusic={() => setActiveTab('music')} 
+            />
+          </ErrorBoundary>
         </div>
       </main>
 
       <PendingOrdersNotifier userRole={userRole} />
 
       <WalkieTalkie posUser={posUser} isOpen={isWalkieOpen} setIsOpen={setIsWalkieOpen} />
-
-      <LatinMusicWidget isOpen={isMusicOpen} setIsOpen={setIsMusicOpen} />
 
       <Toaster position="top-right" />
       </div>

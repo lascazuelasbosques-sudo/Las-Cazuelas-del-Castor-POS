@@ -1,4 +1,5 @@
 import { auth } from "../firebase";
+import toast from "react-hot-toast";
 
 export enum OperationType {
   CREATE = 'create',
@@ -29,8 +30,12 @@ export interface FirestoreErrorInfo {
 }
 
 export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
+  const message = error instanceof Error ? error.message : String(error);
+  if (message.includes("Quota limit exceeded") || message.includes("quota") || message.includes("RESOURCE_EXHAUSTED")) {
+    toast.error("Límite de cuota diaria de Firestore alcanzado. Los cambios locales se sincronizarán al restablecerse la cuota.", { id: "quota-limit-toast" });
+  }
   const errInfo: FirestoreErrorInfo = {
-    error: error instanceof Error ? error.message : String(error),
+    error: message,
     authInfo: {
       userId: auth.currentUser?.uid,
       email: auth.currentUser?.email,
