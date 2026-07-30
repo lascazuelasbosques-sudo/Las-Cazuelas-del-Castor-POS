@@ -88,6 +88,66 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
     return cart.filter(item => item.productId === productId).reduce((sum, item) => sum + item.quantity, 0);
   };
 
+  const isProductPackage = (product: Product): boolean => {
+    if (!product) return false;
+    const nameLower = (product.name || '').toLowerCase();
+    const cat = categories.find(c => c.id === product.categoryId);
+    const catNameLower = cat ? (cat.name || '').toLowerCase() : '';
+
+    return (
+      nameLower.includes('paquete') ||
+      nameLower.includes('combo') ||
+      catNameLower.includes('paquete') ||
+      catNameLower.includes('combo') ||
+      product.categoryId === 'paquetes' ||
+      product.categoryId === 'combo'
+    );
+  };
+
+  const isCustomizableProduct = (product: Product): boolean => {
+    if (isProductPackage(product)) return false;
+    const nameLower = (product.name || '').toLowerCase();
+    return (
+      nameLower.includes('quesadilla') || 
+      nameLower.includes('huarache') || 
+      nameLower.includes('taco') || 
+      nameLower.includes('chilaquil') || 
+      nameLower.includes('gordita') || 
+      nameLower.includes('enchilada') || 
+      nameLower.includes('flauta') || 
+      nameLower.includes('burrito') || 
+      !!product.allowsExtraCheese
+    );
+  };
+
+  const parseFillingsFromItemName = (name: string, productName: string): string[] => {
+    let clean = name;
+    clean = clean.replace(/\s*\([^)]*\)/g, '').trim();
+
+    const prefixes = [
+      'Quesadilla de ', 'Quesadillas de ',
+      'Huarache de ', 'Huaraches de ',
+      'Tacos de ', 'Taco de ',
+      'Chilaquiles con ', 'Chilaquil con ',
+      'Gordita de ', 'Gorditas de ',
+      'Enchiladas con ', 'Enchilada con ',
+      'Flautas de ', 'Burrito de '
+    ];
+
+    for (const prefix of prefixes) {
+      if (clean.toLowerCase().startsWith(prefix.toLowerCase())) {
+        clean = clean.substring(prefix.length).trim();
+        break;
+      }
+    }
+
+    if (!clean || clean.toLowerCase() === productName.toLowerCase()) {
+      return [];
+    }
+
+    return clean.split(/,|\by\b/i).map(p => p.trim()).filter(Boolean);
+  };
+
   const handleDecrementProduct = (product: Product, e: React.MouseEvent) => {
     e.stopPropagation();
     const item = [...cart].reverse().find(i => i.productId === product.id);
@@ -98,10 +158,22 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
 
   const handleIncrementProduct = (product: Product, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (product.name.toLowerCase().includes('quesadilla') || product.allowsExtraCheese) {
-      setSelectedFillings([]);
-      setHasExtraCheeseOpt(false);
-      setProductToCustomize(product);
+    if (isCustomizableProduct(product)) {
+      const customCartItems = cart.filter(i => i.productId === product.id && i.status !== 'completed');
+      if (customCartItems.length > 0) {
+        // Increment the last customized selection of this product directly
+        const lastItem = customCartItems[customCartItems.length - 1];
+        const filling = lastItem.fillings && lastItem.fillings.length > 0
+          ? lastItem.fillings
+          : parseFillingsFromItemName(lastItem.name, product.name);
+        addToCart(product, lastItem.hasExtraCheese || false, filling, 1);
+        toast.success(`+1 ${lastItem.name}`);
+      } else {
+        setSelectedFillings([]);
+        setHasExtraCheeseOpt(false);
+        setCustomizeQuantity(1);
+        setProductToCustomize(product);
+      }
     } else {
       addToCart(product, false);
     }
@@ -166,6 +238,7 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
   const [productToCustomize, setProductToCustomize] = useState<Product | null>(null);
   const [selectedFillings, setSelectedFillings] = useState<string[]>([]);
   const [hasExtraCheeseOpt, setHasExtraCheeseOpt] = useState<boolean>(false);
+  const [customizeQuantity, setCustomizeQuantity] = useState<number>(1);
   const [showConfirmCancel, setShowConfirmCancel] = useState(false);
 
   // Form states for custom items inside the "Otros" category
@@ -316,43 +389,34 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
   };
 
   const handleProductClick = (product: Product) => {
-    const nameLower = product.name.toLowerCase();
-    const isCustomizable = 
-      nameLower.includes('quesadilla') || 
-      nameLower.includes('huarache') || 
-      nameLower.includes('taco') || 
-      nameLower.includes('chilaquil') || 
-      nameLower.includes('gordita') || 
-      nameLower.includes('enchilada') || 
-      nameLower.includes('flauta') || 
-      nameLower.includes('burrito') || 
-      nameLower.includes('comida') || 
-      product.allowsExtraCheese;
-
-    if (isCustomizable) {
+    if (isCustomizableProduct(product)) {
       setSelectedFillings([]);
       setHasExtraCheeseOpt(false);
+      setCustomizeQuantity(1);
       setProductToCustomize(product);
     } else {
       addToCart(product, false);
     }
   };
 
-  const getFillingFromItemName = (name: string): string | undefined => {
-    if (name.startsWith('Quesadilla de ')) {
-      let clean = name.replace('Quesadilla de ', '');
-      clean = clean.replace(' (Queso Extra)', '');
-      return clean;
-    }
-    return undefined;
-  };
-
-  const addToCart = (product: Product, hasExtraCheese: boolean = false, filling?: string | string[]) => {
+  const addToCart = (
+    product: Product, 
+    hasExtraCheese: boolean = false, 
+    filling?: string | string[],
+    quantityToAdd: number = 1
+  ) => {
     setCart(prev => {
       const nameLower = product.name.toLowerCase();
       let baseName = product.name;
 
-      const fillingStr = formatFillings(filling || '');
+      let fillingArr: string[] = [];
+      if (Array.isArray(filling)) {
+        fillingArr = filling;
+      } else if (typeof filling === 'string' && filling.trim()) {
+        fillingArr = [filling.trim()];
+      }
+
+      const fillingStr = formatFillings(fillingArr);
 
       if (fillingStr) {
         if (nameLower.includes('quesadilla')) {
@@ -385,7 +449,7 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
       if (existingPending) {
         return prev.map(item => 
           item === existingPending 
-            ? { ...item, quantity: item.quantity + 1 } 
+            ? { ...item, quantity: item.quantity + quantityToAdd } 
             : item
         );
       }
@@ -395,10 +459,11 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
         productId: product.id, 
         name: finalName, 
         price: product.price + (hasExtraCheese ? 8 : 0), 
-        quantity: 1,
+        quantity: quantityToAdd,
         status: 'pending',
         station: isBistec ? 'plancha' : (product.station || 'cocina'),
-        hasExtraCheese
+        hasExtraCheese,
+        fillings: fillingArr
       }];
     });
   };
@@ -445,10 +510,11 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
       };
 
       if (editingOrderId) {
-        // Al actualizar un pedido, si ya estaba en preparación ('preparing') o listo ('ready'),
-        // conservamos ese estado general de la orden. Cocina de todas maneras verá los nuevos 
-        // platillos agregados con estado 'pending' e indicador visual de "NUEVO".
-        orderData.status = editingOrderStatus === 'preparing' ? 'preparing' : (editingOrderStatus === 'ready' ? 'ready' : 'pending');
+        // Al actualizar un pedido (agregando platillos), si la orden estaba 'ready' o 'served', pasa a 'preparing'
+        // para que Cocina reciba la alerta activa de los nuevos platillos pendientes.
+        orderData.status = (editingOrderStatus === 'ready' || editingOrderStatus === 'served') 
+          ? 'preparing' 
+          : (editingOrderStatus || 'pending');
         
         const userInfo = getLoggedUserForLog();
         const updateLog = {
@@ -823,7 +889,7 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
                   <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-4 pb-12">
                     {currentProducts.map(product => {
                       const qty = getProductCartCount(product.id);
-                      const requiresCustomization = product.name.toLowerCase().includes('quesadilla') || product.allowsExtraCheese;
+                      const requiresCustomization = isCustomizableProduct(product);
                       return (
                         <div 
                           key={product.id}
@@ -872,7 +938,7 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
                                   <button
                                     type="button"
                                     onClick={(e) => handleDecrementProduct(product, e)}
-                                    className="w-7 h-7 flex items-center justify-center rounded-full bg-white hover:bg-stone-50 border border-stone-200 text-stone-600 transition-all active:scale-90"
+                                    className="w-7 h-7 flex items-center justify-center rounded-full bg-white hover:bg-stone-50 border border-stone-200 text-stone-600 transition-all active:scale-90 cursor-pointer"
                                     title="Restar uno"
                                   >
                                     <Minus size={12} className="stroke-[3]" />
@@ -881,23 +947,48 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
                                   <button
                                     type="button"
                                     onClick={(e) => handleIncrementProduct(product, e)}
-                                    className="w-7 h-7 flex items-center justify-center rounded-full bg-mex-green text-white hover:bg-emerald-700 transition-all active:scale-90"
+                                    className="w-7 h-7 flex items-center justify-center rounded-full bg-mex-green text-white hover:bg-emerald-700 transition-all active:scale-90 cursor-pointer"
                                     title="Sumar uno"
                                   >
                                     <Plus size={12} className="stroke-[3]" />
                                   </button>
                                 </div>
                               ) : qty > 0 && requiresCustomization ? (
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleProductClick(product);
-                                  }}
-                                  className="px-2.5 py-1 text-[9px] font-black uppercase tracking-wider rounded-full bg-mex-gold/10 border border-mex-gold/30 text-mex-gold hover:bg-mex-gold/20 transition-all"
-                                >
-                                  + Otro
-                                </button>
+                                <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                                  <div className="flex items-center bg-stone-100 rounded-full p-0.5 shadow-inner">
+                                    <button
+                                      type="button"
+                                      onClick={(e) => handleDecrementProduct(product, e)}
+                                      className="w-6 h-6 flex items-center justify-center rounded-full bg-white hover:bg-stone-50 border border-stone-200 text-stone-600 transition-all active:scale-90 cursor-pointer"
+                                      title="Restar uno"
+                                    >
+                                      <Minus size={10} className="stroke-[3]" />
+                                    </button>
+                                    <span className="w-5 text-center font-black text-xs text-stone-800">{qty}</span>
+                                    <button
+                                      type="button"
+                                      onClick={(e) => handleIncrementProduct(product, e)}
+                                      className="w-6 h-6 flex items-center justify-center rounded-full bg-mex-green text-white hover:bg-emerald-700 transition-all active:scale-90 cursor-pointer"
+                                      title="Agregar otro de la última elección"
+                                    >
+                                      <Plus size={10} className="stroke-[3]" />
+                                    </button>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setSelectedFillings([]);
+                                      setHasExtraCheeseOpt(false);
+                                      setCustomizeQuantity(1);
+                                      setProductToCustomize(product);
+                                    }}
+                                    className="px-2 py-1 text-[9px] font-black uppercase tracking-wider rounded-full bg-mex-gold/10 border border-mex-gold/30 text-mex-gold hover:bg-mex-gold/20 transition-all cursor-pointer whitespace-nowrap"
+                                    title="Elegir otra opción / relleno"
+                                  >
+                                    + Opción
+                                  </button>
+                                </div>
                               ) : (
                                 <div className="w-8 h-8 rounded-full bg-stone-100 text-mex-green flex items-center justify-center hover:bg-mex-green hover:text-white transition-all duration-150">
                                   <Plus size={16} className="stroke-[2.5]" />
@@ -917,7 +1008,7 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
                 <div className="bg-white rounded-2xl border border-stone-200 overflow-hidden shadow-sm divide-y divide-stone-100 pb-12">
                   {currentProducts.map(product => {
                     const qty = getProductCartCount(product.id);
-                    const requiresCustomization = product.name.toLowerCase().includes('quesadilla') || product.allowsExtraCheese;
+                    const requiresCustomization = isCustomizableProduct(product);
                     return (
                       <div 
                         key={product.id}
@@ -968,7 +1059,7 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
                               <button
                                 type="button"
                                 onClick={(e) => handleDecrementProduct(product, e)}
-                                className="w-8 h-8 flex items-center justify-center rounded-full bg-white hover:bg-stone-50 border border-stone-200 text-stone-600 transition-all active:scale-90"
+                                className="w-8 h-8 flex items-center justify-center rounded-full bg-white hover:bg-stone-50 border border-stone-200 text-stone-600 transition-all active:scale-90 cursor-pointer"
                               >
                                 <Minus size={14} className="stroke-[3]" />
                               </button>
@@ -976,19 +1067,46 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
                               <button
                                 type="button"
                                 onClick={(e) => handleIncrementProduct(product, e)}
-                                className="w-8 h-8 flex items-center justify-center rounded-full bg-mex-green text-white hover:bg-emerald-700 transition-all active:scale-90"
+                                className="w-8 h-8 flex items-center justify-center rounded-full bg-mex-green text-white hover:bg-emerald-700 transition-all active:scale-90 cursor-pointer"
                               >
                                 <Plus size={14} className="stroke-[3]" />
                               </button>
                             </div>
                           ) : qty > 0 && requiresCustomization ? (
-                            <button
-                              type="button"
-                              onClick={() => handleProductClick(product)}
-                              className="h-8 px-3 rounded-full bg-mex-gold text-white hover:bg-yellow-600 font-bold text-[10px] uppercase tracking-wider flex items-center justify-center gap-1 shadow-sm active:scale-95 transition-all"
-                            >
-                              <span>+ Otro</span>
-                            </button>
+                            <div className="flex items-center gap-1.5">
+                              <div className="flex items-center bg-stone-100 rounded-full p-0.5 shadow-inner">
+                                <button
+                                  type="button"
+                                  onClick={(e) => handleDecrementProduct(product, e)}
+                                  className="w-7 h-7 flex items-center justify-center rounded-full bg-white hover:bg-stone-50 border border-stone-200 text-stone-600 transition-all active:scale-90 cursor-pointer"
+                                  title="Restar uno"
+                                >
+                                  <Minus size={12} className="stroke-[3]" />
+                                </button>
+                                <span className="w-5 text-center font-black text-xs text-stone-800">{qty}</span>
+                                <button
+                                  type="button"
+                                  onClick={(e) => handleIncrementProduct(product, e)}
+                                  className="w-7 h-7 flex items-center justify-center rounded-full bg-mex-green text-white hover:bg-emerald-700 transition-all active:scale-90 cursor-pointer"
+                                  title="Agregar otro de la última elección"
+                                >
+                                  <Plus size={12} className="stroke-[3]" />
+                                </button>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSelectedFillings([]);
+                                  setHasExtraCheeseOpt(false);
+                                  setCustomizeQuantity(1);
+                                  setProductToCustomize(product);
+                                }}
+                                className="h-7 px-2.5 rounded-full bg-mex-gold text-white hover:bg-yellow-600 font-bold text-[9px] uppercase tracking-wider flex items-center justify-center shadow-sm active:scale-95 transition-all cursor-pointer whitespace-nowrap"
+                                title="Elegir otra opción / relleno"
+                              >
+                                + Opción
+                              </button>
+                            </div>
                           ) : (
                             <button
                               type="button"
@@ -1180,13 +1298,16 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
                         } else {
                           const product = products.find(p => p.id === item.productId);
                           if (product) {
-                            const filling = getFillingFromItemName(item.name);
-                            addToCart(product, item.hasExtraCheese, filling);
+                            const filling = item.fillings && item.fillings.length > 0
+                              ? item.fillings
+                              : parseFillingsFromItemName(item.name, product.name);
+                            addToCart(product, item.hasExtraCheese || false, filling, 1);
                           }
                         }
                       }}
                       disabled={item.status === 'completed'}
-                      className="w-8 h-8 flex items-center justify-center rounded-lg bg-mex-green/10 hover:bg-mex-green/20 text-mex-green disabled:opacity-30 transition-colors"
+                      className="w-8 h-8 flex items-center justify-center rounded-lg bg-mex-green/10 hover:bg-mex-green/20 text-mex-green disabled:opacity-30 transition-colors cursor-pointer"
+                      title="Agregar otro de la misma selección"
                     >
                       <Plus size={14} />
                     </button>
@@ -1321,6 +1442,52 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
             </CardHeader>
 
             <CardContent className="p-5 space-y-5 bg-stone-50 max-h-[70vh] overflow-y-auto">
+              {/* Existing customized selections for this product in current cart */}
+              {(() => {
+                const existingForProduct = cart.filter(i => i.productId === productToCustomize.id && i.status !== 'completed');
+                if (existingForProduct.length === 0) return null;
+
+                return (
+                  <div className="bg-amber-50/90 border border-amber-200 p-3 rounded-xl space-y-2">
+                    <p className="text-[11px] font-black uppercase text-amber-900 tracking-wider flex items-center justify-between">
+                      <span>Ya agregaste a esta comanda:</span>
+                      <span className="text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full text-[10px]">
+                        {existingForProduct.reduce((sum, item) => sum + item.quantity, 0)} piezas
+                      </span>
+                    </p>
+                    <div className="space-y-1.5 max-h-32 overflow-y-auto pr-1">
+                      {existingForProduct.map((item, idx) => (
+                        <div key={idx} className="flex items-center justify-between text-xs bg-white p-2 rounded-lg border border-amber-200 shadow-2xs">
+                          <div className="min-w-0 pr-2">
+                            <p className="font-bold text-stone-800 truncate">{item.name}</p>
+                            <p className="text-[10px] text-stone-400 font-medium">{formatCurrency(item.price)} c/u</p>
+                          </div>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <span className="font-black text-amber-900 bg-amber-100 px-2 py-0.5 rounded-md text-[11px]">
+                              x{item.quantity}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const filling = item.fillings && item.fillings.length > 0
+                                  ? item.fillings
+                                  : parseFillingsFromItemName(item.name, productToCustomize.name);
+                                addToCart(productToCustomize, item.hasExtraCheese || false, filling, 1);
+                                toast.success(`+1 ${item.name}`);
+                              }}
+                              className="px-2 py-1 bg-mex-green text-white font-black rounded-md text-[10px] hover:bg-emerald-700 transition-all active:scale-95 cursor-pointer shadow-xs"
+                              title="Agregar 1 más de esta combinación"
+                            >
+                              +1 Igual
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
+
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-black text-stone-600 uppercase tracking-wider block">
@@ -1413,25 +1580,46 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
               </div>
             </CardContent>
 
-            <CardFooter className="flex gap-3 bg-white p-4 border-t border-stone-100">
+            <CardFooter className="flex items-center gap-2 bg-white p-4 border-t border-stone-100">
               <Button 
                 variant="outline" 
-                className="flex-1" 
+                className="px-3" 
                 onClick={() => setProductToCustomize(null)}
               >
                 Cancelar
               </Button>
+
+              <div className="flex items-center bg-stone-100 rounded-xl p-1 border border-stone-200 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setCustomizeQuantity(prev => Math.max(1, prev - 1))}
+                  className="w-8 h-8 flex items-center justify-center rounded-lg bg-white border border-stone-200 text-stone-700 font-bold active:scale-95 cursor-pointer"
+                  title="Restar cantidad"
+                >
+                  <Minus size={14} />
+                </button>
+                <span className="w-7 text-center font-black text-sm text-stone-900">{customizeQuantity}</span>
+                <button
+                  type="button"
+                  onClick={() => setCustomizeQuantity(prev => prev + 1)}
+                  className="w-8 h-8 flex items-center justify-center rounded-lg bg-white border border-stone-200 text-stone-700 font-bold active:scale-95 cursor-pointer"
+                  title="Sumar cantidad"
+                >
+                  <Plus size={14} />
+                </button>
+              </div>
+
               <Button 
                 variant="primary" 
                 disabled={selectedFillings.length === 0}
-                className="flex-1 bg-mex-gold hover:bg-yellow-600 border-mex-gold text-white font-bold disabled:opacity-50" 
+                className="flex-1 bg-mex-gold hover:bg-yellow-600 border-mex-gold text-white font-bold disabled:opacity-50 cursor-pointer text-xs" 
                 onClick={() => {
                   const effectiveHasExtra = hasExtraCheeseOpt || selectedFillings.includes('Queso Extra');
-                  addToCart(productToCustomize, effectiveHasExtra, selectedFillings);
+                  addToCart(productToCustomize, effectiveHasExtra, selectedFillings, customizeQuantity);
                   setProductToCustomize(null);
                 }}
               >
-                Agregar ${productToCustomize.price + ((hasExtraCheeseOpt || selectedFillings.includes('Queso Extra')) ? 8 : 0)}
+                Agregar {customizeQuantity > 1 ? `(${customizeQuantity}) ` : ''}{formatCurrency((productToCustomize.price + ((hasExtraCheeseOpt || selectedFillings.includes('Queso Extra')) ? 8 : 0)) * customizeQuantity)}
               </Button>
             </CardFooter>
           </Card>

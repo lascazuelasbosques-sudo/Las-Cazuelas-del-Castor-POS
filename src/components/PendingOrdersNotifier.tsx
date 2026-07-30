@@ -185,14 +185,11 @@ export function PendingOrdersNotifier({ userRole = 'waiter' }: { userRole?: stri
 
   // Subscribe to unattended/unfinished orders
   useEffect(() => {
-    const q = query(
-      collection(db, "orders"),
-      where("status", "in", ["pending", "preparing"]),
-      orderBy("createdAt", "desc")
-    );
-
-    const unsubscribe = onSnapshot(q, async (snapshot) => {
-      const orders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Order));
+    const unsubscribe = onSnapshot(collection(db, "orders"), async (snapshot) => {
+      const orders = snapshot.docs
+        .map(doc => ({ id: doc.id, ...doc.data() } as Order))
+        .filter(o => o.status === 'pending' || o.status === 'preparing')
+        .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
 
       // --- DETECT CANCELLED ORDERS ---
       const prevOrders = prevOrdersRef.current;

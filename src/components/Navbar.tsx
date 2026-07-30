@@ -36,6 +36,7 @@ export const Navbar = ({
   setIsWalkieOpen
 }: NavbarProps) => {
   const [pendingStations, setPendingStations] = useState<{plancha: boolean, cocina: boolean}>({ plancha: false, cocina: false });
+  const [pendingFoodCount, setPendingFoodCount] = useState(0);
   const [unpaidPaymentsCount, setUnpaidPaymentsCount] = useState(0);
   const [totalUnreadChats, setTotalUnreadChats] = useState(0);
   const prevUnreadRef = useRef(0);
@@ -118,18 +119,16 @@ export const Navbar = ({
   }, []);
 
   // Monitor Kitchen Orders and Unprocessed Payments
-  useEffect(() => {
-    const q = query(
-      collection(db, "orders"),
-      where("status", "in", ["pending", "preparing", "ready", "served"])
-    );
+  const prevFoodCountRef = useRef<number>(0);
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const orders = snapshot.docs.map(doc => doc.data() as Order);
+  useEffect(() => {
+    const unsubscribe = onSnapshot(collection(db, "orders"), (snapshot) => {
+      const orders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Order));
       
       let hasPlancha = false;
       let hasCocina = false;
       let unpaidCount = 0;
+      let foodCount = 0;
 
       orders.forEach(order => {
         // Ignore unconfirmed WhatsApp orders so they don't light up the kitchen badges before being accepted
@@ -139,34 +138,60 @@ export const Navbar = ({
 
         // Increment count of active unpaid orders (excluding those marked as paid/cancelled)
         const isPaid = order.isPaid || order.status === 'paid';
-        if (!isPaid) {
+        if (!isPaid && order.status !== 'cancelled') {
           unpaidCount++;
         }
 
-        // Only show kitchen alerts for pending or preparing orders
-        if (order.status === 'pending' || order.status === 'preparing') {
-          const activeItems = order.items.filter(item => item.status !== 'cancelled' && item.status !== 'completed');
-          const activePlanchaSpecific = activeItems.some(i => i.station === 'plancha');
-          const activeCocinaSpecific = activeItems.some(i => i.station === 'cocina' || !i.station);
+        // Only show kitchen & food alerts for orders that are not paid or cancelled
+        if (order.status !== 'cancelled' && order.status !== 'paid') {
+          const items = order.items || [];
+          const activeItems = items.filter(item => item.status !== 'cancelled' && item.status !== 'completed');
+          const isPendingOrder = order.status === 'pending' || order.status === 'preparing' || !order.status;
 
-          activeItems.forEach(item => {
-            if (item.station === 'plancha') {
-              hasPlancha = true;
-            } else if (item.station === 'cocina' || !item.station) {
-              hasCocina = true;
-            } else if (item.station === 'comun') {
-              if (activePlanchaSpecific && !activeCocinaSpecific) {
-                hasPlancha = true;
-              } else {
-                hasCocina = true;
-              }
+          if (isPendingOrder || activeItems.length > 0) {
+            let activeQty = 0;
+            if (activeItems.length > 0) {
+              activeQty = activeItems.reduce((sum, i) => sum + (i.quantity || 1), 0);
+            } else if (isPendingOrder) {
+              activeQty = items.reduce((sum, i) => sum + (i.quantity || 1), 0);
             }
-          });
+            foodCount += (activeQty > 0 ? activeQty : 1);
+
+            const activePlanchaSpecific = activeItems.some(i => i.station === 'plancha');
+            const activeCocinaSpecific = activeItems.some(i => i.station === 'cocina' || !i.station);
+
+            activeItems.forEach(item => {
+              if (item.station === 'plancha') {
+                hasPlancha = true;
+              } else if (item.station === 'cocina' || !item.station) {
+                hasCocina = true;
+              } else if (item.station === 'comun') {
+                hasCocina = true;
+                hasPlancha = true;
+              }
+            });
+
+            if (activeItems.length === 0 && isPendingOrder) {
+              hasCocina = true;
+            }
+          }
         }
       });
 
+      if (foodCount > prevFoodCountRef.current && prevFoodCountRef.current > 0) {
+        try {
+          const alertSound = new Audio("https://assets.mixkit.co/active_storage/sfx/2857/2857-preview.mp3");
+          alertSound.volume = 0.7;
+          alertSound.play().catch(() => {});
+        } catch (e) {}
+      }
+      prevFoodCountRef.current = foodCount;
+
       setPendingStations({ plancha: hasPlancha, cocina: hasCocina });
+      setPendingFoodCount(foodCount);
       setUnpaidPaymentsCount(unpaidCount);
+    }, (error) => {
+      console.error("Error subscribing to orders in Navbar:", error);
     });
 
     return () => unsubscribe();
@@ -254,7 +279,7 @@ export const Navbar = ({
     { id: 'orders', label: 'Pedidos', icon: Utensils, roles: ['admin', 'waiter', 'cashier', 'kitchen', 'parrilla'] },
     { id: 'whatsapp', label: 'WhatsApp', icon: MessageSquare, roles: ['admin', 'cashier', 'waiter'] },
     { id: 'kitchen', label: userRole === 'parrilla' ? 'Parrilla' : 'Cocina', icon: ClipboardList, roles: ['admin', 'kitchen', 'parrilla'] },
-    { id: 'inventory', label: 'Comidas', icon: ChefHat, roles: ['admin'] },
+    { id: 'inventory', label: 'Comidas', icon: ChefHat, roles: ['admin', 'kitchen', 'parrilla', 'cashier', 'waiter'] },
     { id: 'cash', label: 'Caja', icon: CreditCard, roles: ['admin', 'cashier', 'waiter'] },
     ...(isPC ? [{ id: 'music', label: 'Música', icon: Music, roles: ['admin', 'waiter', 'cashier', 'kitchen', 'parrilla'] }] : []),
     { id: 'admin', label: 'Admin', icon: Settings, roles: ['admin'] },
@@ -305,18 +330,32 @@ export const Navbar = ({
                 <item.icon size={21} className={cn(
                   "transition-transform duration-250 md:h-[22px] md:w-[22px]", 
                   activeTab === item.id && "scale-105",
-                  item.id === 'whatsapp' && totalUnreadChats > 0 && "animate-bounce text-emerald-600"
+                  item.id === 'whatsapp' && totalUnreadChats > 0 && "animate-bounce text-emerald-600",
+                  item.id === 'kitchen' && (pendingStations.cocina || pendingStations.plancha || pendingFoodCount > 0) && "animate-pulse text-orange-600 font-bold",
+                  item.id === 'inventory' && (pendingFoodCount > 0 || pendingStations.cocina || pendingStations.plancha) && "animate-pulse text-amber-600 font-bold"
                 )} />
                 
                 {/* Kitchen Badges */}
-                {item.id === 'kitchen' && (pendingStations.cocina || pendingStations.plancha) && (
-                  <div className="absolute -top-1 -right-1 flex gap-0.5">
+                {item.id === 'kitchen' && (pendingStations.cocina || pendingStations.plancha || pendingFoodCount > 0) && (
+                  <div className="absolute -top-1.5 -right-1.5 flex items-center gap-0.5">
+                    {pendingFoodCount > 0 && (
+                      <span className="bg-orange-600 text-white text-[8px] md:text-[9px] font-black min-w-[14px] h-3.5 md:h-4 px-1 rounded-full flex items-center justify-center border border-white shadow-sm scale-110 animate-pulse" title="Comidas/Productos pendientes en Cocina">
+                        {pendingFoodCount > 9 ? '+9' : pendingFoodCount}
+                      </span>
+                    )}
                     {pendingStations.cocina && (
                       <span className="w-1.5 h-1.5 md:w-2 md:h-2 bg-blue-500 rounded-full border border-white animate-pulse" title="Pedido en Cocina" />
                     )}
                     {pendingStations.plancha && (
                       <span className="w-1.5 h-1.5 md:w-2 md:h-2 bg-orange-500 rounded-full border border-white animate-pulse" title="Pedido en Parrilla" />
                     )}
+                  </div>
+                )}
+
+                {/* Comidas / Inventory Badge */}
+                {item.id === 'inventory' && (pendingFoodCount > 0 || pendingStations.cocina || pendingStations.plancha) && (
+                  <div className="absolute -top-1.5 -right-1.5 bg-amber-500 text-white text-[8px] md:text-[9px] font-black min-w-[14px] h-3.5 md:h-4 px-1 rounded-full flex items-center justify-center border border-white shadow-sm scale-110 animate-pulse" title="Comidas para preparar en cocina/parrilla">
+                    {pendingFoodCount > 0 ? (pendingFoodCount > 9 ? '+9' : pendingFoodCount) : '!'}
                   </div>
                 )}
 

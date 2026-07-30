@@ -51,7 +51,7 @@ export const DiscreteMiniPlayer: React.FC<DiscreteMiniPlayerProps> = ({
     window.dispatchEvent(new CustomEvent('pos-music-command', { detail: { command: cmd } }));
   };
 
-  if (!isPC) return null;
+  // Allow mini player on all screen sizes
 
   if (compact) {
     return (

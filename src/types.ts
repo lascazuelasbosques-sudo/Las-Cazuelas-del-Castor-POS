@@ -41,6 +41,7 @@ export interface OrderItem {
   status?: 'pending' | 'preparing' | 'completed' | 'cancelled';
   station?: 'plancha' | 'cocina' | 'comun';
   hasExtraCheese?: boolean;
+  fillings?: string[];
 }
 
 export type OrderStatus = 'pending' | 'preparing' | 'ready' | 'served' | 'paid' | 'cancelled';

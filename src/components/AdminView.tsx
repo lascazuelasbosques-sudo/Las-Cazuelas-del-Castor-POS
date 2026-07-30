@@ -507,7 +507,7 @@ export const AdminView = () => {
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = `respaldo_pos_${new Date().toISOString().split('T')[0]}.json`;
+      link.download = `respaldo_pos_v1.1_${new Date().toISOString().split('T')[0]}.json`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -1176,12 +1176,17 @@ export const AdminView = () => {
       {/* BACKUP PANEL */}
       {activeAdminTab === 'backup' && (
         <div className="space-y-6 animate-in fade-in zoom-in-95 duration-400">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-mex-terracotta/10 text-mex-terracotta rounded-xl">
-              <Database size={20} />
+            <div className="flex items-center justify-between w-full">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-mex-terracotta/10 text-mex-terracotta rounded-xl">
+                  <Database size={20} />
+                </div>
+                <h2 className="text-xl font-serif text-stone-800">Sistema y Respaldo de Datos</h2>
+              </div>
+              <span className="px-3 py-1 bg-mex-green/10 text-mex-green border border-mex-green/20 rounded-full text-xs font-black uppercase tracking-wider">
+                v1.1 Backup
+              </span>
             </div>
-            <h2 className="text-xl font-serif text-stone-800">Sistema y Respaldo de Datos</h2>
-          </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Card className="border-none shadow-md rounded-3xl overflow-hidden bg-white">

@@ -222,7 +222,8 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
         name: name.trim(),
         price: price,
         quantity: quantity,
-        notes: notes || ""
+        notes: notes || "",
+        status: 'pending'
       };
       
       // Recalculate total
@@ -237,9 +238,12 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
         userRole: userInfo.userRole
       };
 
+      const updatedOrderStatus = (orderToUpdate.status === 'ready' || orderToUpdate.status === 'served') ? 'preparing' : (orderToUpdate.status || 'pending');
+
       await updateDoc(orderRef, {
         items: newItems,
         total: newTotal,
+        status: updatedOrderStatus,
         updatedAt: new Date().toISOString(),
         movementLogs: arrayUnion(updateLog)
       });
@@ -249,7 +253,7 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
         if (!prev) return null;
         const updatedOrders = prev.orders.map(o => {
           if (o.id === orderId) {
-            return { ...o, items: newItems, total: newTotal };
+            return { ...o, items: newItems, total: newTotal, status: updatedOrderStatus };
           }
           return o;
         });
@@ -262,7 +266,7 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
       });
       
       setEditingPaymentItem(null);
-      toast.success("Artículo actualizado");
+      toast.success("Artículo actualizado y enviado a cocina");
     } catch (error) {
       console.error("Error updating order item:", error);
       toast.error("Error al actualizar el artículo");
@@ -284,7 +288,7 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
         name: name.trim(),
         price: price,
         quantity: quantity,
-        status: 'completed',
+        status: 'pending',
         station: 'cocina'
       };
       
@@ -300,9 +304,12 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
         userRole: userInfo.userRole
       };
 
+      const updatedOrderStatus = (orderToUpdate.status === 'ready' || orderToUpdate.status === 'served') ? 'preparing' : (orderToUpdate.status || 'pending');
+
       await updateDoc(orderRef, {
         items: newItems,
         total: newTotal,
+        status: updatedOrderStatus,
         updatedAt: new Date().toISOString(),
         movementLogs: arrayUnion(addLog)
       });
