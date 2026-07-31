@@ -10,6 +10,11 @@ import { db, auth } from "../firebase";
 import { collection, onSnapshot, query, where, orderBy, doc, updateDoc, addDoc, deleteDoc, writeBatch, getDocs, getDocsFromServer, arrayUnion } from "firebase/firestore";
 import { handleFirestoreError, OperationType } from "../lib/firestoreErrorHandler";
 import toast from "react-hot-toast";
+import { 
+  addOfflineDoc, 
+  updateOfflineDoc, 
+  onOfflineSnapshot 
+} from "../lib/offlineService";
 
 import html2pdf from "html2pdf.js";
 import { jsPDF } from "jspdf";
@@ -839,8 +844,7 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
       orderBy("createdAt", "asc")
     );
 
-    const unsubOrders = onSnapshot(qOrders, (snapshot) => {
-      const orderData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Order));
+    const unsubOrders = onOfflineSnapshot("orders", qOrders, (orderData) => {
       setOrders(orderData);
       setLoading(false);
     }, (error) => {
@@ -849,24 +853,21 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
     });
 
     const qLogs = query(collection(db, "cashLogs"), orderBy("timestamp", "desc"));
-    const unsubLogs = onSnapshot(qLogs, (snapshot) => {
-      const logData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as CashLog));
+    const unsubLogs = onOfflineSnapshot("cashLogs", qLogs, (logData) => {
       setCashLogs(logData);
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, "cashLogs");
     });
 
     const qAudits = query(collection(db, "cashAudits"), orderBy("timestamp", "desc"));
-    const unsubAudits = onSnapshot(qAudits, (snapshot) => {
-      const auditData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    const unsubAudits = onOfflineSnapshot("cashAudits", qAudits, (auditData) => {
       setCashAudits(auditData);
     }, (error) => {
       console.error("Error subscribing to cashAudits:", error);
     });
 
     const qTipLoans = query(collection(db, "tipLoans"), orderBy("createdAt", "desc"));
-    const unsubTipLoans = onSnapshot(qTipLoans, (snapshot) => {
-      const loanData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as TipLoan));
+    const unsubTipLoans = onOfflineSnapshot("tipLoans", qTipLoans, (loanData) => {
       setTipLoans(loanData);
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, "tipLoans");
@@ -877,19 +878,16 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
       where("paymentMethod", "==", "credit")
     );
 
-    const unsubCreditOrders = onSnapshot(qCreditOrders, (snapshot) => {
-      const creditData = snapshot.docs
-        .map(doc => ({ id: doc.id, ...doc.data() } as Order))
-        .filter(order => order.creditStatus !== 'paid');
-      setCreditOrders(creditData);
+    const unsubCreditOrders = onOfflineSnapshot("orders", qCreditOrders, (creditData) => {
+      const activeCreditData = creditData.filter(order => order.creditStatus !== 'paid');
+      setCreditOrders(activeCreditData);
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, "orders (credit)");
     });
     
     // Fetch products
     const qProducts = query(collection(db, "products"), orderBy("name", "asc"));
-    const unsubProducts = onSnapshot(qProducts, (snapshot) => {
-      const prods = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    const unsubProducts = onOfflineSnapshot("products", qProducts, (prods) => {
       setProducts(prods);
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, "products");

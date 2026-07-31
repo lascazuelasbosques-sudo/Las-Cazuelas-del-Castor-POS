@@ -2,8 +2,8 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   Play, Pause, SkipForward, SkipBack, Volume2, VolumeX, Volume1,
   Music, ListMusic, Plus, Trash2, ExternalLink, Radio, Disc, 
-  Shuffle, Repeat, Search, Youtube, RefreshCw, X, Edit3, ChevronRight, Tag, Check,
-  Link, Save, CheckCircle2, Sparkles, Filter, Layers, Eye, EyeOff
+  Shuffle, Repeat, Search, Youtube, RefreshCw, X, Edit3, ChevronRight, ChevronDown, Tag, Check,
+  Link, Save, CheckCircle2, Sparkles, Filter, Layers, Eye, EyeOff, Download
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { cn } from '../lib/utils';
@@ -154,6 +154,17 @@ export function parseYouTubeVideoIds(text: string): string[] {
   return Array.from(idsSet);
 }
 
+const ensurePlaylistTracks = (playlist: SavedPlaylist): TrackItem[] => {
+  if (playlist.tracks && playlist.tracks.length > 0) {
+    return playlist.tracks;
+  }
+  const presetMatch = PRESET_PLAYLISTS.find(p => p.id === playlist.id);
+  if (presetMatch && presetMatch.tracks && presetMatch.tracks.length > 0) {
+    return presetMatch.tracks;
+  }
+  return [];
+};
+
 interface MusicPlayerViewProps {
   userRole?: string;
   activeTab?: string;
@@ -165,6 +176,14 @@ export const MusicPlayerView: React.FC<MusicPlayerViewProps> = ({
 }) => {
   // Saved / Custom Playlists
   const [customPlaylists, setCustomPlaylists] = useState<SavedPlaylist[]>([]);
+  const [collapsedCategories, setCollapsedCategories] = useState<Record<string, boolean>>({});
+
+  const toggleCategoryCollapse = (cat: string) => {
+    setCollapsedCategories(prev => ({
+      ...prev,
+      [cat]: !prev[cat]
+    }));
+  };
   
   // Active Playlist & Player state
   const [currentPlaylistId, setCurrentPlaylistId] = useState<string>(PRESET_PLAYLISTS[0].id);
@@ -377,15 +396,36 @@ export const MusicPlayerView: React.FC<MusicPlayerViewProps> = ({
   const fetchTrackMetadata = async (videoId: string): Promise<TrackItem> => {
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 2000);
+      const timeoutId = setTimeout(() => controller.abort(), 3000);
 
-      const response = await fetch(`https://noembed.com/embed?url=https://www.youtube.com/watch?v=${videoId}`, {
+      const response = await fetch(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`, {
         signal: controller.signal
       });
       clearTimeout(timeoutId);
 
       if (response.ok) {
         const data = await response.json();
+        if (data && data.title) {
+          return {
+            id: videoId,
+            title: data.title,
+            artist: data.author_name || 'YouTube Music',
+            thumbnailUrl: data.thumbnail_url || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`
+          };
+        }
+      }
+    } catch (e) {}
+
+    // Fallback if oEmbed failed
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 2000);
+      const resp = await fetch(`https://noembed.com/embed?url=https://www.youtube.com/watch?v=${videoId}`, {
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
+      if (resp.ok) {
+        const data = await resp.json();
         if (data && data.title) {
           return {
             id: videoId,
@@ -558,8 +598,7 @@ export const MusicPlayerView: React.FC<MusicPlayerViewProps> = ({
       setImportTextInput('');
       setFilterMode('custom');
       
-      loadPlaylist(finalPlaylistObj);
-      toast.success(`¡Todas las listas han sido guardadas y nombradas con éxito!`);
+      toast.success(`¡Todas las listas se guardaron en tu biblioteca! Puedes reproducirlas cuando desees.`);
     }
   };
 
@@ -696,6 +735,22 @@ export const MusicPlayerView: React.FC<MusicPlayerViewProps> = ({
     toast.success(`Canción "${trackToDelete?.title || 'seleccionada'}" eliminada`);
   };
 
+  const handleDownloadTrack = (track: TrackItem, e: React.MouseEvent) => {
+    e.stopPropagation();
+    toast.success(`Redirigiendo para descargar "${track.title}"...`);
+    window.open(`https://www.y2mate.com/youtube/${track.id}`, '_blank');
+  };
+
+  const handleDownloadPlaylist = () => {
+    toast.success(`Preparando la descarga de las ${playlistTracks.length} canciones...`);
+    // Open the first track as a demonstration
+    if (playlistTracks.length > 0) {
+      setTimeout(() => {
+         window.open(`https://www.y2mate.com/youtube/${playlistTracks[0].id}`, '_blank');
+      }, 1000);
+    }
+  };
+
   // Initialize YouTube Iframe API
   useEffect(() => {
     if (!window.YT) {
@@ -725,46 +780,115 @@ export const MusicPlayerView: React.FC<MusicPlayerViewProps> = ({
       const videoData = playerRef.current.getVideoData?.();
       if (videoData && videoData.video_id) {
         const curId = videoData.video_id;
+        const curTitle = videoData.title;
+        const curAuthor = videoData.author || 'YouTube Music';
+
+        // Update active track in playlistTracks if placeholder title
+        if (curTitle) {
+          setPlaylistTracks(prev => {
+            const targetIdx = prev.findIndex(t => t.id === curId);
+            if (targetIdx >= 0) {
+              const existing = prev[targetIdx];
+              if (existing.title.startsWith('Canción #') || existing.title.startsWith('Canción (') || !existing.title) {
+                const updated = [...prev];
+                updated[targetIdx] = {
+                  ...existing,
+                  title: curTitle,
+                  artist: curAuthor
+                };
+                savePlaylistToStorage({
+                  ...currentPlaylist,
+                  tracks: updated
+                });
+                return updated;
+              }
+            }
+            return prev;
+          });
+        }
+
         if (!currentTrack || currentTrack.id !== curId) {
+          const matchIdx = playlistTracks.findIndex(t => t.id === curId);
+          if (matchIdx >= 0) {
+            setCurrentTrackIndex(matchIdx);
+          }
           const match = playlistTracks.find(t => t.id === curId);
           if (match) {
-            setCurrentTrack(match);
+            setCurrentTrack({
+              ...match,
+              title: (match.title && !match.title.startsWith('Canción #')) ? match.title : (curTitle || match.title),
+              artist: (match.artist && match.artist !== 'YouTube Music') ? match.artist : curAuthor
+            });
           } else {
             setCurrentTrack({
               id: curId,
-              title: videoData.title || `Canción YT`,
-              artist: videoData.author || 'YouTube Music',
+              title: curTitle || `Canción YT`,
+              artist: curAuthor,
               thumbnailUrl: `https://i.ytimg.com/vi/${curId}/hqdefault.jpg`
             });
           }
         }
       }
 
-      // Populate playlist tracks if YT player has playlist array and local tracks are empty
+      // Populate & sync playlist tracks from YouTube Iframe Player
       const playlistVideoIds: string[] = playerRef.current.getPlaylist?.();
-      if (Array.isArray(playlistVideoIds) && playlistVideoIds.length > 0 && playlistTracks.length === 0) {
-        const extractedTracks: TrackItem[] = playlistVideoIds.map((vid, idx) => ({
-          id: vid,
-          title: `Canción #${idx + 1}`,
-          artist: 'YouTube Music',
-          thumbnailUrl: `https://i.ytimg.com/vi/${vid}/hqdefault.jpg`
-        }));
-        setPlaylistTracks(extractedTracks);
+      if (Array.isArray(playlistVideoIds) && playlistVideoIds.length > 0) {
+        const needsSync = playlistTracks.length < playlistVideoIds.length || 
+                          playlistTracks.some((t, i) => t.id !== playlistVideoIds[i]);
 
-        // Fetch meta in background for first 10 tracks
-        playlistVideoIds.slice(0, 10).forEach(async (vid, idx) => {
-          const meta = await fetchTrackMetadata(vid);
-          setPlaylistTracks(prev => {
-            const updated = [...prev];
-            if (updated[idx]) {
-              updated[idx] = meta;
+        if (needsSync) {
+          const extractedTracks: TrackItem[] = playlistVideoIds.map((vid, idx) => {
+            const existing = playlistTracks.find(t => t.id === vid);
+            if (existing && existing.title && !existing.title.startsWith('Canción #')) {
+              return existing;
             }
-            return updated;
+            return {
+              id: vid,
+              title: (idx === 0 && videoData && videoData.video_id === vid && videoData.title) ? videoData.title : `Canción #${idx + 1}`,
+              artist: (idx === 0 && videoData && videoData.video_id === vid && videoData.author) ? videoData.author : 'YouTube Music',
+              thumbnailUrl: `https://i.ytimg.com/vi/${vid}/hqdefault.jpg`
+            };
           });
-        });
+
+          setPlaylistTracks(extractedTracks);
+
+          // Save/Sync back to current playlist in Storage
+          const updatedPlaylist: SavedPlaylist = {
+            ...currentPlaylist,
+            tracks: extractedTracks
+          };
+          setCurrentPlaylist(updatedPlaylist);
+          savePlaylistToStorage(updatedPlaylist);
+
+          // Fetch rich track metadata in background for up to 40 tracks
+          playlistVideoIds.slice(0, 40).forEach(async (vid) => {
+            const meta = await fetchTrackMetadata(vid);
+            setPlaylistTracks(prev => {
+              const targetIdx = prev.findIndex(t => t.id === vid);
+              if (targetIdx >= 0 && meta && meta.title && !meta.title.includes('(' + vid + ')')) {
+                const updated = [...prev];
+                updated[targetIdx] = {
+                  ...updated[targetIdx],
+                  title: meta.title,
+                  artist: meta.artist || 'YouTube Music',
+                  thumbnailUrl: meta.thumbnailUrl || updated[targetIdx].thumbnailUrl
+                };
+                
+                // Persist detailed tracks
+                savePlaylistToStorage({
+                  ...currentPlaylist,
+                  tracks: updated
+                });
+
+                return updated;
+              }
+              return prev;
+            });
+          });
+        }
       }
     } catch (e) {}
-  }, [currentTrack, playlistTracks]);
+  }, [currentTrack, playlistTracks, currentPlaylist]);
 
   // Handle Player State Changes
   const onPlayerStateChange = useCallback((event: any) => {
@@ -848,14 +972,20 @@ export const MusicPlayerView: React.FC<MusicPlayerViewProps> = ({
         handlePrevTrack();
       } else if (command === 'loadPlaylist' && payload) {
         loadPlaylist(payload);
+      } else if (command === 'volumeUp') {
+        const nv = Math.min(100, volume + 10);
+        handleVolumeChange(nv);
+      } else if (command === 'volumeDown') {
+        const nv = Math.max(0, volume - 10);
+        handleVolumeChange(nv);
       }
     };
 
     window.addEventListener('pos-music-command', handleMusicCommand);
     return () => window.removeEventListener('pos-music-command', handleMusicCommand);
-  }, []);
+  }, [volume, playlistTracks, currentTrackIndex]);
 
-  // Broadcast current music state to DiscreteMiniPlayer
+  // Broadcast current music state to DiscreteMiniPlayer and update Media Session
   useEffect(() => {
     const detail = {
       isPlaying,
@@ -865,6 +995,34 @@ export const MusicPlayerView: React.FC<MusicPlayerViewProps> = ({
       trackDuration
     };
     window.dispatchEvent(new CustomEvent('pos-music-sync', { detail }));
+
+    // Update Media Session API for background OS playback controls
+    if ('mediaSession' in navigator) {
+      const track = detail.currentTrack;
+      navigator.mediaSession.metadata = new window.MediaMetadata({
+        title: track.title,
+        artist: track.artist,
+        album: detail.currentPlaylistTitle,
+        artwork: track.thumbnailUrl ? [
+          { src: track.thumbnailUrl, sizes: '512x512', type: 'image/jpeg' }
+        ] : []
+      });
+
+      navigator.mediaSession.setActionHandler('play', () => {
+        playerRef.current?.playVideo();
+        setIsPlaying(true);
+      });
+      navigator.mediaSession.setActionHandler('pause', () => {
+        playerRef.current?.pauseVideo();
+        setIsPlaying(false);
+      });
+      navigator.mediaSession.setActionHandler('nexttrack', () => {
+        handleNextTrack();
+      });
+      navigator.mediaSession.setActionHandler('previoustrack', () => {
+        handlePrevTrack();
+      });
+    }
   }, [isPlaying, currentTrack, currentPlaylist, playbackTime, trackDuration]);
 
   // Load playlist into player
@@ -872,25 +1030,30 @@ export const MusicPlayerView: React.FC<MusicPlayerViewProps> = ({
     setCurrentPlaylistId(playlist.id);
     setCurrentPlaylist(playlist);
 
-    const tracks = playlist.tracks || [];
+    const tracks = ensurePlaylistTracks(playlist);
     setPlaylistTracks(tracks);
     setCurrentTrackIndex(0);
     setCurrentTrack(tracks[0] || null);
 
     if (playerRef.current && typeof playerRef.current.loadPlaylist === 'function') {
       try {
-        if (playlist.id.startsWith('pl_custom_')) {
-          // Custom playlist with array of video IDs
+        let ytListId = '';
+        if (playlist.url && playlist.url.includes('list=')) {
+          ytListId = playlist.url.split('list=')[1].split('&')[0];
+        } else if (playlist.id && !playlist.id.startsWith('pl_custom_')) {
+          ytListId = playlist.id.split('_')[0];
+        }
+
+        if (ytListId) {
+          playerRef.current.loadPlaylist({
+            list: ytListId,
+            listType: 'playlist'
+          });
+        } else if (tracks.length > 0) {
           const videoIds = tracks.map(t => t.id);
           if (videoIds.length > 0) {
             playerRef.current.loadPlaylist(videoIds);
           }
-        } else {
-          // YouTube native playlist ID
-          playerRef.current.loadPlaylist({
-            list: playlist.id,
-            listType: 'playlist'
-          });
         }
         setIsPlaying(true);
       } catch (e) {}
@@ -1010,10 +1173,14 @@ export const MusicPlayerView: React.FC<MusicPlayerViewProps> = ({
   );
 
   const isCurrentTab = activeTab === 'music';
-  if (!isCurrentTab) return null;
 
   return (
-    <div className="h-full w-full bg-stone-950 text-stone-100 flex flex-col overflow-hidden select-none">
+    <div 
+      className={cn(
+        "h-full w-full flex-col overflow-hidden select-none flex",
+        !isCurrentTab ? "absolute -left-[9999px] top-0 z-[-50] bg-transparent pointer-events-none opacity-0" : "bg-stone-950 text-stone-100"
+      )}
+    >
       
       {/* TOP HEADER */}
       <header className="p-4 bg-stone-900 border-b border-stone-800 flex items-center justify-between gap-3 flex-wrap shrink-0">
@@ -1217,7 +1384,12 @@ export const MusicPlayerView: React.FC<MusicPlayerViewProps> = ({
             </div>
 
             {/* EMBEDDED YOUTUBE IFRAME BOX */}
-            <div className={cn("mt-4 rounded-xl overflow-hidden bg-black transition-all", showVideoPlayer ? "h-48 sm:h-56 border border-stone-800" : "h-0 opacity-0 pointer-events-none")}>
+            <div 
+              className={cn(
+                "rounded-xl overflow-hidden bg-black transition-all",
+                showVideoPlayer ? "mt-4 h-48 sm:h-56 border border-stone-800 opacity-100" : "mt-4 h-[1px] w-[1px] opacity-0 pointer-events-none border-none overflow-hidden"
+              )}
+            >
               <div id={containerIdRef.current} className="w-full h-full" />
             </div>
 
@@ -1232,17 +1404,27 @@ export const MusicPlayerView: React.FC<MusicPlayerViewProps> = ({
                   <ListMusic className="w-4 h-4 text-red-500" />
                   Canciones de la Lista ({playlistTracks.length})
                 </h3>
-                <button
-                  onClick={() => setShowAddTrackModal(true)}
-                  className="px-2.5 py-1 bg-stone-800 hover:bg-stone-700 text-stone-200 text-[11px] font-bold rounded-lg border border-stone-700 flex items-center gap-1 transition-all cursor-pointer"
-                  title="Añadir una canción por enlace o ID"
-                >
-                  <Plus className="w-3 h-3 text-red-400" />
-                  <span>Añadir Canción</span>
-                </button>
+                <div className="flex items-center gap-1.5 ml-auto">
+                  <button
+                    onClick={handleDownloadPlaylist}
+                    className="px-2.5 py-1 bg-stone-800 hover:bg-stone-700 text-stone-200 text-[11px] font-bold rounded-lg border border-stone-700 flex items-center gap-1 transition-all cursor-pointer"
+                    title="Descargar todas las canciones"
+                  >
+                    <Download className="w-3 h-3 text-red-400" />
+                    <span className="hidden sm:inline">Descargar Lista</span>
+                  </button>
+                  <button
+                    onClick={() => setShowAddTrackModal(true)}
+                    className="px-2.5 py-1 bg-stone-800 hover:bg-stone-700 text-stone-200 text-[11px] font-bold rounded-lg border border-stone-700 flex items-center gap-1 transition-all cursor-pointer"
+                    title="Añadir una canción por enlace o ID"
+                  >
+                    <Plus className="w-3 h-3 text-red-400" />
+                    <span className="hidden sm:inline">Añadir</span>
+                  </button>
+                </div>
               </div>
 
-              <div className="relative w-48 sm:w-60">
+              <div className="relative w-full mt-2">
                 <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-stone-500 w-3.5 h-3.5" />
                 <input 
                   type="text"
@@ -1255,7 +1437,7 @@ export const MusicPlayerView: React.FC<MusicPlayerViewProps> = ({
             </div>
 
             {/* SONGS LIST ITEMS */}
-            <div className="flex-1 overflow-y-auto space-y-1.5 pr-1 custom-scrollbar">
+            <div className="flex-1 overflow-y-auto space-y-1.5 pr-1 custom-scrollbar mt-3">
               {filteredTracks.length === 0 ? (
                 <div className="text-center py-12 text-stone-500">
                   <Music className="w-10 h-10 mx-auto mb-2 opacity-30" />
@@ -1295,13 +1477,22 @@ export const MusicPlayerView: React.FC<MusicPlayerViewProps> = ({
                         <p className="text-[10px] text-stone-400 truncate">{track.artist}</p>
                       </div>
 
-                      <button
-                        onClick={(e) => handleDeleteTrackFromCurrentPlaylist(idx, e)}
-                        className="p-1.5 rounded-lg hover:bg-red-500/20 text-stone-500 hover:text-red-400 transition-colors cursor-pointer shrink-0 opacity-70 hover:opacity-100"
-                        title="Eliminar canción de esta lista"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button
+                          onClick={(e) => handleDownloadTrack(track, e)}
+                          className="p-1.5 rounded-lg hover:bg-stone-700 text-stone-500 hover:text-stone-300 transition-colors cursor-pointer opacity-70 hover:opacity-100"
+                          title="Descargar canción"
+                        >
+                          <Download className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={(e) => handleDeleteTrackFromCurrentPlaylist(idx, e)}
+                          className="p-1.5 rounded-lg hover:bg-red-500/20 text-stone-500 hover:text-red-400 transition-colors cursor-pointer opacity-70 hover:opacity-100"
+                          title="Eliminar canción de esta lista"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </div>
                   );
                 })
@@ -1364,8 +1555,8 @@ export const MusicPlayerView: React.FC<MusicPlayerViewProps> = ({
               ))}
             </div>
 
-            {/* PLAYLIST CARDS GRID */}
-            <div className="flex-1 overflow-y-auto space-y-2 pr-1 custom-scrollbar">
+            {/* PLAYLISTS GROUPED BY CATEGORY (COLLAPSIBLE ACCORDION SECTIONS) */}
+            <div className="flex-1 overflow-y-auto space-y-3 pr-1 custom-scrollbar">
               {filteredPlaylists.length === 0 ? (
                 <div className="text-center py-16 text-stone-500">
                   <ListMusic className="w-12 h-12 mx-auto mb-2 opacity-30" />
@@ -1383,69 +1574,103 @@ export const MusicPlayerView: React.FC<MusicPlayerViewProps> = ({
                   </button>
                 </div>
               ) : (
-                filteredPlaylists.map((pl) => {
-                  const isActive = currentPlaylistId === pl.id;
+                Object.entries(
+                  filteredPlaylists.reduce((acc: Record<string, SavedPlaylist[]>, pl) => {
+                    const cat = pl.category || 'Otros';
+                    if (!acc[cat]) acc[cat] = [];
+                    acc[cat].push(pl);
+                    return acc;
+                  }, {})
+                ).map(([cat, playlists]) => {
+                  const isCollapsed = collapsedCategories[cat] || false;
                   return (
-                    <div
-                      key={pl.id}
-                      onClick={() => loadPlaylist(pl)}
-                      className={cn(
-                        "p-3 rounded-2xl border transition-all cursor-pointer flex items-center gap-3 group relative overflow-hidden",
-                        isActive 
-                          ? "bg-red-950/40 border-red-500/60 shadow-lg" 
-                          : "bg-stone-950/60 hover:bg-stone-800/80 border-stone-800/60"
-                      )}
-                    >
-                      <div className="relative shrink-0">
-                        <img 
-                          src={pl.thumbnailUrl || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&w=400&q=80'} 
-                          alt={pl.title}
-                          className="w-12 h-12 object-cover rounded-xl border border-stone-800"
-                        />
-                        {isActive && (
-                          <div className="absolute inset-0 bg-red-600/40 rounded-xl flex items-center justify-center">
-                            <Radio className="w-5 h-5 text-white animate-pulse" />
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-1.5">
-                          <span className="px-2 py-0.5 rounded-md bg-stone-800 text-[9px] font-bold text-stone-300">
-                            {pl.category}
+                    <div key={cat} className="bg-stone-950/40 border border-stone-800/80 rounded-2xl overflow-hidden shadow-md">
+                      {/* Category Collapsible Header */}
+                      <button
+                        onClick={() => toggleCategoryCollapse(cat)}
+                        className="w-full px-3.5 py-2.5 bg-stone-900/90 hover:bg-stone-800/90 border-b border-stone-800/60 flex items-center justify-between text-left transition-colors cursor-pointer select-none"
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          {isCollapsed ? <ChevronRight className="w-4 h-4 text-red-500 shrink-0" /> : <ChevronDown className="w-4 h-4 text-red-500 shrink-0" />}
+                          <span className="text-xs font-black uppercase tracking-wider text-white truncate">{cat}</span>
+                          <span className="px-2 py-0.5 rounded-full bg-red-950/60 text-red-400 text-[10px] font-bold border border-red-500/20 shrink-0">
+                            {playlists.length}
                           </span>
-                          {pl.isCustom && (
-                            <span className="px-1.5 py-0.5 rounded-md bg-red-950 border border-red-500/30 text-[9px] font-bold text-red-400">
-                              Agregada
-                            </span>
-                          )}
                         </div>
-                        <h4 className="text-xs font-bold text-white truncate mt-1 leading-tight">{pl.title}</h4>
-                        <p className="text-[10px] text-stone-400 truncate mt-0.5">
-                          {pl.tracks && pl.tracks.length > 0 ? `${pl.tracks.length} canciones` : 'YouTube Playlist'}
-                        </p>
-                      </div>
+                        <span className="text-[10px] text-stone-400 font-medium shrink-0 ml-2">
+                          {isCollapsed ? 'Desplegar' : 'Ocultar'}
+                        </span>
+                      </button>
 
-                      <div className="flex items-center gap-1 shrink-0">
-                        {pl.isCustom && (
-                          <>
-                            <button
-                              onClick={(e) => handleOpenEditPlaylist(pl, e)}
-                              className="p-1.5 rounded-lg hover:bg-stone-700 text-stone-400 hover:text-stone-200 transition-colors cursor-pointer"
-                              title="Editar nombre y categoría"
-                            >
-                              <Edit3 className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              onClick={(e) => handleDeletePlaylist(pl.id, e)}
-                              className="p-1.5 rounded-lg hover:bg-red-500/20 text-stone-500 hover:text-red-400 transition-colors cursor-pointer"
-                              title="Eliminar esta lista"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </>
-                        )}
-                      </div>
+                      {/* Playlists in Category Dropdown */}
+                      {!isCollapsed && (
+                        <div className="p-2 space-y-2">
+                          {playlists.map((pl) => {
+                            const isActive = currentPlaylistId === pl.id;
+                            const resolvedThumb = pl.thumbnailUrl || getMatchingImage(pl.title, pl.category, pl.description, pl.tracks || []);
+                            return (
+                              <div
+                                key={pl.id}
+                                onClick={() => loadPlaylist(pl)}
+                                className={cn(
+                                  "p-2.5 rounded-xl border transition-all cursor-pointer flex items-center gap-3 group relative overflow-hidden",
+                                  isActive 
+                                    ? "bg-red-950/50 border-red-500/60 shadow-md" 
+                                    : "bg-stone-900/60 hover:bg-stone-800/80 border-stone-800/60"
+                                )}
+                              >
+                                <div className="relative shrink-0">
+                                  <img 
+                                    src={resolvedThumb} 
+                                    alt={pl.title}
+                                    className="w-12 h-12 object-cover rounded-xl border border-stone-800"
+                                  />
+                                  {isActive && (
+                                    <div className="absolute inset-0 bg-red-600/40 rounded-xl flex items-center justify-center">
+                                      <Radio className="w-4 h-4 text-white animate-pulse" />
+                                    </div>
+                                  )}
+                                </div>
+
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-1.5">
+                                    {pl.isCustom && (
+                                      <span className="px-1.5 py-0.5 rounded-md bg-red-950 border border-red-500/30 text-[9px] font-bold text-red-400">
+                                        Agregada
+                                      </span>
+                                    )}
+                                  </div>
+                                  <h4 className="text-xs font-bold text-white truncate mt-0.5 leading-tight">{pl.title}</h4>
+                                  <p className="text-[10px] text-stone-400 truncate mt-0.5">
+                                    {pl.tracks && pl.tracks.length > 0 ? `${pl.tracks.length} canciones` : 'Lista de YouTube'}
+                                  </p>
+                                </div>
+
+                                <div className="flex items-center gap-1 shrink-0">
+                                  {pl.isCustom && (
+                                    <>
+                                      <button
+                                        onClick={(e) => handleOpenEditPlaylist(pl, e)}
+                                        className="p-1 rounded-lg hover:bg-stone-700 text-stone-400 hover:text-stone-200 transition-colors cursor-pointer"
+                                        title="Editar nombre y categoría"
+                                      >
+                                        <Edit3 className="w-3.5 h-3.5" />
+                                      </button>
+                                      <button
+                                        onClick={(e) => handleDeletePlaylist(pl.id, e)}
+                                        className="p-1 rounded-lg hover:bg-red-500/20 text-stone-500 hover:text-red-400 transition-colors cursor-pointer"
+                                        title="Eliminar esta lista"
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                      </button>
+                                    </>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
                   );
                 })

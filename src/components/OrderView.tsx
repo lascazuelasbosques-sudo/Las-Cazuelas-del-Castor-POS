@@ -5,9 +5,15 @@ import { Card, CardContent, CardHeader, CardFooter } from "./Card";
 import { formatCurrency, cn, customRound } from "@/src/lib/utils";
 import { Product, Category, OrderItem, Order, OrderStatus } from "@/src/types";
 import { db, auth } from "../firebase";
-import { collection, onSnapshot, query, orderBy, addDoc, updateDoc, doc, where, runTransaction, arrayUnion } from "firebase/firestore";
+import { collection, query, orderBy, doc, where, runTransaction, arrayUnion, addDoc, updateDoc } from "firebase/firestore";
 import toast from "react-hot-toast";
 import { useDraggable } from "../lib/useDraggable";
+import { 
+  addOfflineDoc, 
+  updateOfflineDoc, 
+  onOfflineSnapshot,
+  getOfflineStatus
+} from "../lib/offlineService";
 
 const Utensils = UtensilsIcon;
 
@@ -198,8 +204,7 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
 
   useEffect(() => {
     const qCat = query(collection(db, "categories"), orderBy("order", "asc"));
-    const unsubCat = onSnapshot(qCat, (snapshot) => {
-      const cats = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Category));
+    const unsubCat = onOfflineSnapshot("categories", qCat, (cats) => {
       setCategories(cats);
       setSelectedCategory(prev => prev ? prev : (cats.length > 0 ? cats[0].id : ''));
     }, (error) => {
@@ -207,8 +212,7 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
     });
 
     const qProd = query(collection(db, "products"), orderBy("name", "asc"));
-    const unsubProd = onSnapshot(qProd, (snapshot) => {
-      const prods = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Product));
+    const unsubProd = onOfflineSnapshot("products", qProd, (prods) => {
       setProducts(prods);
       setLoading(false);
     }, (error) => {
@@ -221,8 +225,7 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
       where("status", "in", ["pending", "preparing", "ready", "served"]),
       orderBy("createdAt", "desc")
     );
-    const unsubActive = onSnapshot(qActive, (snapshot) => {
-      const allOrders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Order));
+    const unsubActive = onOfflineSnapshot("orders", qActive, (allOrders) => {
       setActiveOrders(allOrders);
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, "orders");
@@ -526,7 +529,7 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
         };
         orderData.movementLogs = arrayUnion(updateLog);
 
-        await updateDoc(doc(db, "orders", editingOrderId), orderData);
+        await updateOfflineDoc("orders", editingOrderId, orderData);
         toast.success("Pedido actualizado y enviado a cocina");
       } else {
         // Generate folio
@@ -573,7 +576,7 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
         orderData.waiterName = userInfo.userName;
         orderData.movementLogs = [initialLog];
         
-        await addDoc(collection(db, "orders"), orderData);
+        await addOfflineDoc("orders", orderData);
         toast.success("Pedido enviado a cocina");
       }
       
@@ -604,7 +607,7 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
         userRole: userInfo.userRole
       };
 
-      await updateDoc(doc(db, "orders", editingOrderId), {
+      await updateOfflineDoc("orders", editingOrderId, {
         status: 'cancelled',
         updatedAt: new Date().toISOString(),
         movementLogs: arrayUnion(cancelLog)

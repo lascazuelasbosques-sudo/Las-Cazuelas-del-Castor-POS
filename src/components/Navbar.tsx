@@ -11,6 +11,14 @@ import { WeatherClockWidget } from "./WeatherClockWidget";
 import { DiscreteMiniPlayer } from "./DiscreteMiniPlayer";
 import { FullScreenLockControl } from "./FullScreenLockControl";
 import toast from "react-hot-toast";
+import { Wifi, WifiOff, RefreshCw } from "lucide-react";
+import { 
+  getOfflineStatus, 
+  getPendingOperationsCount, 
+  subscribeToOfflineState, 
+  toggleSimulateOffline, 
+  syncOfflineData 
+} from "../lib/offlineService";
 
 interface NavbarProps {
   activeTab: string;
@@ -42,8 +50,18 @@ export const Navbar = ({
   const prevUnreadRef = useRef(0);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [localIsFullscreen, setLocalIsFullscreen] = useState(false);
+  const [isOffline, setIsOffline] = useState(getOfflineStatus());
+  const [pendingOps, setPendingOps] = useState(getPendingOperationsCount());
   
   const { branding } = useBranding();
+
+  useEffect(() => {
+    const unsubscribe = subscribeToOfflineState((offline, pendingCount) => {
+      setIsOffline(offline);
+      setPendingOps(pendingCount);
+    });
+    return unsubscribe;
+  }, []);
 
   // Screen Fullscreen monitor
   useEffect(() => {
@@ -389,6 +407,36 @@ export const Navbar = ({
           <PWAInstallBanner compact />
           <FullScreenLockControl compact />
 
+          {/* Compact Offline Switcher for Mobile */}
+          <button
+            onClick={() => {
+              if (pendingOps > 0 && !isOffline) {
+                syncOfflineData();
+              } else {
+                toggleSimulateOffline(!isOffline);
+              }
+            }}
+            className={cn(
+              "flex flex-col items-center gap-1 p-2 rounded-xl shrink-0 transition-all relative",
+              isOffline ? "text-amber-600 bg-amber-50" : "text-stone-600 hover:bg-stone-50"
+            )}
+            title={isOffline ? "Base de datos local activa. Presiona para volver a conectar." : "Trabajar en modo local"}
+          >
+            {isOffline ? (
+              <WifiOff size={21} className="text-amber-500 animate-pulse" />
+            ) : (
+              <Wifi size={21} className="text-stone-400" />
+            )}
+            {pendingOps > 0 && (
+              <span className="absolute top-1 right-1 bg-amber-500 text-stone-950 text-[8px] font-black w-3.5 h-3.5 rounded-full flex items-center justify-center border border-white animate-bounce">
+                {pendingOps}
+              </span>
+            )}
+            <span className="text-[9px] font-extrabold whitespace-nowrap">
+              {isOffline ? `Offline (${pendingOps})` : "En Línea"}
+            </span>
+          </button>
+
           <button
             onClick={() => setIsWalkieOpen(!isWalkieOpen)}
             className={cn(
@@ -432,14 +480,23 @@ export const Navbar = ({
           <DiscreteMiniPlayer compact onNavigateToMusic={() => setActiveTab('music')} />
         </div>
 
-        <div className="p-2 lg:p-3 bg-stone-50 rounded-lg border border-stone-100 mb-2 flex items-center justify-center lg:justify-start">
-          <div className="hidden lg:block w-full">
-            <p className="text-xs text-stone-500">{getRoleLabel(userRole)}</p>
-            <p className="text-sm font-medium truncate">{userName}</p>
+        <div className="p-1.5 lg:p-2 bg-stone-50 rounded-lg border border-stone-100 mb-2 flex items-center justify-between gap-1.5 w-full">
+          <div className="flex items-center gap-1.5 min-w-0">
+            <div className="w-7 h-7 rounded-full overflow-hidden border border-stone-200 shrink-0" title={`${userName} (${getRoleLabel(userRole)})`}>
+              <img src={logoUrl} className="w-full h-full object-cover" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+            </div>
+            <div className="hidden lg:block min-w-0">
+              <p className="text-[10px] text-stone-400 leading-none mb-0.5">{getRoleLabel(userRole)}</p>
+              <p className="text-xs font-bold text-stone-700 truncate max-w-[105px]">{userName}</p>
+            </div>
           </div>
-          <div className="lg:hidden w-8 h-8 rounded-full overflow-hidden border border-stone-200" title={`${userName} (${getRoleLabel(userRole)})`}>
-            <img src={logoUrl} className="w-full h-full object-cover" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
-          </div>
+          <button
+            onClick={() => onLogout()}
+            className="p-1 rounded-md text-stone-400 hover:text-red-600 hover:bg-red-50/50 transition-colors cursor-pointer shrink-0"
+            title="Cerrar sesión"
+          >
+            <LogOut size={13} />
+          </button>
         </div>
 
         {/* Walkie-Talkie Button for Desktop */}
@@ -468,6 +525,56 @@ export const Navbar = ({
           {isFullscreen ? <Minimize2 size={18} className="text-mex-gold" /> : <Maximize2 size={18} className="text-mex-green" />}
           <span className="hidden lg:inline">{isFullscreen ? "Ventana Normal" : "Pantalla Completa"}</span>
         </Button>
+
+        {/* Offline Sync Controls */}
+        <div className="p-2.5 bg-stone-50 border border-stone-200/60 rounded-xl mb-1 text-left w-full hidden md:block">
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-[10px] uppercase font-bold text-stone-400 tracking-wider">Base de Datos</span>
+            <div className="flex items-center gap-1.5">
+              <span className={cn(
+                "w-2 h-2 rounded-full",
+                isOffline ? "bg-amber-500 animate-pulse" : "bg-emerald-500"
+              )} />
+              <span className="text-[10px] font-black uppercase text-stone-700">
+                {isOffline ? "Local" : "Nube"}
+              </span>
+            </div>
+          </div>
+          
+          <div className="flex items-center gap-1">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => toggleSimulateOffline(!isOffline)}
+              className={cn(
+                "flex-1 justify-center gap-1 px-1 h-[28px] rounded-lg text-[9px] font-black uppercase tracking-wider border-stone-200",
+                isOffline ? "bg-amber-100 hover:bg-amber-200 text-amber-800 border-amber-200" : "bg-white hover:bg-stone-50 text-stone-600"
+              )}
+              title={isOffline ? "Volver a Conectar con la Nube" : "Desconectar y Trabajar con BD Temporal"}
+            >
+              {isOffline ? <Wifi size={11} /> : <WifiOff size={11} />}
+              <span>{isOffline ? "Conectar" : "Desconectar"}</span>
+            </Button>
+            
+            {pendingOps > 0 && (
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => syncOfflineData()}
+                className="flex-1 justify-center gap-1 px-1 h-[28px] rounded-lg text-[9px] font-black uppercase tracking-wider bg-mex-green hover:bg-mex-green/90 text-white animate-bounce"
+                title="Sincronizar Cambios locales con la nube"
+              >
+                <RefreshCw size={11} className="animate-spin" />
+                <span>Sincronizar ({pendingOps})</span>
+              </Button>
+            )}
+          </div>
+          {pendingOps > 0 && (
+            <p className="text-[8px] font-bold text-amber-700 mt-1.5 text-center leading-normal animate-pulse">
+              Tiene {pendingOps} cambios sin subir.
+            </p>
+          )}
+        </div>
 
         {/* Lock Screen Button */}
         <FullScreenLockControl />

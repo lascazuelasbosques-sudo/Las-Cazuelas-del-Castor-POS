@@ -195,167 +195,125 @@ export function WeatherClockWidget({ compact = false }: { compact?: boolean }) {
       <div className="relative font-sans">
         <button
           onClick={() => setExpanded(!expanded)}
-          className="flex items-center gap-1.5 px-2 py-1 bg-stone-900/80 hover:bg-stone-800 text-stone-300 hover:text-white rounded-lg border border-stone-800/80 shadow-sm transition-all text-left cursor-pointer shrink-0"
+          className="flex items-center gap-1 px-1.5 py-0.5 bg-stone-900/80 hover:bg-stone-800 text-stone-300 hover:text-white rounded-md border border-stone-800/80 shadow-sm transition-all text-left cursor-pointer shrink-0"
           title="Ver Clima y Hora CDMX / Los Héroes Tecámac"
         >
-          <Clock size={12} className="text-amber-400 shrink-0" />
-          <span className="font-mono font-bold text-[11px] text-stone-200 tracking-tight">{formattedTimeShort}</span>
-          <span className="text-stone-600 text-[10px]">|</span>
-          <span className="text-[10px] font-semibold text-stone-300">
-            {cdmxWeather?.temp ?? '--'}° <span className="text-stone-500">·</span> {tecamacWeather?.temp ?? '--'}°
+          <Clock size={11} className="text-amber-400 shrink-0" />
+          <span className="font-mono font-bold text-[10px] text-stone-200 tracking-tight">{formattedTimeShort}</span>
+          <span className="text-stone-600 text-[9px]">|</span>
+          <span className="text-[9px] font-semibold text-stone-300">
+            {cdmxWeather?.temp ?? '--'}°<span className="text-stone-500">·</span>{tecamacWeather?.temp ?? '--'}°
           </span>
         </button>
 
         {/* Expanded Popover */}
         {expanded && (
-          <div className="absolute top-full left-0 mt-2 z-50 w-72 bg-stone-900 border-2 border-amber-500/50 rounded-2xl p-3 shadow-2xl backdrop-blur-md animate-in fade-in zoom-in-95 duration-200">
-            <div className="flex items-center justify-between pb-2 border-b border-stone-800 mb-2">
-              <div className="flex items-center gap-1.5 text-amber-400 font-extrabold text-xs uppercase tracking-wider">
-                <Clock size={14} />
+          <div className="absolute top-full left-0 mt-2 z-50 w-64 bg-stone-900 border border-stone-800 rounded-xl p-2.5 shadow-2xl backdrop-blur-md animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between pb-1.5 border-b border-stone-800 mb-1.5">
+              <div className="flex items-center gap-1 text-amber-400 font-extrabold text-[10px] uppercase tracking-wider">
+                <Clock size={12} />
                 <span>Horario Oficial CDMX</span>
               </div>
               <button
                 onClick={fetchWeather}
                 disabled={isRefreshing}
-                className="p-1 text-stone-400 hover:text-amber-400 transition-colors cursor-pointer"
+                className="p-0.5 text-stone-400 hover:text-amber-400 transition-colors cursor-pointer"
                 title="Actualizar Clima"
               >
-                <RefreshCw size={12} className={cn(isRefreshing && "animate-spin text-amber-400")} />
+                <RefreshCw size={10} className={cn(isRefreshing && "animate-spin text-amber-400")} />
               </button>
             </div>
 
-            <div className="text-center py-1 bg-stone-950 rounded-xl border border-stone-800 mb-3">
-              <div className="font-mono text-xl font-black text-amber-400 tracking-wider">
+            <div className="text-center py-1 bg-stone-950 rounded-lg border border-stone-850 mb-2">
+              <div className="font-mono text-base font-black text-amber-400 tracking-wider">
                 {formattedTime}
               </div>
-              <div className="text-[10px] text-stone-400 font-bold uppercase tracking-wider">
-                {formattedDate} • CDMX (UTC-6)
+              <div className="text-[8px] text-stone-400 font-bold uppercase tracking-wider">
+                {formattedDate} • CDMX
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-2 gap-1.5">
               {[cdmxWeather, tecamacWeather].map((w, idx) => {
                 if (!w) return null;
                 const info = getWeatherInfo(w.weatherCode, w.isDay);
                 const WeatherIcon = info.icon;
                 return (
-                  <div key={idx} className="bg-stone-950/80 p-2.5 rounded-xl border border-stone-800/80 flex flex-col justify-between gap-1">
+                  <div key={idx} className="bg-stone-950/80 p-2 rounded-lg border border-stone-850 flex flex-col justify-between gap-0.5">
                     <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-black text-amber-400 uppercase truncate max-w-[80px]" title={w.city}>
+                      <span className="text-[9px] font-black text-amber-400 uppercase truncate max-w-[60px]" title={w.city}>
                         {idx === 0 ? 'CDMX' : 'Tecámac'}
                       </span>
-                      <WeatherIcon size={16} className={info.color} />
+                      <WeatherIcon size={12} className={info.color} />
                     </div>
 
-                    <div className="flex items-baseline gap-1 my-0.5">
-                      <span className="text-lg font-black text-white">{w.temp}°C</span>
-                      <span className="text-[9px] text-stone-400 font-medium truncate">{info.description}</span>
+                    <div className="flex items-baseline gap-0.5 my-0.5">
+                      <span className="text-xs font-black text-white">{w.temp}°C</span>
+                      <span className="text-[8px] text-stone-400 font-medium truncate">{info.description}</span>
                     </div>
 
-                    <div className="flex items-center justify-between text-[8px] text-stone-400 font-bold pt-1 border-t border-stone-800/60">
+                    <div className="flex items-center justify-between text-[7px] text-stone-500 font-bold pt-1 border-t border-stone-800/60">
                       <span className="flex items-center gap-0.5" title="Humedad">
-                        <Droplets size={9} className="text-blue-400" /> {w.humidity}%
+                        <Droplets size={8} className="text-blue-400" /> {w.humidity}%
                       </span>
                       <span className="flex items-center gap-0.5" title="Viento">
-                        <Wind size={9} className="text-sky-400" /> {w.windSpeed} km/h
+                        <Wind size={8} className="text-sky-400" /> {w.windSpeed}k/h
                       </span>
                     </div>
                   </div>
                 );
               })}
             </div>
-
-            {lastUpdated && (
-              <div className="text-[8px] text-stone-500 font-mono text-center mt-2">
-                Actualizado: {lastUpdated}
-              </div>
-            )}
           </div>
         )}
       </div>
     );
   }
 
-  // Full Widget Mode (For Sidebar or Top Cards - Discrete & Subtle Layout)
-  const [showDetails, setShowDetails] = useState(false);
-
+  // Full Widget Mode - Much more compact design
   return (
-    <div className="bg-stone-900/90 border border-stone-800/80 p-2.5 rounded-xl shadow-xs text-white flex flex-col gap-2 transition-all">
+    <div className="bg-stone-900/90 border border-stone-800/80 p-2 rounded-xl shadow-xs text-white flex flex-col gap-1.5 transition-all">
       {/* Header Clock - Discrete Bar */}
-      <div className="flex items-center justify-between bg-stone-950/80 px-2.5 py-1.5 rounded-lg border border-stone-800/60">
-        <div className="flex items-center gap-2">
-          <Clock size={14} className="text-amber-400 shrink-0" />
-          <div className="flex items-baseline gap-2">
-            <span className="font-mono text-sm font-bold text-amber-400 leading-none">
-              {formattedTimeShort}
-            </span>
-            <span className="text-[10px] text-stone-400 font-medium capitalize">
-              {formattedDate}
-            </span>
-          </div>
+      <div className="flex items-center justify-between px-1">
+        <div className="flex items-center gap-1.5">
+          <Clock size={12} className="text-amber-400 shrink-0" />
+          <span className="font-mono text-xs font-extrabold text-amber-400 leading-none">
+            {formattedTimeShort}
+          </span>
+          <span className="text-[9px] text-stone-400 font-bold capitalize truncate max-w-[65px]">
+            {formattedDate}
+          </span>
         </div>
 
-        <div className="flex items-center gap-1">
-          <button
-            onClick={() => setShowDetails(!showDetails)}
-            className="p-1 hover:bg-stone-800 text-stone-400 hover:text-stone-200 rounded transition-colors text-[10px] flex items-center gap-0.5 cursor-pointer"
-            title={showDetails ? "Ocultar detalles" : "Ver detalles"}
-          >
-            <span className="text-[9px] font-semibold">{showDetails ? "Menos" : "Más"}</span>
-          </button>
-          <button
-            onClick={fetchWeather}
-            disabled={isRefreshing}
-            className="p-1 text-stone-400 hover:text-amber-400 rounded transition-colors cursor-pointer"
-            title="Actualizar clima"
-          >
-            <RefreshCw size={11} className={cn(isRefreshing && "animate-spin text-amber-400")} />
-          </button>
-        </div>
+        <button
+          onClick={fetchWeather}
+          disabled={isRefreshing}
+          className="p-1 text-stone-400 hover:text-amber-400 rounded transition-colors cursor-pointer"
+          title="Actualizar clima"
+        >
+          <RefreshCw size={10} className={cn(isRefreshing && "animate-spin text-amber-400")} />
+        </button>
       </div>
 
       {/* Weather Compact Bar */}
-      <div className="grid grid-cols-2 gap-1.5">
+      <div className="grid grid-cols-2 gap-1">
         {[cdmxWeather, tecamacWeather].map((w, idx) => {
           if (!w) return null;
           const info = getWeatherInfo(w.weatherCode, w.isDay);
           const WeatherIcon = info.icon;
           return (
-            <div key={idx} className="bg-stone-950/60 px-2 py-1.5 rounded-lg border border-stone-800/50 flex items-center justify-between">
-              <div className="flex items-center gap-1 min-w-0">
-                <span className="text-[10px] font-bold text-stone-300 uppercase truncate">
-                  {idx === 0 ? 'CDMX' : 'Tecámac'}
+            <div key={idx} className="bg-stone-950/55 px-1.5 py-1 rounded-lg border border-stone-850 flex items-center justify-between gap-1">
+              <div className="flex items-baseline gap-0.5 min-w-0">
+                <span className="text-[9px] font-bold text-stone-400 uppercase truncate">
+                  {idx === 0 ? 'CDMX' : 'Tec'}
                 </span>
-                <span className="text-xs font-black text-amber-300">{w.temp}°</span>
+                <span className="text-[11px] font-black text-amber-300">{w.temp}°</span>
               </div>
-              <WeatherIcon size={13} className={`${info.color} shrink-0`} />
+              <WeatherIcon size={11} className={`${info.color} shrink-0`} />
             </div>
           );
         })}
       </div>
-
-      {/* Expanded Details when toggled */}
-      {showDetails && (
-        <div className="grid grid-cols-2 gap-1.5 pt-1.5 border-t border-stone-800/60 animate-in fade-in duration-150">
-          {[cdmxWeather, tecamacWeather].map((w, idx) => {
-            if (!w) return null;
-            const info = getWeatherInfo(w.weatherCode, w.isDay);
-            return (
-              <div key={idx} className="text-[9px] text-stone-400 flex flex-col gap-0.5 px-1">
-                <span className="text-stone-300 font-medium truncate">{info.description}</span>
-                <div className="flex items-center justify-between text-[8px] text-stone-500">
-                  <span className="flex items-center gap-0.5">
-                    <Droplets size={8} className="text-blue-400" /> {w.humidity}%
-                  </span>
-                  <span className="flex items-center gap-0.5">
-                    <Wind size={8} className="text-sky-400" /> {w.windSpeed}k/h
-                  </span>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
     </div>
   );
 }
