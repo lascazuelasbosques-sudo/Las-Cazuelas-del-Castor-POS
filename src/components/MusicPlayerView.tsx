@@ -618,6 +618,15 @@ export const MusicPlayerView: React.FC<MusicPlayerViewProps> = ({
     }
   };
 
+  // Sequential Wizard: Cancel all remaining items and close modal
+  const handleCancelSequential = () => {
+    setShowSequentialModal(false);
+    setPendingImportQueue([]);
+    setCurrentQueueIndex(0);
+    setImportTextInput('');
+    toast('Ventana cerrada');
+  };
+
   // Open Edit Existing Playlist Modal
   const handleOpenEditPlaylist = (playlist: SavedPlaylist, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -1155,10 +1164,11 @@ export const MusicPlayerView: React.FC<MusicPlayerViewProps> = ({
     ...customPlaylists.map(p => p.category).filter(Boolean)
   ])).sort();
 
-  // Combined lists for rendering
+  // Combined lists for rendering with deduplication
+  const presetNotInCustom = PRESET_PLAYLISTS.filter(preset => !customPlaylists.some(cp => cp.id === preset.id));
   const allPlaylistsList = filterMode === 'custom' 
     ? customPlaylists 
-    : [...customPlaylists, ...PRESET_PLAYLISTS];
+    : [...customPlaylists, ...presetNotInCustom];
 
   const filteredPlaylists = allPlaylistsList.filter(p => {
     const matchesSearch = p.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -1605,12 +1615,12 @@ export const MusicPlayerView: React.FC<MusicPlayerViewProps> = ({
                       {/* Playlists in Category Dropdown */}
                       {!isCollapsed && (
                         <div className="p-2 space-y-2">
-                          {playlists.map((pl) => {
+                          {playlists.map((pl, plIdx) => {
                             const isActive = currentPlaylistId === pl.id;
                             const resolvedThumb = pl.thumbnailUrl || getMatchingImage(pl.title, pl.category, pl.description, pl.tracks || []);
                             return (
                               <div
-                                key={pl.id}
+                                key={`${pl.id}-${plIdx}`}
                                 onClick={() => loadPlaylist(pl)}
                                 className={cn(
                                   "p-2.5 rounded-xl border transition-all cursor-pointer flex items-center gap-3 group relative overflow-hidden",
@@ -1777,7 +1787,15 @@ PLDISa-NAtXbvhLd4f-v_4_lC668R8Xg8C
               />
             </div>
 
-            <div className="flex items-center justify-between mb-4 pt-1">
+            <button 
+              onClick={handleCancelSequential}
+              className="absolute top-4 right-4 text-stone-400 hover:text-white p-1 rounded-lg hover:bg-stone-800 transition-colors cursor-pointer z-10"
+              title="Cerrar ventana"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="flex items-center justify-between mb-4 pt-1 pr-6">
               <div className="flex items-center gap-2.5">
                 <div className="w-9 h-9 rounded-xl bg-red-600/20 text-red-500 border border-red-500/30 flex items-center justify-center font-bold text-xs">
                   {currentQueueIndex + 1}/{pendingImportQueue.length}
@@ -1881,13 +1899,22 @@ PLDISa-NAtXbvhLd4f-v_4_lC668R8Xg8C
               </div>
 
               <div className="pt-3 flex items-center justify-between gap-2 border-t border-stone-800/80">
-                <button
-                  type="button"
-                  onClick={handleSkipSequential}
-                  className="px-3.5 py-2 bg-stone-800 hover:bg-stone-700 text-stone-300 font-bold text-xs rounded-xl transition-all cursor-pointer"
-                >
-                  Omitir esta Lista
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleCancelSequential}
+                    className="px-3.5 py-2 bg-stone-800 hover:bg-stone-700 text-stone-400 hover:text-stone-200 font-bold text-xs rounded-xl transition-all cursor-pointer"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSkipSequential}
+                    className="px-3.5 py-2 bg-stone-800/60 hover:bg-stone-800 text-stone-300 font-bold text-xs rounded-xl transition-all cursor-pointer"
+                  >
+                    Omitir esta Lista
+                  </button>
+                </div>
 
                 <button
                   type="submit"
