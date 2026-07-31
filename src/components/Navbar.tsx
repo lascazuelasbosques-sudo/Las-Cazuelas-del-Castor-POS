@@ -94,6 +94,15 @@ export const Navbar = ({
       propToggleFullscreen();
       return;
     }
+    
+    const isLocked = localStorage.getItem('pos_fullscreen_locked') === 'true';
+    if (isLocked) {
+      toast('🔒 Pantalla Bloqueada. Desactiva el bloqueo de pantalla completa primero.', {
+        icon: '🔒',
+        id: 'fs-locked-toast'
+      });
+      return;
+    }
     try {
       const doc = document as any;
       const docElm = document.documentElement as any;

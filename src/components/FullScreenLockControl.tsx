@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Lock, Unlock, Maximize2, ShieldCheck } from 'lucide-react';
+import { Lock, Maximize2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 interface FullScreenLockProps {
@@ -7,30 +7,24 @@ interface FullScreenLockProps {
 }
 
 export function FullScreenLockControl({ compact = false }: FullScreenLockProps) {
-  const [isLocked, setIsLocked] = useState(false);
-  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isLocked, setIsLocked] = useState<boolean>(() => {
+    return localStorage.getItem('pos_fullscreen_locked') === 'true';
+  });
   const wakeLockRef = useRef<any>(null);
 
-  // Monitor Fullscreen status and enforce lock if exited unexpectedly
+  // Keep state in sync if triggered elsewhere
   useEffect(() => {
-    const handleFullscreenChange = () => {
-      const isFull = !!document.fullscreenElement;
-      setIsFullscreen(isFull);
-
-      // If fullscreen was exited while lock is active, force re-entry
-      if (!isFull && isLocked) {
-        toast('Manteniendo pantalla completa bloqueada', { icon: '🔒' });
-        setTimeout(() => {
-          document.documentElement.requestFullscreen().catch(() => {});
-        }, 100);
+    const handleLockSync = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      if (customEvent.detail && typeof customEvent.detail.isLocked === 'boolean') {
+        setIsLocked(customEvent.detail.isLocked);
       }
     };
+    window.addEventListener('pos_lock_changed', handleLockSync);
+    return () => window.removeEventListener('pos_lock_changed', handleLockSync);
+  }, []);
 
-    document.addEventListener('fullscreenchange', handleFullscreenChange);
-    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
-  }, [isLocked]);
-
-  // Manage Screen Wake Lock to prevent phone display from turning off or sleeping
+  // Screen Wake Lock API to prevent mobile / tablet sleep
   useEffect(() => {
     if (isLocked && 'wakeLock' in navigator) {
       (navigator as any).wakeLock?.request('screen')
@@ -45,32 +39,44 @@ export function FullScreenLockControl({ compact = false }: FullScreenLockProps) 
   }, [isLocked]);
 
   const toggleLock = async () => {
-    if (!isLocked) {
+    const nextState = !isLocked;
+    setIsLocked(nextState);
+    localStorage.setItem('pos_fullscreen_locked', String(nextState));
+    window.dispatchEvent(new CustomEvent('pos_lock_changed', { detail: { isLocked: nextState } }));
+
+    if (nextState) {
       // Activate Fullscreen Lock
       try {
-        if (!document.fullscreenElement) {
-          await document.documentElement.requestFullscreen().catch(() => {});
+        const doc = document as any;
+        const docElm = document.documentElement as any;
+        if (!doc.fullscreenElement && !doc.webkitFullscreenElement) {
+          const req = docElm.requestFullscreen || docElm.webkitRequestFullscreen;
+          if (req) await req.call(docElm).catch(() => {});
         }
       } catch (e) {
-        console.warn('Fullscreen error:', e);
+        // App.tsx listener enforces simulated full screen
       }
 
       if (navigator.vibrate) {
         try { navigator.vibrate([80, 40, 80]); } catch (e) {}
       }
 
-      setIsLocked(true);
-      toast.success('🔒 Maximización Bloqueada (No se saldrá de pantalla completa)', {
+      toast.success('🔒 Pantalla Completa Bloqueada (Fija)', {
         icon: '🔒',
-        duration: 3500
+        id: 'lock-fs-toast',
+        duration: 3000
       });
     } else {
       // Deactivate Lock
       if (navigator.vibrate) {
-        try { navigator.vibrate(150); } catch (e) {}
+        try { navigator.vibrate(100); } catch (e) {}
       }
-      setIsLocked(false);
-      toast.success('🔓 Bloqueo de Maximización Desactivado', { icon: '🔓' });
+
+      toast.success('🔓 Bloqueo de Pantalla Completa Desactivado', {
+        icon: '🔓',
+        id: 'lock-fs-toast',
+        duration: 2500
+      });
     }
   };
 
@@ -83,7 +89,7 @@ export function FullScreenLockControl({ compact = false }: FullScreenLockProps) 
             ? 'bg-amber-500 text-stone-950 border-amber-400 shadow-sm animate-pulse'
             : 'bg-stone-900/80 hover:bg-stone-800 text-stone-300 border-stone-800'
         }`}
-        title={isLocked ? 'Maximización Bloqueada. Clic para desbloquear' : 'Bloquear Maximización (Evitar salir de Pantalla Completa)'}
+        title={isLocked ? 'Pantalla Completa Bloqueada. Clic para desbloquear' : 'Bloquear Pantalla Completa (Evitar salir de Full Screen)'}
       >
         {isLocked ? (
           <>
@@ -108,20 +114,21 @@ export function FullScreenLockControl({ compact = false }: FullScreenLockProps) 
           ? 'bg-amber-500 text-stone-950 border-amber-400 hover:bg-amber-400'
           : 'bg-white text-stone-700 hover:bg-amber-50 hover:text-amber-900 border-stone-200'
       }`}
-      title={isLocked ? 'Desbloquear Pantalla Completa' : 'Bloquear Maximización en Pantalla Completa'}
+      title={isLocked ? 'Desbloquear Pantalla Completa' : 'Bloquear en Pantalla Completa'}
     >
       {isLocked ? (
         <>
           <Lock size={18} className="text-stone-950 shrink-0" />
-          <span className="hidden lg:inline">Maximización Bloqueada</span>
+          <span className="hidden lg:inline">Pantalla Completa Bloqueada</span>
         </>
       ) : (
         <>
           <Maximize2 size={18} className="text-amber-500 shrink-0" />
-          <span className="hidden lg:inline">Bloquear Maximización</span>
+          <span className="hidden lg:inline">Bloquear Pantalla Completa</span>
         </>
       )}
     </button>
   );
 }
+
 

@@ -41,7 +41,7 @@ export default function App() {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isSimulatedFullscreen, setIsSimulatedFullscreen] = useState(false);
 
-  // Sync fullscreen change events
+  // Sync fullscreen change events & Lock status
   useEffect(() => {
     const handleFullscreenChange = () => {
       const doc = document as any;
@@ -50,8 +50,12 @@ export default function App() {
                         doc.mozFullScreenElement || 
                         doc.msFullscreenElement);
       setIsFullscreen(isFull);
-      if (!isFull) {
-        setIsSimulatedFullscreen(false);
+    };
+
+    const handleLockSync = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      if (customEvent.detail && customEvent.detail.isLocked) {
+        setIsSimulatedFullscreen(true);
       }
     };
 
@@ -59,57 +63,69 @@ export default function App() {
     document.addEventListener("webkitfullscreenchange", handleFullscreenChange);
     document.addEventListener("mozfullscreenchange", handleFullscreenChange);
     document.addEventListener("MSFullscreenChange", handleFullscreenChange);
+    window.addEventListener("pos_lock_changed", handleLockSync);
+
+    // Initial check for lock
+    if (localStorage.getItem('pos_fullscreen_locked') === 'true') {
+      setIsSimulatedFullscreen(true);
+    }
 
     return () => {
       document.removeEventListener("fullscreenchange", handleFullscreenChange);
       document.removeEventListener("webkitfullscreenchange", handleFullscreenChange);
       document.removeEventListener("mozfullscreenchange", handleFullscreenChange);
       document.removeEventListener("MSFullscreenChange", handleFullscreenChange);
+      window.removeEventListener("pos_lock_changed", handleLockSync);
     };
   }, []);
 
   const toggleFullscreen = async () => {
+    const isLocked = localStorage.getItem('pos_fullscreen_locked') === 'true';
+    if (isLocked) {
+      toast('🔒 Pantalla Bloqueada. Desactiva el bloqueo de pantalla completa primero.', {
+        icon: '🔒',
+        id: 'fs-locked-toast'
+      });
+      return;
+    }
+
     try {
       const doc = document as any;
       const docElm = document.documentElement as any;
-      const currentFullscreenElm = doc.fullscreenElement ||
-                                  doc.webkitFullscreenElement ||
-                                  doc.mozFullScreenElement ||
-                                  doc.msFullscreenElement;
+      const currentNativeFull = !!(doc.fullscreenElement ||
+                                doc.webkitFullscreenElement ||
+                                doc.mozFullScreenElement ||
+                                doc.msFullscreenElement);
 
-      if (!currentFullscreenElm && !isSimulatedFullscreen) {
-        // Try native
-        try {
-          if (docElm.requestFullscreen) {
-            await docElm.requestFullscreen();
-          } else if (docElm.webkitRequestFullscreen) {
-            await docElm.webkitRequestFullscreen();
-          } else if (docElm.mozRequestFullScreen) {
-            await docElm.mozRequestFullScreen();
-          } else if (docElm.msRequestFullscreen) {
-            await docElm.msRequestFullscreen();
-          } else {
-            throw new Error("No native support");
-          }
-        } catch (nativeErr) {
-          console.warn("Native fullscreen failed, falling back to simulated:", nativeErr);
-          setIsSimulatedFullscreen(true);
-          toast.success("¡Modo Pantalla Completa Activado!", { id: "simulated-fs-toast" });
-        }
-      } else {
-        // Exit native or simulated
-        if (currentFullscreenElm) {
-          if (doc.exitFullscreen) {
-            await doc.exitFullscreen();
-          } else if (doc.webkitExitFullscreen) {
-            await doc.webkitExitFullscreen();
-          } else if (doc.mozCancelFullScreen) {
-            await doc.mozCancelFullScreen();
-          } else if (doc.msExitFullscreen) {
-            await doc.msExitFullscreen();
+      const currentlyFull = currentNativeFull || isSimulatedFullscreen;
+
+      if (currentlyFull) {
+        // Turn OFF Fullscreen -> Go to Normal Window Mode
+        if (currentNativeFull) {
+          try {
+            if (doc.exitFullscreen) await doc.exitFullscreen();
+            else if (doc.webkitExitFullscreen) await doc.webkitExitFullscreen();
+            else if (doc.mozCancelFullScreen) await doc.mozCancelFullScreen();
+            else if (doc.msExitFullscreen) await doc.msExitFullscreen();
+          } catch (e) {
+            console.warn("exitFullscreen error:", e);
           }
         }
+        setIsFullscreen(false);
         setIsSimulatedFullscreen(false);
+        toast("Modo Ventana Normal", { icon: "🔲", id: "fs-toast" });
+      } else {
+        // Turn ON Fullscreen
+        setIsSimulatedFullscreen(true);
+        try {
+          if (docElm.requestFullscreen) await docElm.requestFullscreen();
+          else if (docElm.webkitRequestFullscreen) await docElm.webkitRequestFullscreen();
+          else if (docElm.mozRequestFullScreen) await docElm.mozRequestFullScreen();
+          else if (docElm.msRequestFullscreen) await docElm.msRequestFullscreen();
+        } catch (e) {
+          console.warn("Native fullscreen request restricted:", e);
+        }
+        toast.success("¡Pantalla Completa Activada! 📺", { id: "fs-toast" });
       }
     } catch (err) {
       console.warn("Fullscreen toggle error:", err);
@@ -125,27 +141,26 @@ export default function App() {
                                   doc.webkitFullscreenElement ||
                                   doc.mozFullScreenElement ||
                                   doc.msFullscreenElement;
-      if (!currentFullscreenElm && !isSimulatedFullscreen) {
+      if (!currentFullscreenElm) {
         try {
           if (docElm.requestFullscreen) {
             await docElm.requestFullscreen();
           } else if (docElm.webkitRequestFullscreen) {
             await docElm.webkitRequestFullscreen();
-          } else {
-            throw new Error("No native support");
           }
-        } catch (nativeErr) {
-          // Silent fallback to simulated for auto-fullscreen
+        } catch (e) {
           setIsSimulatedFullscreen(true);
         }
       }
-    } catch (err) {
-      console.warn("Auto-fullscreen failed:", err);
+    } catch (e) {
       setIsSimulatedFullscreen(true);
     }
   };
 
   const exitFullscreen = async () => {
+    const isLocked = localStorage.getItem('pos_fullscreen_locked') === 'true';
+    if (isLocked) return;
+
     try {
       const doc = document as any;
       const currentFullscreenElm = doc.fullscreenElement ||
@@ -328,27 +343,28 @@ export default function App() {
     };
   }, []);
 
-  // Auto fullscreen on first interaction for admin
+  // Auto fullscreen on first interaction for all users
   useEffect(() => {
-    const isAdmin = (posUser && posUser.role === 'admin') || userRole === 'admin';
-    if (isAdmin) {
-      const handleFirstInteraction = () => {
-        const doc = document as any;
-        const currentFullscreenElm = doc.fullscreenElement ||
-                                    doc.webkitFullscreenElement ||
-                                    doc.mozFullScreenElement ||
-                                    doc.msFullscreenElement;
-        if (!currentFullscreenElm) {
-          enterFullscreen();
-        }
-      };
-      window.addEventListener('click', handleFirstInteraction, { once: true });
-      window.addEventListener('touchstart', handleFirstInteraction, { once: true });
-      return () => {
-        window.removeEventListener('click', handleFirstInteraction);
-        window.removeEventListener('touchstart', handleFirstInteraction);
-      };
-    }
+    const handleFirstInteraction = () => {
+      const doc = document as any;
+      const currentFullscreenElm = doc.fullscreenElement ||
+                                  doc.webkitFullscreenElement ||
+                                  doc.mozFullScreenElement ||
+                                  doc.msFullscreenElement;
+      if (!currentFullscreenElm) {
+        enterFullscreen();
+      }
+    };
+
+    // Attempt immediately on mount
+    enterFullscreen();
+
+    window.addEventListener('click', handleFirstInteraction, { once: true });
+    window.addEventListener('touchstart', handleFirstInteraction, { once: true });
+    return () => {
+      window.removeEventListener('click', handleFirstInteraction);
+      window.removeEventListener('touchstart', handleFirstInteraction);
+    };
   }, [posUser, userRole]);
 
   if (loading) {
@@ -457,16 +473,24 @@ export default function App() {
     }
   };
 
+  const isFull = isFullscreen || isSimulatedFullscreen;
+
   return (
-    <div className={`flex items-center justify-center min-h-[100dvh] w-screen bg-stone-900 transition-colors duration-500`}>
-      <div className={`flex flex-col md:flex-row h-[100dvh] w-full bg-mex-cream overflow-hidden shadow-2xl relative ${(isFullscreen || isSimulatedFullscreen) ? "simulated-fullscreen !max-w-none w-screen" : "max-w-[1400px]"}`}>
+    <div className={`flex items-center justify-center min-h-[100dvh] w-screen bg-stone-900 transition-all duration-300 ${
+      isFull ? 'fixed inset-0 z-[999] p-0 bg-stone-950 overflow-hidden' : 'p-2 md:p-4 bg-stone-900 overflow-y-auto'
+    }`}>
+      <div className={`flex flex-col md:flex-row bg-mex-cream overflow-hidden relative transition-all duration-300 ${
+        isFull 
+          ? "w-screen h-[100dvh] !max-w-none rounded-none shadow-none" 
+          : "w-full max-w-[1400px] h-[92vh] rounded-2xl shadow-2xl border border-stone-700/50"
+      }`}>
         <Navbar 
           activeTab={activeTab} 
           setActiveTab={setActiveTab} 
           userRole={userRole} 
           userName={posUser?.name || firebaseUser?.displayName || firebaseUser?.email?.split('@')[0] || 'Usuario'} 
           onLogout={handleLogout}
-          isFullscreen={isFullscreen || isSimulatedFullscreen}
+          isFullscreen={isFull}
           toggleFullscreen={toggleFullscreen}
           isWalkieOpen={isWalkieOpen}
           setIsWalkieOpen={setIsWalkieOpen}
