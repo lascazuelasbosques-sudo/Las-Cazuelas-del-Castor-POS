@@ -5,13 +5,13 @@ import { KitchenView } from './components/KitchenView';
 import { CashierView } from './components/CashierView';
 import { InventoryView } from './components/InventoryView';
 import { AdminView } from './components/AdminView';
-import { MusicPlayerView } from './components/MusicPlayerView';
 import WhatsAppInternoView from './components/WhatsAppInternoView';
 import { CustomerPortal } from './components/CustomerPortal';
 import { Login } from './components/Login';
 import { PendingOrdersNotifier } from './components/PendingOrdersNotifier';
 import { WalkieTalkie } from './components/WalkieTalkie';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { YouTubeFloatingWidget } from './components/YouTubeFloatingWidget';
 import { auth } from './firebase';
 import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
 import { doc, getDoc, setDoc, onSnapshot, collection, getDocs, query, limit } from 'firebase/firestore';
@@ -30,6 +30,7 @@ export default function App() {
   const dragExitPortal = useDraggable();
   const [activeTab, setActiveTab] = useState('orders');
   const [isWalkieOpen, setIsWalkieOpen] = useState(false);
+  const [isYouTubeOpen, setIsYouTubeOpen] = useState(false);
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
   const [posUser, setPosUser] = useState<POSUser | null>(null);
   const [userRole, setUserRole] = useState<string>('waiter');
@@ -469,8 +470,6 @@ export default function App() {
         return <CashierView onEditOrder={handleEditOrder} userRole={userRole} />;
       case 'inventory':
         return <InventoryView userRole={userRole} />;
-      case 'music':
-        return null;
       case 'admin':
         return <AdminView />;
       default:
@@ -499,17 +498,14 @@ export default function App() {
           toggleFullscreen={toggleFullscreen}
           isWalkieOpen={isWalkieOpen}
           setIsWalkieOpen={setIsWalkieOpen}
+          isYouTubeOpen={isYouTubeOpen}
+          onToggleYouTube={() => setIsYouTubeOpen(!isYouTubeOpen)}
         />
       
       <main className="flex-1 overflow-hidden relative pb-16 md:pb-0 h-full w-full min-h-0">
         <div className="absolute inset-0 overflow-hidden">
           <ErrorBoundary>
             {renderView()}
-            <MusicPlayerView 
-              userRole={userRole} 
-              activeTab={activeTab} 
-              onNavigateToMusic={() => setActiveTab('music')} 
-            />
           </ErrorBoundary>
         </div>
       </main>
@@ -517,6 +513,8 @@ export default function App() {
       <PendingOrdersNotifier userRole={userRole} />
 
       <WalkieTalkie posUser={posUser} isOpen={isWalkieOpen} setIsOpen={setIsWalkieOpen} />
+
+      <YouTubeFloatingWidget isOpen={isYouTubeOpen} onClose={() => setIsYouTubeOpen(false)} />
 
       <Toaster position="top-right" />
       </div>

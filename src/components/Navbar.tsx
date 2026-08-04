@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Utensils, ClipboardList, Package, CreditCard, Settings, LogOut, Menu, ChefHat, MessageSquare, Bell, Maximize2, Minimize2, Radio, Music } from "lucide-react";
+import { Utensils, ClipboardList, Package, CreditCard, Settings, LogOut, Menu, ChefHat, MessageSquare, Bell, Maximize2, Minimize2, Radio, Youtube } from "lucide-react";
 import { Button } from "./Button";
 import { cn, getRoleLabel } from "@/src/lib/utils";
 import { auth, db } from "../firebase";
@@ -8,7 +8,6 @@ import { Order } from "../types";
 import { useBranding } from "../lib/useBranding";
 import { PWAInstallBanner } from "./PWAInstallBanner";
 import { WeatherClockWidget } from "./WeatherClockWidget";
-import { DiscreteMiniPlayer } from "./DiscreteMiniPlayer";
 import { FullScreenLockControl } from "./FullScreenLockControl";
 import toast from "react-hot-toast";
 import { Wifi, WifiOff, RefreshCw } from "lucide-react";
@@ -30,6 +29,8 @@ interface NavbarProps {
   toggleFullscreen?: () => void;
   isWalkieOpen: boolean;
   setIsWalkieOpen: (open: boolean) => void;
+  isYouTubeOpen: boolean;
+  onToggleYouTube: () => void;
 }
 
 export const Navbar = ({ 
@@ -41,7 +42,9 @@ export const Navbar = ({
   isFullscreen: propIsFullscreen,
   toggleFullscreen: propToggleFullscreen,
   isWalkieOpen,
-  setIsWalkieOpen
+  setIsWalkieOpen,
+  isYouTubeOpen,
+  onToggleYouTube
 }: NavbarProps) => {
   const [pendingStations, setPendingStations] = useState<{plancha: boolean, cocina: boolean}>({ plancha: false, cocina: false });
   const [pendingFoodCount, setPendingFoodCount] = useState(0);
@@ -308,7 +311,6 @@ export const Navbar = ({
     { id: 'kitchen', label: userRole === 'parrilla' ? 'Parrilla' : 'Cocina', icon: ClipboardList, roles: ['admin', 'kitchen', 'parrilla'] },
     { id: 'inventory', label: 'Comidas', icon: ChefHat, roles: ['admin', 'kitchen', 'parrilla', 'cashier', 'waiter'] },
     { id: 'cash', label: 'Caja', icon: CreditCard, roles: ['admin', 'cashier', 'waiter'] },
-    ...(isPC ? [{ id: 'music', label: 'Música', icon: Music, roles: ['admin', 'waiter', 'cashier', 'kitchen', 'parrilla'] }] : []),
     { id: 'admin', label: 'Admin', icon: Settings, roles: ['admin'] },
   ];
 
@@ -459,6 +461,20 @@ export const Navbar = ({
             <span className="text-[9px] font-extrabold whitespace-nowrap">Walkie</span>
           </button>
 
+          {isPC && (
+            <button
+              onClick={onToggleYouTube}
+              className={cn(
+                "flex flex-col items-center gap-1 p-2 rounded-xl shrink-0 transition-all",
+                isYouTubeOpen ? "text-red-600 bg-red-50" : "text-stone-600 hover:bg-stone-50"
+              )}
+              title="Abrir YouTube (Siempre Visible)"
+            >
+              <Youtube size={21} className={cn(isYouTubeOpen ? "animate-pulse" : "text-red-500")} />
+              <span className="text-[9px] font-extrabold whitespace-nowrap">YouTube</span>
+            </button>
+          )}
+
           <button
             onClick={toggleFullscreen}
             className="flex flex-col items-center gap-1 p-2 rounded-xl text-stone-600 hover:bg-stone-50 shrink-0"
@@ -484,11 +500,9 @@ export const Navbar = ({
         {/* Weather & Clock Widget for Desktop */}
         <div className="hidden lg:flex flex-col gap-1.5 mb-1">
           <WeatherClockWidget />
-          <DiscreteMiniPlayer onNavigateToMusic={() => setActiveTab('music')} />
         </div>
         <div className="lg:hidden flex flex-col items-center gap-1 mb-1">
           <WeatherClockWidget compact />
-          <DiscreteMiniPlayer compact onNavigateToMusic={() => setActiveTab('music')} />
         </div>
 
         {/* User Profile Card */}
@@ -526,6 +540,24 @@ export const Navbar = ({
           <Radio size={16} className={cn(isWalkieOpen ? "animate-pulse" : "text-orange-500")} />
           <span className="hidden lg:inline">Walkie-Talkie</span>
         </Button>
+
+        {/* YouTube Button (PC Only) */}
+        {isPC && (
+          <Button 
+            variant={isYouTubeOpen ? "primary" : "outline"}
+            className={cn(
+              "justify-center lg:justify-start gap-2.5 w-full px-0 lg:px-3 h-[36px] rounded-xl text-xs font-bold transition-all",
+              isYouTubeOpen 
+                ? "bg-red-600 hover:bg-red-700 text-white border-red-600" 
+                : "border-stone-200 bg-white text-stone-600 hover:bg-stone-50 hover:text-red-600"
+            )}
+            title="Abrir YouTube (Siempre Visible)"
+            onClick={onToggleYouTube}
+          >
+            <Youtube size={16} className={cn(isYouTubeOpen ? "animate-pulse" : "text-red-500")} />
+            <span className="hidden lg:inline">YouTube Popup</span>
+          </Button>
+        )}
 
         {/* Fullscreen Button */}
         <Button 
