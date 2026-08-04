@@ -3,7 +3,7 @@ import {
   Play, Pause, SkipForward, SkipBack, Volume2, VolumeX, Volume1,
   Music, ListMusic, Plus, Trash2, ExternalLink, Radio, Disc, 
   Shuffle, Repeat, Search, Youtube, RefreshCw, X, Edit3, ChevronRight, ChevronDown, Tag, Check,
-  Link, Save, CheckCircle2, Sparkles, Filter, Layers, Eye, EyeOff, Download
+  Link, Save, CheckCircle2, Sparkles, Filter, Layers, Eye, EyeOff, Download, Clock, History
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { cn } from '../lib/utils';
@@ -39,6 +39,57 @@ export interface SavedPlaylist {
   isCustom?: boolean;
 }
 
+// Local Cache Helper Functions to avoid unnecessary server/API requests
+const getCachedTrackMetadata = (videoId: string): TrackItem | null => {
+  try {
+    const raw = localStorage.getItem(`yt_track_cache_${videoId}`);
+    if (raw) return JSON.parse(raw);
+  } catch (e) {}
+  return null;
+};
+
+const setCachedTrackMetadata = (videoId: string, item: TrackItem) => {
+  try {
+    if (item && item.title && !item.title.startsWith('Canción (')) {
+      localStorage.setItem(`yt_track_cache_${videoId}`, JSON.stringify(item));
+    }
+  } catch (e) {}
+};
+
+const getCachedPlaylistMetadata = (playlistId: string): { title: string; thumbnailUrl: string } | null => {
+  try {
+    const raw = localStorage.getItem(`yt_pl_cache_${playlistId}`);
+    if (raw) return JSON.parse(raw);
+  } catch (e) {}
+  return null;
+};
+
+const setCachedPlaylistMetadata = (playlistId: string, meta: { title: string; thumbnailUrl: string }) => {
+  try {
+    if (meta && meta.title) {
+      localStorage.setItem(`yt_pl_cache_${playlistId}`, JSON.stringify(meta));
+    }
+  } catch (e) {}
+};
+
+const getRecentlyPlayedHistory = (): TrackItem[] => {
+  try {
+    const raw = localStorage.getItem('yt_played_history_cache');
+    if (raw) return JSON.parse(raw);
+  } catch (e) {}
+  return [];
+};
+
+const saveToPlayedHistory = (track: TrackItem) => {
+  if (!track || !track.id) return;
+  try {
+    const current = getRecentlyPlayedHistory();
+    const filtered = current.filter(t => t.id !== track.id);
+    const updated = [track, ...filtered].slice(0, 60); // Keep last 60 songs
+    localStorage.setItem('yt_played_history_cache', JSON.stringify(updated));
+  } catch (e) {}
+};
+
 // Preset recommended playlists
 const PRESET_PLAYLISTS: SavedPlaylist[] = [
   {
@@ -46,7 +97,7 @@ const PRESET_PLAYLISTS: SavedPlaylist[] = [
     title: 'Cumbia & Salsa Tropical',
     description: 'Sabor y ritmo alegre para amenizar la comida.',
     category: 'Fiesta & Sabor',
-    url: 'https://music.youtube.com/playlist?list=PLDISa-NAtXbvhLd4f-v_4_lC668R8Xg8C',
+    url: 'https://www.youtube.com/playlist?list=PLDISa-NAtXbvhLd4f-v_4_lC668R8Xg8C',
     thumbnailUrl: 'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?auto=format&fit=crop&w=400&q=80',
     tracks: [
       { id: '3JZ_D3ELwOQ', title: 'Como Te Voy a Olvidar', artist: 'Los Ángeles Azules', thumbnailUrl: 'https://i.ytimg.com/vi/3JZ_D3ELwOQ/hqdefault.jpg' },
@@ -59,7 +110,7 @@ const PRESET_PLAYLISTS: SavedPlaylist[] = [
     title: 'Mariachi & Rancheras Clásicas',
     description: 'Tradición mexicana con los mejores exponentes.',
     category: 'Tradición Mexicana',
-    url: 'https://music.youtube.com/playlist?list=RDEMLIYf42tL3A-p9v6I-7O61A',
+    url: 'https://www.youtube.com/playlist?list=RDEMLIYf42tL3A-p9v6I-7O61A',
     thumbnailUrl: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&w=400&q=80',
     tracks: [
       { id: '8R8Qx-M952Y', title: 'El Rey', artist: 'Vicente Fernández', thumbnailUrl: 'https://i.ytimg.com/vi/8R8Qx-M952Y/hqdefault.jpg' },
@@ -71,7 +122,7 @@ const PRESET_PLAYLISTS: SavedPlaylist[] = [
     title: 'Pop Latino & Baladas del Recuerdo',
     description: 'Música suave y agradable para ambiente familiar.',
     category: 'Ambiente Familiar',
-    url: 'https://music.youtube.com/playlist?list=PL4fGSI1pDJn6O1LS0XSdF3RyO0Bo_dD_S',
+    url: 'https://www.youtube.com/playlist?list=PL4fGSI1pDJn6O1LS0XSdF3RyO0Bo_dD_S',
     thumbnailUrl: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?auto=format&fit=crop&w=400&q=80',
     tracks: [
       { id: 'W3q8Od5qJio', title: 'La Incondicional', artist: 'Luis Miguel', thumbnailUrl: 'https://i.ytimg.com/vi/W3q8Od5qJio/hqdefault.jpg' },
@@ -83,7 +134,7 @@ const PRESET_PLAYLISTS: SavedPlaylist[] = [
     title: 'Cafe Jazz & Bossa Nova Chill',
     description: 'Música Instrumental sofisticada para desayunos y cafés.',
     category: 'Relax & Café',
-    url: 'https://music.youtube.com/playlist?list=PLw-VjHDlEOgv_fS7p4p8C4kK2tQ4sL3Nn',
+    url: 'https://www.youtube.com/playlist?list=PLw-VjHDlEOgv_fS7p4p8C4kK2tQ4sL3Nn',
     thumbnailUrl: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=400&q=80',
     tracks: [
       { id: '5qap5aO4i9A', title: 'Girl From Ipanema', artist: 'Stan Getz & Astrud Gilberto', thumbnailUrl: 'https://i.ytimg.com/vi/5qap5aO4i9A/hqdefault.jpg' },
@@ -121,19 +172,22 @@ export function getMatchingImage(title: string, category: string, description: s
   return 'https://images.unsplash.com/photo-1487180142328-054b783fc471?auto=format&fit=crop&w=400&q=80';
 }
 
-// Extract playlist IDs from text (single or multiple)
+// Robust YouTube & YouTube Music playlist ID extractor
 export function parseYouTubePlaylistIds(text: string): string[] {
   const idsSet = new Set<string>();
   if (!text) return [];
 
-  // 1. Matches list=PL... or list=RD... or list=OLAK5...
-  const listMatches = text.matchAll(/[?&]list=([a-zA-Z0-9_-]+)/gi);
+  // Normalize music.youtube.com links to standard youtube.com
+  const cleaned = text.replace(/music\.youtube\.com/gi, 'www.youtube.com');
+
+  // 1. Matches list=PL... or list=RD... or list=OLAK5... or list=FL... or list=UU...
+  const listMatches = cleaned.matchAll(/[?&]list=([a-zA-Z0-9_-]+)/gi);
   for (const m of listMatches) {
     if (m[1] && m[1].length >= 8) idsSet.add(m[1]);
   }
 
   // 2. Standalone playlist IDs starting with PL, RD, FL, OLAK5, UU, LL
-  const standaloneMatches = text.matchAll(/\b(PL|RD|FL|OLAK5|UU|LL)[a-zA-Z0-9_-]{10,}\b/g);
+  const standaloneMatches = cleaned.matchAll(/\b(PL|RD|FL|OLAK5|UU|LL)[a-zA-Z0-9_-]{8,}\b/g);
   for (const m of standaloneMatches) {
     idsSet.add(m[0]);
   }
@@ -141,12 +195,13 @@ export function parseYouTubePlaylistIds(text: string): string[] {
   return Array.from(idsSet);
 }
 
-// Extract video IDs from text (single or multiple)
+// Robust YouTube video ID extractor
 export function parseYouTubeVideoIds(text: string): string[] {
   const idsSet = new Set<string>();
   if (!text) return [];
 
-  const videoMatches = text.matchAll(/(?:v=|v\/|embed\/|youtu\.be\/|\/v\/)([\w-]{11})/gi);
+  const cleaned = text.replace(/music\.youtube\.com/gi, 'www.youtube.com');
+  const videoMatches = cleaned.matchAll(/(?:v=|v\/|embed\/|youtu\.be\/|\/v\/)([\w-]{11})/gi);
   for (const m of videoMatches) {
     if (m[1] && !m[0].includes('list=')) idsSet.add(m[1]);
   }
@@ -176,6 +231,7 @@ export const MusicPlayerView: React.FC<MusicPlayerViewProps> = ({
 }) => {
   // Saved / Custom Playlists
   const [customPlaylists, setCustomPlaylists] = useState<SavedPlaylist[]>([]);
+  const [recentlyPlayedHistory, setRecentlyPlayedHistory] = useState<TrackItem[]>(() => getRecentlyPlayedHistory());
   const [collapsedCategories, setCollapsedCategories] = useState<Record<string, boolean>>({});
 
   const toggleCategoryCollapse = (cat: string) => {
@@ -203,7 +259,7 @@ export const MusicPlayerView: React.FC<MusicPlayerViewProps> = ({
   const [trackDuration, setTrackDuration] = useState<number>(0);
 
   // Filters & Search
-  const [filterMode, setFilterMode] = useState<'all' | 'custom'>('custom'); // Default to showing added playlists
+  const [filterMode, setFilterMode] = useState<'all' | 'custom' | 'history'>('custom'); // Default to showing added playlists
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedCategory, setSelectedCategory] = useState<string>('Todos');
   const [trackSearchQuery, setTrackSearchQuery] = useState<string>('');
@@ -245,9 +301,9 @@ export const MusicPlayerView: React.FC<MusicPlayerViewProps> = ({
   const [isApiReady, setIsApiReady] = useState<boolean>(false);
   const containerIdRef = useRef<string>('yt-player-container');
 
-  // Load custom playlists from Firestore & LocalStorage
+  // Load custom playlists from LocalStorage cache & Firestore
   useEffect(() => {
-    // 1. LocalStorage initial load
+    // 1. LocalStorage initial load (Instant zero-delay render)
     try {
       const cached = localStorage.getItem('yt_custom_playlists');
       if (cached) {
@@ -269,7 +325,7 @@ export const MusicPlayerView: React.FC<MusicPlayerViewProps> = ({
           description: data.description || '',
           category: data.category || 'Importadas',
           thumbnailUrl: data.thumbnailUrl || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&w=400&q=80',
-          url: data.url || '',
+          url: data.url || `https://www.youtube.com/playlist?list=${docSnap.id}`,
           tracks: data.tracks || [],
           importedAt: data.importedAt || new Date().toISOString(),
           isCustom: true
@@ -312,7 +368,7 @@ export const MusicPlayerView: React.FC<MusicPlayerViewProps> = ({
         description: playlistObj.description || '',
         category: playlistObj.category || 'Mi Música',
         thumbnailUrl: playlistObj.thumbnailUrl || '',
-        url: playlistObj.url || '',
+        url: playlistObj.url || `https://www.youtube.com/playlist?list=${playlistObj.id}`,
         tracks: playlistObj.tracks || [],
         importedAt: playlistObj.importedAt || new Date().toISOString()
       }, { merge: true });
@@ -364,12 +420,16 @@ export const MusicPlayerView: React.FC<MusicPlayerViewProps> = ({
     loadPlaylist(PRESET_PLAYLISTS[0]);
   };
 
-  // Fetch metadata for a YouTube Playlist
+  // Fetch metadata for a YouTube Playlist with Local Caching
   const fetchPlaylistMetadata = async (playlistId: string): Promise<{ title: string; thumbnailUrl: string }> => {
+    const cached = getCachedPlaylistMetadata(playlistId);
+    if (cached) return cached;
+
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 2000);
+      const timeoutId = setTimeout(() => controller.abort(), 2500);
 
+      // Use standard Youtube playlist URL for metadata resolution
       const response = await fetch(`https://noembed.com/embed?url=https://www.youtube.com/playlist?list=${playlistId}`, {
         signal: controller.signal
       });
@@ -378,25 +438,32 @@ export const MusicPlayerView: React.FC<MusicPlayerViewProps> = ({
       if (response.ok) {
         const data = await response.json();
         if (data && data.title) {
-          return {
+          const res = {
             title: data.title,
             thumbnailUrl: data.thumbnail_url || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&w=400&q=80'
           };
+          setCachedPlaylistMetadata(playlistId, res);
+          return res;
         }
       }
     } catch (e) {}
 
-    return {
-      title: `Lista YT (${playlistId.substring(0, 10)})`,
+    const fallback = {
+      title: `Lista YouTube (${playlistId.substring(0, 10)})`,
       thumbnailUrl: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&w=400&q=80'
     };
+    setCachedPlaylistMetadata(playlistId, fallback);
+    return fallback;
   };
 
-  // Fetch metadata for a YouTube Video Track
+  // Fetch metadata for a YouTube Video Track with Local Caching
   const fetchTrackMetadata = async (videoId: string): Promise<TrackItem> => {
+    const cached = getCachedTrackMetadata(videoId);
+    if (cached) return cached;
+
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 3000);
+      const timeoutId = setTimeout(() => controller.abort(), 2500);
 
       const response = await fetch(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`, {
         signal: controller.signal
@@ -406,12 +473,14 @@ export const MusicPlayerView: React.FC<MusicPlayerViewProps> = ({
       if (response.ok) {
         const data = await response.json();
         if (data && data.title) {
-          return {
+          const res: TrackItem = {
             id: videoId,
             title: data.title,
-            artist: data.author_name || 'YouTube Music',
+            artist: data.author_name || 'YouTube',
             thumbnailUrl: data.thumbnail_url || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`
           };
+          setCachedTrackMetadata(videoId, res);
+          return res;
         }
       }
     } catch (e) {}
@@ -427,22 +496,25 @@ export const MusicPlayerView: React.FC<MusicPlayerViewProps> = ({
       if (resp.ok) {
         const data = await resp.json();
         if (data && data.title) {
-          return {
+          const res: TrackItem = {
             id: videoId,
             title: data.title,
-            artist: data.author_name || 'YouTube Music',
+            artist: data.author_name || 'YouTube',
             thumbnailUrl: data.thumbnail_url || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`
           };
+          setCachedTrackMetadata(videoId, res);
+          return res;
         }
       }
     } catch (e) {}
 
-    return {
+    const fallback: TrackItem = {
       id: videoId,
       title: `Canción (${videoId})`,
-      artist: 'YouTube Music',
+      artist: 'YouTube',
       thumbnailUrl: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`
     };
+    return fallback;
   };
 
   // Update sequential review form fields whenever current index or queue changes
@@ -457,11 +529,11 @@ export const MusicPlayerView: React.FC<MusicPlayerViewProps> = ({
     }
   }, [currentQueueIndex, pendingImportQueue]);
 
-  // Handle Importing Single or Multiple Playlists/Videos -> Populates Sequential Review Wizard
+  // Handle Importing Single or Multiple Playlists/Videos -> Populates Sequential Review Wizard or Direct Save
   const handleImportPlaylistsOrSongs = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!importTextInput.trim()) {
-      toast.error('Ingresa o pega uno o varios enlaces/IDs de YouTube Music');
+      toast.error('Ingresa o pega uno o varios enlaces/IDs de YouTube');
       return;
     }
 
@@ -484,7 +556,7 @@ export const MusicPlayerView: React.FC<MusicPlayerViewProps> = ({
       setImportProgress(`Procesando ${playlistIds.length} lista(s)...`);
       for (let i = 0; i < playlistIds.length; i++) {
         const plId = playlistIds[i];
-        setImportProgress(`Obteniendo título de lista ${i + 1} de ${playlistIds.length}...`);
+        setImportProgress(`Obteniendo información de lista ${i + 1} de ${playlistIds.length}...`);
         
         const meta = await fetchPlaylistMetadata(plId);
         
@@ -495,14 +567,14 @@ export const MusicPlayerView: React.FC<MusicPlayerViewProps> = ({
         }
 
         // Auto assign high quality image matching the title/category
-        const resolvedThumbnail = getMatchingImage(meta.title, importCategory, `Lista de YouTube Music (${plId})`, []);
+        const resolvedThumbnail = getMatchingImage(meta.title, importCategory, `Lista de YouTube (${plId})`, []);
 
         const playlistObj: SavedPlaylist = {
           id: finalId,
           title: meta.title,
-          description: `Lista de YouTube Music (${plId})`,
+          description: `Lista de YouTube (${plId})`,
           category: importCategory.trim() || 'Mi Música',
-          url: `https://music.youtube.com/playlist?list=${plId}`,
+          url: `https://www.youtube.com/playlist?list=${plId}`,
           thumbnailUrl: resolvedThumbnail,
           isCustom: true,
           tracks: []
@@ -534,7 +606,7 @@ export const MusicPlayerView: React.FC<MusicPlayerViewProps> = ({
         title: playlistTitle,
         description: playlistDescription,
         category: playlistCategory,
-        url: `https://music.youtube.com/watch?v=${tracks[0]?.id || ''}`,
+        url: `https://www.youtube.com/watch?v=${tracks[0]?.id || ''}`,
         thumbnailUrl: resolvedThumbnail,
         tracks,
         isCustom: true
@@ -550,7 +622,7 @@ export const MusicPlayerView: React.FC<MusicPlayerViewProps> = ({
       setPendingImportQueue(queueItems);
       setCurrentQueueIndex(0);
       setShowSequentialModal(true);
-      toast.success(`Se prepararon ${queueItems.length} lista(s). Personaliza el nombre y categoría a continuación:`);
+      toast.success(`Se prepararon ${queueItems.length} lista(s). Confirma el nombre y categoría:`);
     }
   };
 
@@ -591,14 +663,16 @@ export const MusicPlayerView: React.FC<MusicPlayerViewProps> = ({
       setCurrentQueueIndex(nextIdx);
       toast.success(`Guardada "${finalPlaylistObj.title}". Siguiente lista (${nextIdx + 1}/${pendingImportQueue.length})`);
     } else {
-      // Completed all
+      // Completed all - CLOSE WIZARD PROPERLY
       setShowSequentialModal(false);
       setPendingImportQueue([]);
       setCurrentQueueIndex(0);
       setImportTextInput('');
       setFilterMode('custom');
       
-      toast.success(`¡Todas las listas se guardaron en tu biblioteca! Puedes reproducirlas cuando desees.`);
+      // Load and play the newly imported playlist immediately!
+      loadPlaylist(finalPlaylistObj);
+      toast.success(`¡"${finalPlaylistObj.title}" guardada y lista para reproducir!`);
     }
   };
 
@@ -614,7 +688,7 @@ export const MusicPlayerView: React.FC<MusicPlayerViewProps> = ({
       setCurrentQueueIndex(0);
       setImportTextInput('');
       setFilterMode('custom');
-      toast.success('Proceso de revisión finalizado');
+      toast.success('Proceso de importación finalizado');
     }
   };
 
@@ -677,7 +751,7 @@ export const MusicPlayerView: React.FC<MusicPlayerViewProps> = ({
     const newTrackObj: TrackItem = {
       id: videoId,
       title: newTrackTitle.trim() || meta.title || `Canción (${videoId})`,
-      artist: newTrackArtist.trim() || meta.artist || 'YouTube Music',
+      artist: newTrackArtist.trim() || meta.artist || 'YouTube',
       thumbnailUrl: meta.thumbnailUrl || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`
     };
 
@@ -743,7 +817,6 @@ export const MusicPlayerView: React.FC<MusicPlayerViewProps> = ({
 
   const handleDownloadPlaylist = () => {
     toast.success(`Preparando la descarga de las ${playlistTracks.length} canciones...`);
-    // Open the first track as a demonstration
     if (playlistTracks.length > 0) {
       setTimeout(() => {
          window.open(`https://www.y2mate.com/youtube/${playlistTracks[0].id}`, '_blank');
@@ -767,7 +840,7 @@ export const MusicPlayerView: React.FC<MusicPlayerViewProps> = ({
     }
   }, []);
 
-  // Update track information from YouTube Player state
+  // Update track information from YouTube Player state & Save to History Cache
   const updateTrackInfoFromPlayer = useCallback(() => {
     if (!playerRef.current) return;
     try {
@@ -781,7 +854,21 @@ export const MusicPlayerView: React.FC<MusicPlayerViewProps> = ({
       if (videoData && videoData.video_id) {
         const curId = videoData.video_id;
         const curTitle = videoData.title;
-        const curAuthor = videoData.author || 'YouTube Music';
+        const curAuthor = videoData.author || 'YouTube';
+
+        const activeTrackObj: TrackItem = {
+          id: curId,
+          title: curTitle || 'Canción YouTube',
+          artist: curAuthor,
+          thumbnailUrl: `https://i.ytimg.com/vi/${curId}/hqdefault.jpg`
+        };
+
+        // Save to Recently Played History Cache
+        if (curTitle && !curTitle.startsWith('Canción (')) {
+          saveToPlayedHistory(activeTrackObj);
+          setRecentlyPlayedHistory(getRecentlyPlayedHistory());
+          setCachedTrackMetadata(curId, activeTrackObj);
+        }
 
         // Update active track in playlistTracks if placeholder title
         if (curTitle) {
@@ -817,15 +904,10 @@ export const MusicPlayerView: React.FC<MusicPlayerViewProps> = ({
             setCurrentTrack({
               ...match,
               title: (match.title && !match.title.startsWith('Canción #')) ? match.title : (curTitle || match.title),
-              artist: (match.artist && match.artist !== 'YouTube Music') ? match.artist : curAuthor
+              artist: (match.artist && match.artist !== 'YouTube') ? match.artist : curAuthor
             });
           } else {
-            setCurrentTrack({
-              id: curId,
-              title: curTitle || `Canción YT`,
-              artist: curAuthor,
-              thumbnailUrl: `https://i.ytimg.com/vi/${curId}/hqdefault.jpg`
-            });
+            setCurrentTrack(activeTrackObj);
           }
         }
       }
@@ -838,6 +920,9 @@ export const MusicPlayerView: React.FC<MusicPlayerViewProps> = ({
 
         if (needsSync) {
           const extractedTracks: TrackItem[] = playlistVideoIds.map((vid, idx) => {
+            const cachedTrack = getCachedTrackMetadata(vid);
+            if (cachedTrack) return cachedTrack;
+
             const existing = playlistTracks.find(t => t.id === vid);
             if (existing && existing.title && !existing.title.startsWith('Canción #')) {
               return existing;
@@ -845,7 +930,7 @@ export const MusicPlayerView: React.FC<MusicPlayerViewProps> = ({
             return {
               id: vid,
               title: (idx === 0 && videoData && videoData.video_id === vid && videoData.title) ? videoData.title : `Canción #${idx + 1}`,
-              artist: (idx === 0 && videoData && videoData.video_id === vid && videoData.author) ? videoData.author : 'YouTube Music',
+              artist: (idx === 0 && videoData && videoData.video_id === vid && videoData.author) ? videoData.author : 'YouTube',
               thumbnailUrl: `https://i.ytimg.com/vi/${vid}/hqdefault.jpg`
             };
           });
@@ -870,7 +955,7 @@ export const MusicPlayerView: React.FC<MusicPlayerViewProps> = ({
                 updated[targetIdx] = {
                   ...updated[targetIdx],
                   title: meta.title,
-                  artist: meta.artist || 'YouTube Music',
+                  artist: meta.artist || 'YouTube',
                   thumbnailUrl: meta.thumbnailUrl || updated[targetIdx].thumbnailUrl
                 };
                 
@@ -989,7 +1074,7 @@ export const MusicPlayerView: React.FC<MusicPlayerViewProps> = ({
   useEffect(() => {
     const detail = {
       isPlaying,
-      currentTrack: currentTrack || { title: currentPlaylist.title, artist: 'YouTube Music', thumbnailUrl: currentPlaylist.thumbnailUrl },
+      currentTrack: currentTrack || { title: currentPlaylist.title, artist: 'YouTube', thumbnailUrl: currentPlaylist.thumbnailUrl },
       currentPlaylistTitle: currentPlaylist.title,
       playbackTime,
       trackDuration
@@ -1069,6 +1154,11 @@ export const MusicPlayerView: React.FC<MusicPlayerViewProps> = ({
     const targetTrack = playlistTracks[index];
     setCurrentTrack(targetTrack);
 
+    if (targetTrack) {
+      saveToPlayedHistory(targetTrack);
+      setRecentlyPlayedHistory(getRecentlyPlayedHistory());
+    }
+
     if (playerRef.current) {
       try {
         if (typeof playerRef.current.playVideoAt === 'function' && !currentPlaylistId.startsWith('pl_custom_')) {
@@ -1079,6 +1169,21 @@ export const MusicPlayerView: React.FC<MusicPlayerViewProps> = ({
         setIsPlaying(true);
       } catch (e) {}
     }
+  };
+
+  // Play a single track from history or external search directly
+  const playSingleTrackDirect = (track: TrackItem) => {
+    setCurrentTrack(track);
+    saveToPlayedHistory(track);
+    setRecentlyPlayedHistory(getRecentlyPlayedHistory());
+
+    if (playerRef.current && typeof playerRef.current.loadVideoById === 'function') {
+      try {
+        playerRef.current.loadVideoById(track.id);
+        setIsPlaying(true);
+      } catch (e) {}
+    }
+    toast.success(`Reproduciendo "${track.title}"`);
   };
 
   // Controls
@@ -1190,10 +1295,10 @@ export const MusicPlayerView: React.FC<MusicPlayerViewProps> = ({
           </div>
           <div>
             <h1 className="text-base font-black text-white tracking-wide flex items-center gap-2">
-              Reproductor YouTube Music
+              Reproductor YouTube
             </h1>
             <p className="text-xs text-stone-400">
-              Listas e importaciones guardadas en la nube
+              Listas optimizadas con caché local y sin interrupciones
             </p>
           </div>
         </div>
@@ -1211,7 +1316,7 @@ export const MusicPlayerView: React.FC<MusicPlayerViewProps> = ({
               )}
             >
               <Filter className="w-3.5 h-3.5" />
-              Solo Agregadas ({customPlaylists.length})
+              Agregadas ({customPlaylists.length})
             </button>
             <button
               onClick={() => setFilterMode('all')}
@@ -1224,6 +1329,19 @@ export const MusicPlayerView: React.FC<MusicPlayerViewProps> = ({
             >
               <Layers className="w-3.5 h-3.5" />
               Todas
+            </button>
+            <button
+              onClick={() => setFilterMode('history')}
+              className={cn(
+                "px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer",
+                filterMode === 'history' 
+                  ? "bg-amber-600 text-white shadow-sm" 
+                  : "text-stone-400 hover:text-stone-200"
+              )}
+              title="Ver canciones reproducidas recientemente en caché"
+            >
+              <History className="w-3.5 h-3.5" />
+              Historial ({recentlyPlayedHistory.length})
             </button>
           </div>
 
@@ -1292,7 +1410,7 @@ export const MusicPlayerView: React.FC<MusicPlayerViewProps> = ({
                   {currentTrack?.title || 'Sin canción seleccionada'}
                 </h2>
                 <p className="text-xs text-stone-400 truncate mb-4 font-medium">
-                  {currentTrack?.artist || 'YouTube Music'}
+                  {currentTrack?.artist || 'YouTube'}
                 </p>
 
                 {/* SEEK BAR */}
@@ -1395,33 +1513,35 @@ export const MusicPlayerView: React.FC<MusicPlayerViewProps> = ({
 
           </div>
 
-          {/* SONGS LIST OF CURRENT PLAYLIST */}
+          {/* SONGS LIST OF CURRENT PLAYLIST OR HISTORY */}
           <div className="bg-stone-900 border border-stone-800 rounded-2xl p-4 shadow-xl flex-1 flex flex-col overflow-hidden min-h-[320px]">
             
             <div className="flex items-center justify-between gap-3 mb-3 shrink-0 flex-wrap">
               <div className="flex items-center gap-2">
                 <h3 className="text-xs font-black uppercase tracking-wider text-stone-300 flex items-center gap-2">
                   <ListMusic className="w-4 h-4 text-red-500" />
-                  Canciones de la Lista ({playlistTracks.length})
+                  {filterMode === 'history' ? `Historial en Caché (${recentlyPlayedHistory.length})` : `Canciones de la Lista (${playlistTracks.length})`}
                 </h3>
-                <div className="flex items-center gap-1.5 ml-auto">
-                  <button
-                    onClick={handleDownloadPlaylist}
-                    className="px-2.5 py-1 bg-stone-800 hover:bg-stone-700 text-stone-200 text-[11px] font-bold rounded-lg border border-stone-700 flex items-center gap-1 transition-all cursor-pointer"
-                    title="Descargar todas las canciones"
-                  >
-                    <Download className="w-3 h-3 text-red-400" />
-                    <span className="hidden sm:inline">Descargar Lista</span>
-                  </button>
-                  <button
-                    onClick={() => setShowAddTrackModal(true)}
-                    className="px-2.5 py-1 bg-stone-800 hover:bg-stone-700 text-stone-200 text-[11px] font-bold rounded-lg border border-stone-700 flex items-center gap-1 transition-all cursor-pointer"
-                    title="Añadir una canción por enlace o ID"
-                  >
-                    <Plus className="w-3 h-3 text-red-400" />
-                    <span className="hidden sm:inline">Añadir</span>
-                  </button>
-                </div>
+                {filterMode !== 'history' && (
+                  <div className="flex items-center gap-1.5 ml-auto">
+                    <button
+                      onClick={handleDownloadPlaylist}
+                      className="px-2.5 py-1 bg-stone-800 hover:bg-stone-700 text-stone-200 text-[11px] font-bold rounded-lg border border-stone-700 flex items-center gap-1 transition-all cursor-pointer"
+                      title="Descargar todas las canciones"
+                    >
+                      <Download className="w-3 h-3 text-red-400" />
+                      <span className="hidden sm:inline">Descargar Lista</span>
+                    </button>
+                    <button
+                      onClick={() => setShowAddTrackModal(true)}
+                      className="px-2.5 py-1 bg-stone-800 hover:bg-stone-700 text-stone-200 text-[11px] font-bold rounded-lg border border-stone-700 flex items-center gap-1 transition-all cursor-pointer"
+                      title="Añadir una canción por enlace o ID"
+                    >
+                      <Plus className="w-3 h-3 text-red-400" />
+                      <span className="hidden sm:inline">Añadir</span>
+                    </button>
+                  </div>
+                )}
               </div>
 
               <div className="relative w-full mt-2">
@@ -1436,13 +1556,54 @@ export const MusicPlayerView: React.FC<MusicPlayerViewProps> = ({
               </div>
             </div>
 
-            {/* SONGS LIST ITEMS */}
+            {/* SONGS LIST ITEMS (OR HISTORY ITEMS) */}
             <div className="flex-1 overflow-y-auto space-y-1.5 pr-1 custom-scrollbar mt-3">
-              {filteredTracks.length === 0 ? (
+              {filterMode === 'history' ? (
+                recentlyPlayedHistory.length === 0 ? (
+                  <div className="text-center py-12 text-stone-500">
+                    <History className="w-10 h-10 mx-auto mb-2 opacity-30" />
+                    <p className="text-xs font-bold">No hay canciones reproducidas en la caché local</p>
+                    <p className="text-[11px] text-stone-600 mt-1">A medida que reproduzcas música, las canciones se guardarán automáticamente aquí.</p>
+                  </div>
+                ) : (
+                  recentlyPlayedHistory
+                    .filter(t => t.title.toLowerCase().includes(trackSearchQuery.toLowerCase()) || t.artist.toLowerCase().includes(trackSearchQuery.toLowerCase()))
+                    .map((track, idx) => (
+                      <div 
+                        key={`hist-${track.id}-${idx}`}
+                        onClick={() => playSingleTrackDirect(track)}
+                        className="p-2.5 rounded-xl transition-all cursor-pointer flex items-center gap-3 border bg-stone-950/50 hover:bg-stone-800/80 border-stone-800/60 text-stone-300 hover:text-white group"
+                      >
+                        <span className="text-xs font-mono text-stone-500 w-5 text-center shrink-0">
+                          {idx + 1}
+                        </span>
+
+                        <img 
+                          src={track.thumbnailUrl || `https://i.ytimg.com/vi/${track.id}/hqdefault.jpg`} 
+                          alt={track.title} 
+                          className="w-9 h-9 object-cover rounded-lg shrink-0 border border-stone-800"
+                        />
+
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs truncate font-bold leading-tight">{track.title}</p>
+                          <p className="text-[10px] text-amber-500 font-medium truncate">{track.artist}</p>
+                        </div>
+
+                        <button
+                          onClick={(e) => handleDownloadTrack(track, e)}
+                          className="p-1.5 rounded-lg hover:bg-stone-700 text-stone-500 hover:text-stone-300 transition-colors cursor-pointer opacity-70 hover:opacity-100 shrink-0"
+                          title="Descargar canción"
+                        >
+                          <Download className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))
+                )
+              ) : filteredTracks.length === 0 ? (
                 <div className="text-center py-12 text-stone-500">
                   <Music className="w-10 h-10 mx-auto mb-2 opacity-30" />
                   <p className="text-xs font-bold">No hay canciones listadas para esta lista</p>
-                  <p className="text-[11px] text-stone-600 mt-1">Haz clic en "+ Añadir Canción" para agregar canciones manualmente.</p>
+                  <p className="text-[11px] text-stone-600 mt-1">Haz clic en "+ Añadir" para agregar canciones manualmente.</p>
                 </div>
               ) : (
                 filteredTracks.map((track, idx) => {
@@ -1511,7 +1672,7 @@ export const MusicPlayerView: React.FC<MusicPlayerViewProps> = ({
             <div className="flex items-center justify-between gap-2 mb-3 shrink-0">
               <h3 className="text-xs font-black uppercase tracking-wider text-stone-200 flex items-center gap-2">
                 <Music className="w-4 h-4 text-red-500" />
-                {filterMode === 'custom' ? `Listas Agregadas (${customPlaylists.length})` : `Todas las Listas (${allPlaylistsList.length})`}
+                {filterMode === 'custom' ? `Listas Agregadas (${customPlaylists.length})` : filterMode === 'history' ? `Historial` : `Todas las Listas (${allPlaylistsList.length})`}
               </h3>
 
               <div className="relative w-36">
@@ -1564,7 +1725,7 @@ export const MusicPlayerView: React.FC<MusicPlayerViewProps> = ({
                     {filterMode === 'custom' ? 'No has agregado listas de YouTube aún' : 'No se encontraron listas'}
                   </p>
                   <p className="text-[11px] text-stone-500 mt-1 max-w-xs mx-auto">
-                    Haz clic en "Importar Lista(s)" para agregar enlaces o IDs de tus listas de YouTube Music.
+                    Haz clic en "Importar Lista(s)" para agregar enlaces o IDs de tus listas de YouTube.
                   </p>
                   <button
                     onClick={() => setShowImportModal(true)}
@@ -1688,7 +1849,10 @@ export const MusicPlayerView: React.FC<MusicPlayerViewProps> = ({
         <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
           <div className="bg-stone-900 border border-stone-800 w-full max-w-lg rounded-2xl p-6 shadow-2xl relative">
             <button 
-              onClick={() => setShowImportModal(false)}
+              onClick={() => {
+                setShowImportModal(false);
+                setIsImporting(false);
+              }}
               className="absolute top-4 right-4 text-stone-400 hover:text-white p-1 rounded-lg hover:bg-stone-800 transition-colors cursor-pointer"
             >
               <X className="w-5 h-5" />
@@ -1699,7 +1863,7 @@ export const MusicPlayerView: React.FC<MusicPlayerViewProps> = ({
                 <Youtube className="w-5 h-5" />
               </div>
               <div>
-                <h3 className="text-sm font-bold text-white">Importar Lista(s) de YouTube Music</h3>
+                <h3 className="text-sm font-bold text-white">Importar Lista(s) de YouTube</h3>
                 <p className="text-xs text-stone-400">Pega enlaces o IDs individuales o varios a la vez</p>
               </div>
             </div>
@@ -1707,7 +1871,7 @@ export const MusicPlayerView: React.FC<MusicPlayerViewProps> = ({
             <form onSubmit={handleImportPlaylistsOrSongs} className="space-y-4">
               <div>
                 <label className="block text-xs font-bold text-stone-300 mb-1">
-                  Dirección(es) o ID(s) de YouTube Music / YouTube *
+                  Dirección(es) o ID(s) de YouTube / YouTube Music *
                 </label>
                 <textarea 
                   required
@@ -1715,6 +1879,7 @@ export const MusicPlayerView: React.FC<MusicPlayerViewProps> = ({
                   value={importTextInput}
                   onChange={(e) => setImportTextInput(e.target.value)}
                   placeholder="Ejemplo:
+https://www.youtube.com/playlist?list=PL...
 https://music.youtube.com/playlist?list=PL...
 PLDISa-NAtXbvhLd4f-v_4_lC668R8Xg8C
 (Puedes pegar varios enlaces separados por salto de línea)"
@@ -1745,7 +1910,10 @@ PLDISa-NAtXbvhLd4f-v_4_lC668R8Xg8C
               <div className="pt-2 flex justify-end gap-2">
                 <button
                   type="button"
-                  onClick={() => setShowImportModal(false)}
+                  onClick={() => {
+                    setShowImportModal(false);
+                    setIsImporting(false);
+                  }}
                   className="px-4 py-2 bg-stone-800 hover:bg-stone-700 text-stone-300 font-bold text-xs rounded-xl transition-all cursor-pointer"
                   disabled={isImporting}
                 >
@@ -2040,7 +2208,7 @@ PLDISa-NAtXbvhLd4f-v_4_lC668R8Xg8C
                   required
                   value={newTrackUrl}
                   onChange={(e) => setNewTrackUrl(e.target.value)}
-                  placeholder="https://music.youtube.com/watch?v=..."
+                  placeholder="https://www.youtube.com/watch?v=... o music.youtube.com/watch?v=..."
                   className="w-full bg-stone-950 border border-stone-800 focus:border-red-500 rounded-xl px-3.5 py-2 text-xs text-white placeholder-stone-500 outline-none"
                 />
               </div>
