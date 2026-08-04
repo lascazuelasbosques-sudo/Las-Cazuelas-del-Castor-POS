@@ -28,6 +28,24 @@ export const Login = ({ onLogin, onEnterPortal }: LoginProps) => {
 
   const [imageError, setImageError] = useState(false);
 
+  React.useEffect(() => {
+    const triggerFS = () => {
+      const doc = document as any;
+      const docElm = document.documentElement as any;
+      const req = docElm.requestFullscreen || docElm.webkitRequestFullscreen || docElm.mozRequestFullScreen || docElm.msRequestFullscreen;
+      if (req) {
+        req.call(docElm).catch(() => {});
+      }
+    };
+    triggerFS();
+    window.addEventListener('click', triggerFS, { once: true });
+    window.addEventListener('touchstart', triggerFS, { once: true });
+    return () => {
+      window.removeEventListener('click', triggerFS);
+      window.removeEventListener('touchstart', triggerFS);
+    };
+  }, []);
+
   const handleCredentialsLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!username.trim() || !password.trim()) {

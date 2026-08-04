@@ -46,7 +46,11 @@ export function FullScreenLockControl({ compact = false }: FullScreenLockProps) 
     const nextState = !isLocked;
     setIsLocked(nextState);
     try {
-      localStorage.setItem('pos_fullscreen_locked', String(nextState));
+      if (nextState) {
+        localStorage.setItem('pos_fullscreen_locked', 'true');
+      } else {
+        localStorage.removeItem('pos_fullscreen_locked');
+      }
     } catch (e) {}
     window.dispatchEvent(new CustomEvent('pos_lock_changed', { detail: { isLocked: nextState } }));
 
