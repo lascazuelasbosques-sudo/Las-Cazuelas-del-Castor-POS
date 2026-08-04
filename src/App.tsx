@@ -216,9 +216,9 @@ export default function App() {
     testConnection();
 
     // 1. Load POS user from local storage
-    const savedUser = localStorage.getItem('posUser');
-    if (savedUser) {
-      try {
+    try {
+      const savedUser = localStorage.getItem('posUser');
+      if (savedUser) {
         const parsedUser = JSON.parse(savedUser);
         if (parsedUser && parsedUser.name) {
           const nameLower = parsedUser.name.toLowerCase().trim();
@@ -230,7 +230,7 @@ export default function App() {
             nameLower.includes('abigail')
           ) {
             parsedUser.name = 'Antonieta Abigail Villagómez';
-            localStorage.setItem('posUser', JSON.stringify(parsedUser));
+            try { localStorage.setItem('posUser', JSON.stringify(parsedUser)); } catch (e) {}
           }
         }
         setPosUser(parsedUser);
@@ -240,10 +240,10 @@ export default function App() {
         } else {
           setActiveTab('orders');
         }
-      } catch (e) {
-        console.error("Error parsing saved user", e);
-        localStorage.removeItem('posUser');
       }
+    } catch (e) {
+      console.warn("Error reading saved user from storage", e);
+      try { localStorage.removeItem('posUser'); } catch (err) {}
     }
 
     // 2. Handle Firebase Auth
@@ -337,7 +337,12 @@ export default function App() {
       }
     });
 
+    const safetyTimer = setTimeout(() => {
+      setLoading(false);
+    }, 2000);
+
     return () => {
+      clearTimeout(safetyTimer);
       unsubscribe();
       if (unsubUserDoc) unsubUserDoc();
     };
@@ -496,7 +501,7 @@ export default function App() {
           setIsWalkieOpen={setIsWalkieOpen}
         />
       
-      <main className="flex-1 overflow-hidden relative pb-16 md:pb-0">
+      <main className="flex-1 overflow-hidden relative pb-16 md:pb-0 h-full w-full min-h-0">
         <div className="absolute inset-0 overflow-hidden">
           <ErrorBoundary>
             {renderView()}

@@ -315,11 +315,12 @@ export const Navbar = ({
   const filteredItems = navItems.filter(item => item.roles.includes(userRole));
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-stone-200 px-2 py-1 flex justify-around items-center md:relative md:flex-col md:h-screen md:w-20 lg:w-64 md:border-t-0 md:border-r md:justify-start md:gap-4 md:px-2 lg:px-4 md:py-8 z-50 transition-all duration-300">
-      <div className="hidden md:flex flex-col items-center mb-8 px-2 lg:px-4">
-        <div className="w-12 h-12 lg:w-24 lg:h-24 mb-4 rounded-full overflow-hidden border-2 lg:border-4 border-mex-gold shadow-xl transition-all duration-300 bg-white flex items-center justify-center">
+    <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-stone-200 px-2 py-1 flex justify-around items-center md:relative md:flex-col md:h-full md:w-20 lg:w-64 md:border-t-0 md:border-r md:justify-between md:px-2 lg:px-4 md:py-4 z-50 transition-all duration-300 md:overflow-y-auto custom-scrollbar select-none">
+      {/* Desktop Logo Header */}
+      <div className="hidden md:flex flex-col items-center mb-4 px-1 lg:px-2 shrink-0">
+        <div className="w-10 h-10 lg:w-20 lg:h-20 mb-2 rounded-full overflow-hidden border-2 lg:border-3 border-mex-gold shadow-md transition-all duration-300 bg-white flex items-center justify-center shrink-0">
           {imageError ? (
-            <ChefHat className="text-mex-brown h-6 w-6 lg:h-12 lg:w-12" />
+            <ChefHat className="text-mex-brown h-5 w-5 lg:h-10 lg:w-10" />
           ) : (
             <img 
               src={logoUrl} 
@@ -330,13 +331,13 @@ export const Navbar = ({
             />
           )}
         </div>
-        <h1 className="hidden lg:block text-xl font-serif text-mex-brown text-center leading-tight">
+        <h1 className="hidden lg:block text-base font-serif font-bold text-mex-brown text-center leading-tight truncate max-w-[200px]">
           {branding.appName}
         </h1>
       </div>
 
-      {/* Unified flex scroll track for mobile, default grid/col for desktop */}
-      <div className="flex items-center gap-1 w-full overflow-x-auto no-scrollbar py-1 md:py-0 md:overflow-visible md:flex-col justify-between md:justify-start">
+      {/* Unified flex scroll track for mobile, vertical auto-fitting track for desktop */}
+      <div className="flex items-center gap-1 w-full overflow-x-auto no-scrollbar py-1 md:py-0 md:overflow-visible md:flex-col justify-between md:justify-start md:flex-1">
         
         {/* Navigation Tabs */}
         <div className="flex md:flex-col gap-1 items-center md:items-stretch shrink-0 md:shrink md:w-full">
@@ -346,7 +347,7 @@ export const Navbar = ({
               onClick={() => setActiveTab(item.id)}
               title={item.label}
               className={cn(
-                "flex flex-col items-center gap-1 p-2 rounded-xl transition-all md:w-full md:px-3 lg:px-4 md:py-3 lg:flex-row lg:gap-3 relative shrink-0",
+                "flex flex-col items-center gap-1 p-1.5 md:p-2 rounded-xl transition-all md:w-full md:px-2.5 lg:px-3.5 md:py-2.5 lg:flex-row lg:gap-3 relative shrink-0",
                 activeTab === item.id 
                   ? "text-mex-green bg-mex-green/10 font-bold px-3 py-1.5 md:shadow-inner" 
                   : "text-stone-500 hover:bg-stone-100",
@@ -354,8 +355,8 @@ export const Navbar = ({
               )}
             >
               <div className="relative shrink-0 flex items-center justify-center">
-                <item.icon size={21} className={cn(
-                  "transition-transform duration-250 md:h-[22px] md:w-[22px]", 
+                <item.icon size={20} className={cn(
+                  "transition-transform duration-200 md:h-[20px] md:w-[20px]", 
                   activeTab === item.id && "scale-105",
                   item.id === 'whatsapp' && totalUnreadChats > 0 && "animate-bounce text-emerald-600",
                   item.id === 'kitchen' && (pendingStations.cocina || pendingStations.plancha || pendingFoodCount > 0) && "animate-pulse text-orange-600 font-bold",
@@ -401,7 +402,7 @@ export const Navbar = ({
                 )}
               </div>
               <span className={cn(
-                "text-[9px] font-extrabold whitespace-nowrap lg:text-xs tracking-tight transition-all duration-300",
+                "text-[9px] font-extrabold whitespace-nowrap lg:text-xs tracking-tight transition-all duration-200",
                 activeTab === item.id ? "block" : "hidden md:block"
               )}>
                 {item.label}
@@ -478,9 +479,10 @@ export const Navbar = ({
 
       </div>
 
-      <div className="hidden md:mt-auto md:flex flex-col w-full gap-2 px-2 lg:px-4">
+      {/* Desktop Controls Panel (Vertical stack, scrollable if window height is low) */}
+      <div className="hidden md:flex flex-col w-full gap-1.5 px-1 lg:px-2 pt-3 border-t border-stone-100 shrink-0">
         {/* Weather & Clock Widget for Desktop */}
-        <div className="hidden lg:flex flex-col gap-2 mb-1">
+        <div className="hidden lg:flex flex-col gap-1.5 mb-1">
           <WeatherClockWidget />
           <DiscreteMiniPlayer onNavigateToMusic={() => setActiveTab('music')} />
         </div>
@@ -489,30 +491,31 @@ export const Navbar = ({
           <DiscreteMiniPlayer compact onNavigateToMusic={() => setActiveTab('music')} />
         </div>
 
-        <div className="p-1.5 lg:p-2 bg-stone-50 rounded-lg border border-stone-100 mb-2 flex items-center justify-between gap-1.5 w-full">
+        {/* User Profile Card */}
+        <div className="p-1.5 lg:p-2 bg-stone-50 rounded-xl border border-stone-200/80 mb-1 flex items-center justify-between gap-1.5 w-full">
           <div className="flex items-center gap-1.5 min-w-0">
             <div className="w-7 h-7 rounded-full overflow-hidden border border-stone-200 shrink-0" title={`${userName} (${getRoleLabel(userRole)})`}>
               <img src={logoUrl} className="w-full h-full object-cover" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
             </div>
             <div className="hidden lg:block min-w-0">
-              <p className="text-[10px] text-stone-400 leading-none mb-0.5">{getRoleLabel(userRole)}</p>
-              <p className="text-xs font-bold text-stone-700 truncate max-w-[105px]">{userName}</p>
+              <p className="text-[10px] text-stone-400 font-semibold leading-none mb-0.5">{getRoleLabel(userRole)}</p>
+              <p className="text-xs font-bold text-stone-700 truncate max-w-[110px]">{userName}</p>
             </div>
           </div>
           <button
             onClick={() => onLogout()}
-            className="p-1 rounded-md text-stone-400 hover:text-red-600 hover:bg-red-50/50 transition-colors cursor-pointer shrink-0"
+            className="p-1 rounded-lg text-stone-400 hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer shrink-0"
             title="Cerrar sesión"
           >
-            <LogOut size={13} />
+            <LogOut size={14} />
           </button>
         </div>
 
-        {/* Walkie-Talkie Button for Desktop */}
+        {/* Walkie-Talkie Button */}
         <Button 
           variant={isWalkieOpen ? "primary" : "outline"}
           className={cn(
-            "justify-center lg:justify-start gap-3 w-full px-0 lg:px-4 h-[40px] rounded-xl text-xs font-bold transition-all",
+            "justify-center lg:justify-start gap-2.5 w-full px-0 lg:px-3 h-[36px] rounded-xl text-xs font-bold transition-all",
             isWalkieOpen 
               ? "bg-orange-500 hover:bg-orange-600 text-stone-950 border-orange-500" 
               : "border-stone-200 bg-white text-stone-600 hover:bg-stone-50"
@@ -520,31 +523,31 @@ export const Navbar = ({
           title="Walkie-Talkie Interno"
           onClick={() => setIsWalkieOpen(!isWalkieOpen)}
         >
-          <Radio size={18} className={cn(isWalkieOpen ? "animate-pulse" : "text-orange-500")} />
+          <Radio size={16} className={cn(isWalkieOpen ? "animate-pulse" : "text-orange-500")} />
           <span className="hidden lg:inline">Walkie-Talkie</span>
         </Button>
 
-        {/* Fullscreen Button for Desktop */}
+        {/* Fullscreen Button */}
         <Button 
           variant="outline" 
-          className="justify-center lg:justify-start gap-3 w-full border-stone-200 bg-white text-stone-600 hover:bg-stone-50 hover:text-stone-900 px-0 lg:px-4 h-[40px] rounded-xl text-xs font-bold"
+          className="justify-center lg:justify-start gap-2.5 w-full border-stone-200 bg-white text-stone-600 hover:bg-stone-50 hover:text-stone-900 px-0 lg:px-3 h-[36px] rounded-xl text-xs font-bold"
           title={isFullscreen ? "Salir de Pantalla Completa" : "Pantalla Completa"}
           onClick={toggleFullscreen}
         >
-          {isFullscreen ? <Minimize2 size={18} className="text-mex-gold" /> : <Maximize2 size={18} className="text-mex-green" />}
+          {isFullscreen ? <Minimize2 size={16} className="text-mex-gold" /> : <Maximize2 size={16} className="text-mex-green" />}
           <span className="hidden lg:inline">{isFullscreen ? "Ventana Normal" : "Pantalla Completa"}</span>
         </Button>
 
         {/* Offline Sync Controls */}
-        <div className="p-2.5 bg-stone-50 border border-stone-200/60 rounded-xl mb-1 text-left w-full hidden md:block">
-          <div className="flex items-center justify-between mb-1.5">
-            <span className="text-[10px] uppercase font-bold text-stone-400 tracking-wider">Base de Datos</span>
-            <div className="flex items-center gap-1.5">
+        <div className="p-2 bg-stone-50 border border-stone-200/60 rounded-xl text-left w-full hidden md:block">
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-[9px] uppercase font-bold text-stone-400 tracking-wider">Base de Datos</span>
+            <div className="flex items-center gap-1">
               <span className={cn(
                 "w-2 h-2 rounded-full",
                 isOffline ? "bg-amber-500 animate-pulse" : "bg-emerald-500"
               )} />
-              <span className="text-[10px] font-black uppercase text-stone-700">
+              <span className="text-[9px] font-black uppercase text-stone-700">
                 {isOffline ? "Local" : "Nube"}
               </span>
             </div>
@@ -556,7 +559,7 @@ export const Navbar = ({
               size="sm"
               onClick={() => toggleSimulateOffline(!isOffline)}
               className={cn(
-                "flex-1 justify-center gap-1 px-1 h-[28px] rounded-lg text-[9px] font-black uppercase tracking-wider border-stone-200",
+                "flex-1 justify-center gap-1 px-1 h-[26px] rounded-lg text-[9px] font-black uppercase tracking-wider border-stone-200",
                 isOffline ? "bg-amber-100 hover:bg-amber-200 text-amber-800 border-amber-200" : "bg-white hover:bg-stone-50 text-stone-600"
               )}
               title={isOffline ? "Volver a Conectar con la Nube" : "Desconectar y Trabajar con BD Temporal"}
@@ -570,17 +573,17 @@ export const Navbar = ({
                 variant="primary"
                 size="sm"
                 onClick={() => syncOfflineData()}
-                className="flex-1 justify-center gap-1 px-1 h-[28px] rounded-lg text-[9px] font-black uppercase tracking-wider bg-mex-green hover:bg-mex-green/90 text-white animate-bounce"
+                className="flex-1 justify-center gap-1 px-1 h-[26px] rounded-lg text-[9px] font-black uppercase tracking-wider bg-mex-green hover:bg-mex-green/90 text-white animate-bounce"
                 title="Sincronizar Cambios locales con la nube"
               >
                 <RefreshCw size={11} className="animate-spin" />
-                <span>Sincronizar ({pendingOps})</span>
+                <span>Subir ({pendingOps})</span>
               </Button>
             )}
           </div>
           {pendingOps > 0 && (
-            <p className="text-[8px] font-bold text-amber-700 mt-1.5 text-center leading-normal animate-pulse">
-              Tiene {pendingOps} cambios sin subir.
+            <p className="text-[8px] font-bold text-amber-700 mt-1 text-center leading-tight animate-pulse">
+              {pendingOps} cambios locales sin subir.
             </p>
           )}
         </div>
@@ -590,11 +593,11 @@ export const Navbar = ({
 
         <Button 
           variant="ghost" 
-          className="justify-center lg:justify-start gap-3 w-full text-stone-500 px-0 lg:px-4"
+          className="justify-center lg:justify-start gap-2.5 w-full text-stone-500 hover:text-red-600 hover:bg-red-50 px-0 lg:px-3 h-[36px] text-xs font-semibold"
           title="Cerrar Sesión"
           onClick={() => onLogout()}
         >
-          <LogOut size={20} />
+          <LogOut size={16} />
           <span className="hidden lg:inline">Cerrar Sesión</span>
         </Button>
       </div>

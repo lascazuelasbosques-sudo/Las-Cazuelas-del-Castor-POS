@@ -8,7 +8,11 @@ interface FullScreenLockProps {
 
 export function FullScreenLockControl({ compact = false }: FullScreenLockProps) {
   const [isLocked, setIsLocked] = useState<boolean>(() => {
-    return localStorage.getItem('pos_fullscreen_locked') === 'true';
+    try {
+      return localStorage.getItem('pos_fullscreen_locked') === 'true';
+    } catch (e) {
+      return false;
+    }
   });
   const wakeLockRef = useRef<any>(null);
 
@@ -41,7 +45,9 @@ export function FullScreenLockControl({ compact = false }: FullScreenLockProps) 
   const toggleLock = async () => {
     const nextState = !isLocked;
     setIsLocked(nextState);
-    localStorage.setItem('pos_fullscreen_locked', String(nextState));
+    try {
+      localStorage.setItem('pos_fullscreen_locked', String(nextState));
+    } catch (e) {}
     window.dispatchEvent(new CustomEvent('pos_lock_changed', { detail: { isLocked: nextState } }));
 
     if (nextState) {

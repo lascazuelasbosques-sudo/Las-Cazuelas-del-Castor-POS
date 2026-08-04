@@ -1,18 +1,23 @@
-import { initializeApp } from 'firebase/app';
+import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
-import { initializeFirestore, memoryLocalCache, disableNetwork, enableNetwork } from 'firebase/firestore';
+import { initializeFirestore, memoryLocalCache, getFirestore, disableNetwork, enableNetwork } from 'firebase/firestore';
 
 // This file will be created by the set_up_firebase tool
 import firebaseConfig from '../firebase-applet-config.json';
 
-const app = initializeApp(firebaseConfig);
+const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 
-// Handle IndexedDB quota or iframe restrictions gracefully
-export const db = initializeFirestore(app, {
-  localCache: memoryLocalCache(),
-  experimentalForceLongPolling: true,
-}, firebaseConfig.firestoreDatabaseId);
+let firestoreInstance;
+try {
+  firestoreInstance = initializeFirestore(app, {
+    localCache: memoryLocalCache(),
+    experimentalForceLongPolling: true,
+  }, firebaseConfig.firestoreDatabaseId);
+} catch (e) {
+  firestoreInstance = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+}
 
+export const db = firestoreInstance;
 export const auth = getAuth(app);
 
 export const disableFirestore = async () => {

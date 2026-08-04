@@ -80,23 +80,18 @@
 }
 
 /* Specific overlay enhancement for headers, buttons & spans inside modals (fixed dialogs) */
-.fixed h1,
-.fixed h2,
-.fixed h3,
-.fixed h4,
-.fixed p,
-.fixed button,
-.fixed span,
-.fixed label {
-  /* Prevent generic light-on-light readability problems in modals for any white/light font elements */
-  &.text-white, &.text-stone-50, &.text-red-50, &.text-rose-100, &.text-rose-200, &.text-emerald-100, &.text-blue-105 {
-    text-shadow: 
-      -0.5px -0.5px 0px rgba(0, 0, 0, 0.7), 
-       0.5px -0.5px 0px rgba(0, 0, 0, 0.7), 
-      -0.5px  0.5px 0px rgba(0, 0, 0, 0.7), 
-       0.5px  0.5px 0px rgba(0, 0, 0, 0.7),
-       0px    1px   2px rgba(0, 0, 0, 0.6);
-  }
+.fixed .text-white,
+.fixed .text-stone-50,
+.fixed .text-red-50,
+.fixed .text-rose-100,
+.fixed .text-rose-200,
+.fixed .text-emerald-100 {
+  text-shadow: 
+    -0.5px -0.5px 0px rgba(0, 0, 0, 0.7), 
+     0.5px -0.5px 0px rgba(0, 0, 0, 0.7), 
+    -0.5px  0.5px 0px rgba(0, 0, 0, 0.7), 
+     0.5px  0.5px 0px rgba(0, 0, 0, 0.7),
+     0px    1px   2px rgba(0, 0, 0, 0.6);
 }
 
 

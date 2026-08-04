@@ -32,10 +32,31 @@ const stateListeners = new Set<OfflineStateListener>();
 type CacheListener = (collectionName: string, data: any[]) => void;
 const cacheListeners = new Map<string, Set<CacheListener>>();
 
+// Safe localStorage wrapper for iframe applets
+const safeStorage = {
+  getItem: (key: string): string | null => {
+    try {
+      return localStorage.getItem(key);
+    } catch (e) {
+      return null;
+    }
+  },
+  setItem: (key: string, value: string): void => {
+    try {
+      localStorage.setItem(key, value);
+    } catch (e) {}
+  },
+  removeItem: (key: string): void => {
+    try {
+      localStorage.removeItem(key);
+    } catch (e) {}
+  }
+};
+
 // Internal states
-let isSimulatingOffline = localStorage.getItem('simulate_offline_mode') === 'true';
+let isSimulatingOffline = safeStorage.getItem('simulate_offline_mode') === 'true';
 let isSyncing = false;
-let isBrowserOnline = navigator.onLine;
+let isBrowserOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
 
 // Check if really online (online status + firebase accessible)
 export function getOfflineStatus(): boolean {
@@ -45,7 +66,7 @@ export function getOfflineStatus(): boolean {
 
 export function toggleSimulateOffline(simulate: boolean) {
   isSimulatingOffline = simulate;
-  localStorage.setItem('simulate_offline_mode', simulate ? 'true' : 'false');
+  safeStorage.setItem('simulate_offline_mode', simulate ? 'true' : 'false');
   notifyStateChange();
   
   if (!simulate && isBrowserOnline) {
@@ -76,7 +97,7 @@ function notifyStateChange() {
 
 // Local cache methods
 export function getLocalCache(collectionName: string): any[] {
-  const dataStr = localStorage.getItem(`offline_cache_col_${collectionName}`);
+  const dataStr = safeStorage.getItem(`offline_cache_col_${collectionName}`);
   if (!dataStr) return [];
   try {
     return JSON.parse(dataStr);
@@ -88,7 +109,7 @@ export function getLocalCache(collectionName: string): any[] {
 
 export function saveLocalCache(collectionName: string, data: any[]) {
   try {
-    localStorage.setItem(`offline_cache_col_${collectionName}`, JSON.stringify(data));
+    safeStorage.setItem(`offline_cache_col_${collectionName}`, JSON.stringify(data));
     notifyCacheListeners(collectionName, data);
   } catch (e) {
     console.error(`Error saving local cache for ${collectionName}:`, e);
@@ -122,7 +143,7 @@ function notifyCacheListeners(collectionName: string, data: any[]) {
 
 // Queue methods
 export function getQueue(): OfflineOperation[] {
-  const queueStr = localStorage.getItem('offline_operations_queue');
+  const queueStr = safeStorage.getItem('offline_operations_queue');
   if (!queueStr) return [];
   try {
     return JSON.parse(queueStr);
@@ -133,7 +154,7 @@ export function getQueue(): OfflineOperation[] {
 }
 
 function saveQueue(queue: OfflineOperation[]) {
-  localStorage.setItem('offline_operations_queue', JSON.stringify(queue));
+  safeStorage.setItem('offline_operations_queue', JSON.stringify(queue));
   notifyStateChange();
 }
 

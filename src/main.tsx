@@ -2,6 +2,7 @@ import {StrictMode, useState, useEffect} from 'react';
 import {createRoot} from 'react-dom/client';
 import App from './App.tsx';
 import { CustomerPortal } from './components/CustomerPortal';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import './index.css';
 
 function AppWrapper() {
@@ -33,17 +34,29 @@ function AppWrapper() {
   return isStaff ? <App /> : <CustomerPortal />;
 }
 
-// Service Worker Registration for background communication
+// Service Worker Registration for background communication (Only in production standalone)
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js')
-      .then(reg => console.log('Radio Service Worker registrado:', reg.scope))
-      .catch(err => console.log('Error al registrar Service Worker:', err));
-  });
+  if (import.meta.env.PROD && !window.location.hostname.includes('run.app') && !window.location.hostname.includes('localhost')) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/sw.js')
+        .then(reg => console.log('Radio Service Worker registrado:', reg.scope))
+        .catch(err => console.log('Error al registrar Service Worker:', err));
+    });
+  } else {
+    // Unregister stale service workers in dev/iframe preview to prevent blank screen or cached script conflicts
+    navigator.serviceWorker.getRegistrations().then(registrations => {
+      for (let registration of registrations) {
+        registration.unregister();
+      }
+    }).catch(() => {});
+  }
 }
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <AppWrapper />
+    <ErrorBoundary>
+      <AppWrapper />
+    </ErrorBoundary>
   </StrictMode>,
 );
+
