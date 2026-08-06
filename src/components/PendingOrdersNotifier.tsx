@@ -6,6 +6,7 @@ import { Bell, BellOff, Volume2, VolumeX, AlertTriangle, Clock, ChevronDown, Che
 import { formatCurrency } from "@/src/lib/utils";
 import toast from "react-hot-toast";
 import { useDraggable } from "../lib/useDraggable";
+import { isDrinkItem } from "../lib/drinkUtils";
 
 export function PendingOrdersNotifier({ userRole = 'waiter' }: { userRole?: string }) {
   const { dragProps, hasMoved } = useDraggable();
@@ -226,37 +227,9 @@ export function PendingOrdersNotifier({ userRole = 'waiter' }: { userRole?: stri
       if (orders.length > prevOrdersCountRef.current) {
         const newest = orders[0];
 
-        // Helper to check if an item is a drink
-        const isDrinkItem = (item: any) => {
-          // Check categories if loaded
-          const prod = products.find(p => p.id === item.productId || p.name === item.name);
-          if (prod) {
-            const cat = categories.find(c => c.id === prod.categoryId);
-            if (cat && cat.name.toLowerCase().includes('bebida')) {
-              return true;
-            }
-          }
-          const nameLower = item.name.toLowerCase();
-          return nameLower.includes("agua") || 
-                 nameLower.includes("jugo") || 
-                 nameLower.includes("bebida") || 
-                 nameLower.includes("refresco") || 
-                 nameLower.includes("café") || 
-                 nameLower.includes("cafe") || 
-                 nameLower.includes("coca") || 
-                 nameLower.includes("soda") || 
-                 nameLower.includes("fanta") || 
-                 nameLower.includes("sprite") || 
-                 nameLower.includes("boing") || 
-                 nameLower.includes("cerveza") || 
-                 nameLower.includes("licuado") || 
-                 nameLower.includes("té") || 
-                 nameLower.includes("te");
-        };
-
         const activeItems = newest.items.filter(item => item.status !== 'cancelled');
-        const drinksToDeliver = activeItems.filter(isDrinkItem);
-        const dishesToPrepare = activeItems.filter(item => !isDrinkItem(item));
+        const drinksToDeliver = activeItems.filter(item => isDrinkItem(item, products, categories));
+        const dishesToPrepare = activeItems.filter(item => !isDrinkItem(item, products, categories));
 
         let shouldAlert = false;
         let speakMsg = "";
