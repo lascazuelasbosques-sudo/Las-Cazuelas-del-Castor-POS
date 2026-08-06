@@ -844,10 +844,12 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
   });
 
   const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [confirmAdminPin, setConfirmAdminPin] = useState("");
   const [confirmAction, setConfirmAction] = useState<{
     title: string;
     message: string;
     requireReason?: boolean;
+    requireAdminPin?: boolean;
     action: (reason?: string) => Promise<void>;
   } | null>(null);
   const [cancelReasonText, setCancelReasonText] = useState("");
@@ -2306,13 +2308,26 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
 
   const handleDeleteAudit = async (auditId: string) => {
     setCancelReasonText("");
+    setConfirmAdminPin("");
     setConfirmAction({
-      title: "Cancelar Arqueo de Caja",
-      message: "¿Estás seguro de que deseas cancelar este arqueo de caja? Se marcará como [CANCELADO] en el historial y no afectará los saldos de caja ni las comparativas de apertura/cierre, pero mantendrá el motivo registrado para la trazabilidad de auditoría.",
+      title: "Eliminar Arqueo de Caja",
+      message: "¿Estás seguro de que deseas eliminar este arqueo de caja? Se registrará en el historial como ELIMINADO/CANCELADO con su motivo correspondiente. Esta acción está protegida y requiere autorización de administrador.",
       requireReason: true,
+      requireAdminPin: true,
       action: async (reason) => {
-        const toastId = toast.loading("Cancelando arqueo de caja...");
+        const toastId = toast.loading("Eliminando arqueo de caja...");
         try {
+          // Log deletion in cashLogs for audit history
+          await addDoc(collection(db, "cashLogs"), {
+            timestamp: new Date().toISOString(),
+            userId: auth.currentUser?.uid || "unknown",
+            userName: auth.currentUser?.displayName || auth.currentUser?.email || "Usuario",
+            amount: 0,
+            type: 'egress',
+            reason: `ARQUEO ELIMINADO - ID: ${auditId}. Motivo: ${reason || "Sin motivo"}. Eliminado por Administrador.`,
+            paymentMethod: 'cash'
+          });
+
           await updateDoc(doc(db, "cashAudits", auditId), {
             cancelled: true,
             cancelledAt: new Date().toISOString(),
@@ -2320,13 +2335,14 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
             cancelReason: reason || "Sin motivo",
             status: "cancelled"
           });
-          toast.success("Registro de arqueo cancelado correctamente", { id: toastId });
+          toast.success("Registro de arqueo eliminado correctamente", { id: toastId });
         } catch (error) {
-          console.error("Error cancelling cash audit:", error);
-          toast.error("Error al cancelar el arqueo de caja", { id: toastId });
+          console.error("Error deleting cash audit:", error);
+          toast.error("Error al eliminar el arqueo de caja", { id: toastId });
         } finally {
           setShowConfirmModal(false);
           setConfirmAction(null);
+          setConfirmAdminPin("");
         }
       }
     });
@@ -5582,7 +5598,7 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
                 <AlertTriangle size={20} />
                 {confirmAction.title}
               </h3>
-              <button onClick={() => setShowConfirmModal(false)}><X size={24}/></button>
+              <button onClick={() => { setShowConfirmModal(false); setConfirmAdminPin(""); }}><X size={24}/></button>
             </CardHeader>
             <CardContent className="p-6">
               <p className="text-stone-700 font-medium">{confirmAction.message}</p>
@@ -5600,16 +5616,43 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
                   />
                 </div>
               )}
+              {confirmAction.requireAdminPin && (
+                <div className="mt-4">
+                  <label className="text-[10px] font-black text-amber-600 uppercase tracking-widest block mb-1">
+                    PIN o Contraseña de Administrador (Obligatorio)
+                  </label>
+                  <input
+                    type="password"
+                    value={confirmAdminPin}
+                    onChange={(e) => setConfirmAdminPin(e.target.value)}
+                    placeholder="Escribe el PIN o contraseña de administrador..."
+                    className="w-full px-3 py-2 bg-stone-50 border border-stone-200 rounded-xl text-sm font-bold text-center focus:bg-white focus:border-amber-500 focus:outline-none transition-all text-stone-700"
+                    required
+                  />
+                </div>
+              )}
             </CardContent>
             <CardFooter className="flex gap-2 p-4 bg-stone-50">
-              <Button variant="ghost" className="flex-1" onClick={() => setShowConfirmModal(false)}>
+              <Button variant="ghost" className="flex-1" onClick={() => { setShowConfirmModal(false); setConfirmAdminPin(""); }}>
                 Cancelar
               </Button>
               <Button 
                 variant="primary" 
                 className="flex-1 gap-2 bg-mex-red hover:bg-red-700 disabled:opacity-50 disabled:pointer-events-none" 
-                onClick={() => confirmAction.action(cancelReasonText)}
-                disabled={!!confirmAction.requireReason && !cancelReasonText.trim()}
+                onClick={async () => {
+                  if (confirmAction.requireAdminPin) {
+                    const verified = await verifyAdminCredentials(confirmAdminPin);
+                    if (!verified) {
+                      toast.error("Contraseña o PIN incorrecto de Administrador");
+                      return;
+                    }
+                  }
+                  confirmAction.action(cancelReasonText);
+                }}
+                disabled={
+                  (!!confirmAction.requireReason && !cancelReasonText.trim()) ||
+                  (!!confirmAction.requireAdminPin && !confirmAdminPin.trim())
+                }
               >
                 <CheckCircle2 size={18} />
                 Confirmar
