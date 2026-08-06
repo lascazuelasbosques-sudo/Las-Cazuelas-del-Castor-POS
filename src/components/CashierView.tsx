@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { motion } from "motion/react";
-import { CreditCard, DollarSign, Receipt, TrendingUp, TrendingDown, Clock, CheckCircle2, Trash2, Edit2, Plus, X, AlertTriangle, History, Package, UploadCloud, DownloadCloud, Eye, Image as LucideImage, Calculator, ClipboardCheck, User, BarChart3, PieChart as PieChartIcon, Utensils, ArrowUpRight, Sparkles, Calendar, Share2, RefreshCw, Printer, BookOpen, Loader2, ShieldAlert } from "lucide-react";
+import { CreditCard, DollarSign, Receipt, TrendingUp, TrendingDown, Clock, CheckCircle2, Trash2, Edit2, Plus, X, AlertTriangle, History, Package, UploadCloud, DownloadCloud, Eye, Image as LucideImage, Calculator, ClipboardCheck, User, BarChart3, PieChart as PieChartIcon, Utensils, ArrowUpRight, Sparkles, Calendar, Share2, RefreshCw, Printer, BookOpen, Loader2, ShieldAlert, Split, Users, Scissors, Layers, RotateCcw } from "lucide-react";
 import { Button } from "./Button";
 import { Card, CardContent, CardHeader, CardFooter } from "./Card";
 import { formatCurrency, cn, customRound } from "@/src/lib/utils";
@@ -9,6 +9,7 @@ import { Order, CashLog, OrderStatus, TipLoan, OrderItem, DEFAULT_USERS } from "
 import { db, auth } from "../firebase";
 import { collection, onSnapshot, query, where, orderBy, doc, updateDoc, addDoc, deleteDoc, writeBatch, getDocs, getDocsFromServer, arrayUnion } from "firebase/firestore";
 import { handleFirestoreError, OperationType } from "../lib/firestoreErrorHandler";
+import { isDrinkItem } from "../lib/drinkUtils";
 import toast from "react-hot-toast";
 import { 
   addOfflineDoc, 
@@ -125,7 +126,8 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
 
   // States for Credit Collection
   const [creditOrders, setCreditOrders] = useState<Order[]>([]);
-  const [activeSubTab, setActiveSubTab] = useState<'pending' | 'credits' | 'transactions' | 'loans'>('pending');
+  const [cancelledOrders, setCancelledOrders] = useState<Order[]>([]);
+  const [activeSubTab, setActiveSubTab] = useState<'pending' | 'credits' | 'transactions' | 'loans' | 'cancelled'>('pending');
   const [tipLoans, setTipLoans] = useState<TipLoan[]>([]);
   const [showLoanModal, setShowLoanModal] = useState(false);
   const [loanAmount, setLoanAmount] = useState<string>('');
@@ -221,6 +223,7 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
       const orderToUpdate = orders.find(o => o.id === orderId);
       if (!orderToUpdate) return;
       
+      const isDrink = isDrinkItem({ name: name.trim() });
       const newItems = [...orderToUpdate.items];
       newItems[itemIndex] = {
         ...newItems[itemIndex],
@@ -228,7 +231,7 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
         price: price,
         quantity: quantity,
         notes: notes || "",
-        status: 'pending'
+        status: isDrink ? 'completed' : 'pending'
       };
       
       // Recalculate total
@@ -243,7 +246,9 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
         userRole: userInfo.userRole
       };
 
-      const updatedOrderStatus = (orderToUpdate.status === 'ready' || orderToUpdate.status === 'served') ? 'preparing' : (orderToUpdate.status || 'pending');
+      const updatedOrderStatus = isDrink
+        ? orderToUpdate.status
+        : ((orderToUpdate.status === 'ready' || orderToUpdate.status === 'served') ? 'preparing' : (orderToUpdate.status || 'pending'));
 
       await updateDoc(orderRef, {
         items: newItems,
@@ -271,7 +276,7 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
       });
       
       setEditingPaymentItem(null);
-      toast.success("Artículo actualizado y enviado a cocina");
+      toast.success(isDrink ? "Refresco / Bebida actualizado (directo a cobrar)" : "Artículo actualizado y enviado a cocina");
     } catch (error) {
       console.error("Error updating order item:", error);
       toast.error("Error al actualizar el artículo");
@@ -288,13 +293,14 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
       const orderToUpdate = orders.find(o => o.id === orderId);
       if (!orderToUpdate) return;
       
+      const isDrink = isDrinkItem({ name: name.trim() });
       const newItem: OrderItem = {
         productId: `custom-${Date.now()}`,
         name: name.trim(),
         price: price,
         quantity: quantity,
-        status: 'pending',
-        station: 'cocina'
+        status: isDrink ? 'completed' : 'pending',
+        station: isDrink ? ('barra' as any) : 'cocina'
       };
       
       const newItems = [...orderToUpdate.items, newItem];
@@ -309,7 +315,9 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
         userRole: userInfo.userRole
       };
 
-      const updatedOrderStatus = (orderToUpdate.status === 'ready' || orderToUpdate.status === 'served') ? 'preparing' : (orderToUpdate.status || 'pending');
+      const updatedOrderStatus = isDrink 
+        ? orderToUpdate.status 
+        : ((orderToUpdate.status === 'ready' || orderToUpdate.status === 'served') ? 'preparing' : (orderToUpdate.status || 'pending'));
 
       await updateDoc(orderRef, {
         items: newItems,
@@ -324,7 +332,7 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
         if (!prev) return null;
         const updatedOrders = prev.orders.map(o => {
           if (o.id === orderId) {
-            return { ...o, items: newItems, total: newTotal };
+            return { ...o, items: newItems, total: newTotal, status: updatedOrderStatus };
           }
           return o;
         });
@@ -335,10 +343,10 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
           total: updatedTotal
         };
       });
-      
+
       setShowAddPaymentItem(false);
       setAddPaymentItemForm({ name: '', price: 0, quantity: 1 });
-      toast.success("Artículo agregado");
+      toast.success(isDrink ? "Refresco / Bebida agregado (directo a cobrar)" : "Artículo agregado y enviado a cocina");
     } catch (error) {
       console.error("Error adding order item:", error);
       toast.error("Error al agregar el artículo");
@@ -753,12 +761,19 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
     }
   };
 
+  interface SubAccountData {
+    subName: string;
+    orders: Order[];
+    total: number;
+  }
+
   interface GroupedOrder {
     id: string; // tableNumber or orderId for takeaway
     displayTitle: string;
     isTakeaway: boolean;
     total: number;
     orders: Order[];
+    subAccountsMap?: { [subName: string]: SubAccountData };
     folios: string[];
     waiterNames: string[];
     isUnconfirmed?: boolean;
@@ -766,6 +781,8 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
 
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [lastPaymentData, setLastPaymentData] = useState<{group: GroupedOrder, method: 'cash' | 'card' | 'transfer' | 'credit', total: number} | null>(null);
+
+
 
   const groupedOrders = orders.reduce((acc: GroupedOrder[], order) => {
     const key = order.isTakeaway ? order.id : order.tableNumber;
@@ -778,6 +795,7 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
         isTakeaway: order.isTakeaway,
         total: 0,
         orders: [],
+        subAccountsMap: {},
         folios: [],
         waiterNames: [],
         isUnconfirmed: order.isTakeaway && order.whatsAppConfirmed === false
@@ -787,6 +805,17 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
     
     group.orders.push(order);
     group.total += order.total;
+
+    if (!group.subAccountsMap) {
+      group.subAccountsMap = {};
+    }
+    const subName = order.subAccount && order.subAccount.trim() ? order.subAccount.trim() : 'General';
+    if (!group.subAccountsMap[subName]) {
+      group.subAccountsMap[subName] = { subName, orders: [], total: 0 };
+    }
+    group.subAccountsMap[subName].orders.push(order);
+    group.subAccountsMap[subName].total += order.total;
+
     if (order.folio && !group.folios.includes(order.folio)) {
       group.folios.push(order.folio);
     }
@@ -799,6 +828,8 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
     
     return acc;
   }, []);
+
+
 
   // CRUD for Cash Logs
   const [showLogModal, setShowLogModal] = useState(false);
@@ -884,6 +915,16 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, "orders (credit)");
     });
+
+    const qCancelledOrders = query(
+      collection(db, "orders"),
+      where("status", "==", "cancelled")
+    );
+    const unsubCancelledOrders = onOfflineSnapshot("orders", qCancelledOrders, (cData) => {
+      setCancelledOrders(cData);
+    }, (error) => {
+      console.error("Error loading cancelled orders:", error);
+    });
     
     // Fetch products
     const qProducts = query(collection(db, "products"), orderBy("name", "asc"));
@@ -898,10 +939,32 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
       unsubLogs();
       unsubAudits();
       unsubCreditOrders();
+      unsubCancelledOrders();
       unsubProducts();
       unsubTipLoans();
     };
   }, []);
+
+  const handleRestoreCancelledOrder = async (orderId: string) => {
+    try {
+      const userInfo = getLoggedUserForLog();
+      await updateOfflineDoc("orders", orderId, {
+        status: 'pending',
+        updatedAt: new Date().toISOString(),
+        movementLogs: arrayUnion({
+          action: 'Restauración de Cuenta Borrada/Cancelada',
+          timestamp: new Date().toISOString(),
+          userId: userInfo.userId,
+          userName: userInfo.userName,
+          userRole: userInfo.userRole
+        })
+      });
+      toast.success("¡Cuenta / Orden restaurada exitosamente!");
+    } catch (err) {
+      console.error("Error restoring order:", err);
+      toast.error("Error al restaurar la cuenta");
+    }
+  };
 
   // Disposable helpers
   const disposableProduct = products.find(p => p.name.toLowerCase() === 'desechable');
@@ -1419,6 +1482,81 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
         } catch (error) {
           console.error("Error cancelling log/cobro:", error);
           toast.error("Error al cancelar el registro", { id: toastId });
+        } finally {
+          setShowConfirmModal(false);
+          setConfirmAction(null);
+        }
+      }
+    });
+    setShowConfirmModal(true);
+  };
+
+  const handleReturnIncome = (log: CashLog) => {
+    setCancelReasonText("");
+    const hasOrders = log.orderIds && log.orderIds.length > 0;
+    setConfirmAction({
+      title: "Regresar Ingreso a Consumo Activo",
+      message: hasOrders 
+        ? `¿Estás seguro de regresar este ingreso de ${formatCurrency(log.amount)}? El cobro se anulará en movimientos y la mesa/comanda (${log.reason}) volverá a estar activa en 'Mesas con consumo activo' para poder modificarla o cobrarla nuevamente.`
+        : `¿Estás seguro de regresar/anular este ingreso manual de ${formatCurrency(log.amount)}? Este registro de ingreso quedará anulado en movimientos y no afectará el balance de caja.`,
+      requireReason: true,
+      action: async (reason) => {
+        const toastId = toast.loading("Regresando ingreso...");
+        try {
+          const batch = writeBatch(db);
+          
+          // 1. Mark CashLog as cancelled and returned
+          const logRef = doc(db, "cashLogs", log.id);
+          batch.update(logRef, {
+            cancelled: true,
+            returned: true,
+            cancelledAt: new Date().toISOString(),
+            cancelledBy: auth.currentUser?.displayName || auth.currentUser?.email || "Usuario",
+            cancelReason: reason || "Ingreso regresado a consumo activo",
+            reason: log.reason.startsWith("[REGRESADO]") ? log.reason : `[REGRESADO] ${log.reason}`
+          });
+
+          // 2. Reopen associated orders back to active pending state ('served')
+          if (log.orderIds && log.orderIds.length > 0) {
+            const userInfo = getLoggedUserForLog();
+            const returnLog = {
+              action: `Ingreso regresado desde movimientos (${reason || 'Sin motivo'}) - Reabierta en consumo activo`,
+              timestamp: new Date().toISOString(),
+              userId: userInfo.userId,
+              userName: userInfo.userName,
+              userRole: userInfo.userRole
+            };
+
+            log.orderIds.forEach(orderId => {
+              const orderRef = doc(db, "orders", orderId);
+              if (log.isCreditSettlement) {
+                batch.update(orderRef, {
+                  creditStatus: 'pending',
+                  updatedAt: new Date().toISOString(),
+                  movementLogs: arrayUnion(returnLog)
+                });
+              } else {
+                batch.update(orderRef, {
+                  status: "served",
+                  paymentMethod: null,
+                  creditStatus: null,
+                  updatedAt: new Date().toISOString(),
+                  movementLogs: arrayUnion(returnLog)
+                });
+              }
+            });
+          }
+
+          await batch.commit();
+          toast.success(
+            hasOrders 
+              ? "Ingreso regresado correctamente. La comanda/mesa ha reaparecido en consumo activo." 
+              : "Ingreso regresado y anulado correctamente.",
+            { id: toastId }
+          );
+        } catch (error) {
+          console.error("Error returning income:", error);
+          toast.error("Error al regresar el ingreso", { id: toastId });
         } finally {
           setShowConfirmModal(false);
           setConfirmAction(null);
@@ -2600,9 +2738,21 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
                 <DollarSign size={14} />
                 Préstamos ({tipLoans.filter(l => l.status === 'pending').length})
               </button>
+              <button 
+                onClick={() => setActiveSubTab('cancelled')}
+                className={cn(
+                   "flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs font-black transition-all cursor-pointer whitespace-nowrap",
+                   activeSubTab === 'cancelled' 
+                     ? "bg-red-650 text-white shadow-lg" 
+                     : "text-stone-500 hover:text-stone-700 hover:bg-red-50"
+                )}
+              >
+                <Trash2 size={14} />
+                Canceladas ({cancelledOrders.length})
+              </button>
             </div>
             <span className="text-[10px] font-black text-stone-400 uppercase tracking-widest text-right shrink-0 hidden md:inline">
-              {activeSubTab === 'pending' ? `${groupedOrders.length} MESAS` : activeSubTab === 'credits' ? `${creditOrders.length} CUENTAS` : activeSubTab === 'transactions' ? `${currentSessionLogs.length} LOGS` : `${tipLoans.length} PRÉSTAMOS`}
+              {activeSubTab === 'pending' ? `${groupedOrders.length} MESAS` : activeSubTab === 'credits' ? `${creditOrders.length} CUENTAS` : activeSubTab === 'transactions' ? `${currentSessionLogs.length} LOGS` : activeSubTab === 'loans' ? `${tipLoans.length} PRÉSTAMOS` : `${cancelledOrders.length} CANCELADAS`}
             </span>
           </div>
           
@@ -2632,8 +2782,9 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
                         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                           <p className="text-[10px] text-stone-400 font-mono">Folios: {group.folios.join(', ')}</p>
                           <span className="text-stone-300 hidden sm:inline">•</span>
-                          <p className="text-[10px] text-stone-400 font-bold uppercase tracking-widest">Mesero: {group.waiterNames.join(', ')}</p>
+                          <p className="text-[10px] text-stone-400 font-bold uppercase tracking-widest">Mesero: {group.waiterNames[0] || 'Atendido'}</p>
                         </div>
+
                       </div>
                       <div className="flex flex-row sm:flex-col items-center sm:items-end justify-between w-full sm:w-auto gap-2 border-t sm:border-none pt-3 sm:pt-0 mt-1 sm:mt-0">
                         <p className="text-2xl font-black text-mex-brown font-serif">{formatCurrency(group.total)}</p>
@@ -2649,6 +2800,7 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
                               <Edit2 size={18} />
                             </Button>
                           )}
+
                           <Button 
                             variant="outline" 
                             size="sm" 
@@ -3023,6 +3175,59 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
                   )}
                 </div>
               </div>
+            ) : activeSubTab === 'cancelled' ? (
+              <div className="space-y-3">
+                {cancelledOrders.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-20 opacity-20">
+                    <Trash2 size={64} className="mb-4 text-stone-400" />
+                    <p className="text-xl font-serif uppercase tracking-tighter">Sin órdenes canceladas</p>
+                    <p className="text-xs mt-1">No hay cuentas ni platillos borrados recientemente</p>
+                  </div>
+                ) : (
+                  cancelledOrders.map(order => (
+                    <Card key={order.id} className="border-none shadow-md bg-white border border-stone-100 overflow-hidden">
+                      <div className="p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="px-2 py-0.5 bg-red-100 text-red-800 text-[10px] font-black uppercase tracking-wider rounded">
+                              CANCELADA
+                            </span>
+                            <p className="font-bold text-stone-800">
+                              {order.isTakeaway ? 'PARA LLEVAR' : `MESA ${order.tableNumber}`}
+                            </p>
+                            {order.subAccount && (
+                              <span className="px-1.5 py-0.5 bg-blue-100 text-blue-800 text-[9px] font-black uppercase tracking-wider rounded">
+                                {order.subAccount}
+                              </span>
+                            )}
+                            {order.folio && (
+                              <span className="text-[10px] text-stone-400 font-mono font-bold">
+                                Folio: #{order.folio}
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs text-stone-500 font-medium mt-1">
+                            {order.items?.length || 0} platillos • Total: <span className="font-bold text-mex-green">{formatCurrency(order.total)}</span>
+                          </p>
+                          {order.notes && (
+                            <p className="text-[11px] text-stone-400 italic mt-0.5">{order.notes}</p>
+                          )}
+                        </div>
+
+                        <Button
+                          variant="primary"
+                          size="sm"
+                          className="h-10 px-4 bg-mex-green hover:bg-mex-green/90 text-white font-black text-xs rounded-xl shadow-md flex items-center gap-2 shrink-0 cursor-pointer"
+                          onClick={() => handleRestoreCancelledOrder(order.id)}
+                        >
+                          <RefreshCw size={14} />
+                          RESTAURAR / DESHACER
+                        </Button>
+                      </div>
+                    </Card>
+                  ))
+                )}
+              </div>
             ) : (
               <div className="space-y-3">
                 {currentSessionLogs.length === 0 ? (
@@ -3213,8 +3418,11 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
                     <p className={cn("text-sm font-bold leading-tight pr-4", log.cancelled ? "text-stone-400 line-through" : "text-stone-800")}>
                       {log.reason}
                       {log.cancelled && (
-                        <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-extrabold bg-red-100 text-red-700 border border-red-200 uppercase tracking-widest leading-none">
-                          CANCELADO
+                        <span className={cn(
+                          "ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-extrabold uppercase tracking-widest leading-none border",
+                          log.returned ? "bg-blue-100 text-blue-800 border-blue-200" : "bg-red-100 text-red-700 border-red-200"
+                        )}>
+                          {log.returned ? "REGRESADO A MESA" : "CANCELADO"}
                         </span>
                       )}
                     </p>
@@ -3272,6 +3480,16 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
                   <div className="flex gap-1 opacity-100 transition-opacity">
                     {!log.cancelled && (
                       <>
+                        {log.type === 'income' && (
+                          <button 
+                            onClick={() => handleReturnIncome(log)}
+                            className="px-2.5 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 hover:text-blue-900 rounded-lg transition-all cursor-pointer flex items-center gap-1.5 text-[11px] font-extrabold border border-blue-200 shadow-2xs mr-1"
+                            title="Regresar este ingreso a consumo activo en mesa"
+                          >
+                            <RotateCcw size={13} />
+                            <span>Regresar Ingreso</span>
+                          </button>
+                        )}
                         {(log.type === 'income' || log.itemsSummary) && (
                           <button 
                             onClick={() => handleReprintHistoryTicket(log)}
@@ -3994,8 +4212,11 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
                           <p className={cn("text-base font-bold leading-tight pr-4 text-stone-850", log.cancelled ? "text-stone-400 line-through" : "")}>
                             {log.reason}
                             {log.cancelled && (
-                              <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-extrabold bg-red-100 text-red-700 border border-red-200 uppercase tracking-widest leading-none">
-                                CANCELADO
+                              <span className={cn(
+                                "ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-extrabold uppercase tracking-widest leading-none border",
+                                log.returned ? "bg-blue-100 text-blue-800 border-blue-200" : "bg-red-100 text-red-700 border-red-200"
+                              )}>
+                                {log.returned ? "REGRESADO A MESA" : "CANCELADO"}
                               </span>
                             )}
                           </p>
@@ -4043,6 +4264,16 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
                         <div className="flex gap-1">
                           {!log.cancelled && (
                             <>
+                              {log.type === 'income' && (
+                                <button 
+                                  onClick={() => handleReturnIncome(log)}
+                                  className="px-2.5 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 hover:text-blue-900 rounded-lg transition-all cursor-pointer flex items-center gap-1.5 text-[11px] font-extrabold border border-blue-200 shadow-2xs mr-1"
+                                  title="Regresar este ingreso a consumo activo en mesa"
+                                >
+                                  <RotateCcw size={13} />
+                                  <span>Regresar Ingreso</span>
+                                </button>
+                              )}
                               {(log.type === 'income' || log.itemsSummary) && (
                                 <button 
                                   onClick={() => handleReprintHistoryTicket(log)}
@@ -4962,7 +5193,7 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
                 <div className="border-t border-stone-200 pt-2 space-y-1">
                   <p>Mesa: {lastPaymentData.group.displayTitle}</p>
                   <p>Folios: {lastPaymentData.group.folios.join(", ")}</p>
-                  <p>Meseros: {lastPaymentData.group.waiterNames.join(", ")}</p>
+                  <p>Mesero: {lastPaymentData.group.waiterNames[0] || 'Atendido'}</p>
                   {lastPaymentData.method === 'credit' && (
                     <>
                       <p className="font-bold text-red-700">MÉTODO: CRÉDITO</p>
@@ -5012,7 +5243,7 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
                   <div style={{ borderTop: '1px dashed #000', borderBottom: '1px dashed #000', padding: '8px 0', margin: '8px 0' }}>
                     <p style={{ margin: '2px 0' }}>Mesa: {lastPaymentData.group.displayTitle}</p>
                     <p style={{ margin: '2px 0' }}>Folios: {lastPaymentData.group.folios.join(", ")}</p>
-                    <p style={{ margin: '2px 0' }}>Meseros: {lastPaymentData.group.waiterNames.join(", ")}</p>
+                    <p style={{ margin: '2px 0' }}>Mesero: {lastPaymentData.group.waiterNames[0] || 'Atendido'}</p>
                   </div>
                   <div style={{ borderBottom: '1px dashed #000', paddingBottom: '8px', marginBottom: '8px' }}>
                     {lastPaymentData.group.orders.map(order => 
@@ -7040,6 +7271,7 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
           </Card>
         </div>
       )}
+
     </div>
   );
 };

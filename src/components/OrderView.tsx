@@ -20,6 +20,7 @@ const Utensils = UtensilsIcon;
 import { handleFirestoreError, OperationType } from "../lib/firestoreErrorHandler";
 import { getFallbackProductImage } from "../lib/presetImages";
 import { checkIsBistec } from "../lib/orderUtils";
+import { isDrinkItem } from "../lib/drinkUtils";
 
 interface OrderViewProps {
   orderToEdit?: Order | null;
@@ -74,6 +75,7 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
   const [selectedCategory, setSelectedCategory] = useState<string>('');
   const [cart, setCart] = useState<OrderItem[]>([]);
   const [tableNumber, setTableNumber] = useState('');
+  const [subAccount, setSubAccount] = useState('');
   const [isTakeaway, setIsTakeaway] = useState(false);
   const [activeOrders, setActiveOrders] = useState<Order[]>([]);
   const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
@@ -117,6 +119,7 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
       nameLower.includes('quesadilla') || 
       nameLower.includes('huarache') || 
       nameLower.includes('taco') || 
+      nameLower.includes('tostada') || 
       nameLower.includes('chilaquil') || 
       nameLower.includes('gordita') || 
       nameLower.includes('enchilada') || 
@@ -134,6 +137,7 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
       'Quesadilla de ', 'Quesadillas de ',
       'Huarache de ', 'Huaraches de ',
       'Tacos de ', 'Taco de ',
+      'Tostadas con ', 'Tostada con ', 'Tostadas de ', 'Tostada de ',
       'Chilaquiles con ', 'Chilaquil con ',
       'Gordita de ', 'Gorditas de ',
       'Enchiladas con ', 'Enchilada con ',
@@ -294,13 +298,14 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
     }
 
     const isBistec = checkIsBistec({ name: finalName });
+    const isDrink = isDrinkItem({ name: finalName }, products, categories);
 
     const newItem: OrderItem = {
       productId: `custom_${Date.now()}`,
       name: finalName,
       price: priceNum,
       quantity: 1,
-      status: 'pending',
+      status: isDrink ? 'completed' : 'pending',
       station: isBistec ? 'plancha' : customItemStation,
       hasExtraCheese: false
     };
@@ -324,6 +329,7 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
       // If coming from Cashier to edit a specific order (e.g. to fix a mistake)
       setCart(orderToEdit.items);
       setTableNumber(orderToEdit.tableNumber === 'Para Llevar' ? '' : orderToEdit.tableNumber);
+      setSubAccount(orderToEdit.subAccount || '');
       setIsTakeaway(orderToEdit.isTakeaway);
       setNotes(orderToEdit.notes || '');
       setEditingOrderId(orderToEdit.id);
@@ -428,6 +434,8 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
           baseName = `Huarache de ${fillingStr}`;
         } else if (nameLower.includes('tacos') || nameLower.includes('taco')) {
           baseName = `Tacos de ${fillingStr}`;
+        } else if (nameLower.includes('tostada')) {
+          baseName = `Tostadas con ${fillingStr}`;
         } else if (nameLower.includes('chilaquiles') || nameLower.includes('chilaquil')) {
           baseName = `Chilaquiles con ${fillingStr}`;
         } else if (nameLower.includes('gordita')) {
@@ -457,13 +465,14 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
         );
       }
       const isBistec = checkIsBistec({ name: finalName, notes: (fillingStr || '') });
+      const isDrink = isDrinkItem({ name: finalName, productId: product.id }, products, categories);
 
       return [...prev, { 
         productId: product.id, 
         name: finalName, 
         price: product.price + (hasExtraCheese ? 8 : 0), 
         quantity: quantityToAdd,
-        status: 'pending',
+        status: isDrink ? 'completed' : 'pending',
         station: isBistec ? 'plancha' : (product.station || 'cocina'),
         hasExtraCheese,
         fillings: fillingArr
@@ -504,6 +513,7 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
     try {
       const orderData: any = {
         tableNumber: isTakeaway ? 'Para Llevar' : tableNumber,
+        subAccount: isTakeaway ? '' : subAccount.trim(),
         items: cart,
         subtotal,
         total,
@@ -569,11 +579,16 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
           userRole: userInfo.userRole
         };
 
+        // Si la mesa ya tiene una orden activa, mantenemos al mismo mesero principal de esa mesa
+        const existingTableOrder = !isTakeaway && tableNumber 
+          ? activeOrders.find(o => !o.isTakeaway && o.tableNumber === tableNumber)
+          : null;
+
         orderData.folio = `${dayLetter}${hours}${minutes}-${tableStr}-${paddedConsecutive}`;
         orderData.status = 'pending';
         orderData.createdAt = new Date().toISOString();
-        orderData.waiterId = auth.currentUser.uid;
-        orderData.waiterName = userInfo.userName;
+        orderData.waiterId = existingTableOrder?.waiterId || auth.currentUser.uid;
+        orderData.waiterName = existingTableOrder?.waiterName || userInfo.userName;
         orderData.movementLogs = [initialLog];
         
         await addOfflineDoc("orders", orderData);
@@ -633,6 +648,7 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
     // Cargamos los items existentes para poder agregar más
     setCart(order.items);
     setTableNumber(order.tableNumber === 'Para Llevar' ? '' : order.tableNumber);
+    setSubAccount(order.subAccount || '');
     setIsTakeaway(order.isTakeaway);
     setNotes(order.notes || '');
     setEditingOrderId(order.id);
@@ -1200,15 +1216,17 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
               Para Llevar
             </label>
             {!isTakeaway && (
-              <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-xl border border-stone-200 shadow-sm">
-                <span className="text-[10px] font-bold text-stone-400 uppercase">Mesa</span>
-                <input 
-                  type="text" 
-                  placeholder="#" 
-                  value={tableNumber}
-                  onChange={(e) => setTableNumber(e.target.value)}
-                  className="w-10 text-center focus:outline-none font-bold text-mex-green"
-                />
+              <div className="flex flex-wrap items-center gap-2 bg-white px-3 py-2 rounded-xl border border-stone-200 shadow-sm">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] font-bold text-stone-400 uppercase">Mesa</span>
+                  <input 
+                    type="text" 
+                    placeholder="#" 
+                    value={tableNumber}
+                    onChange={(e) => setTableNumber(e.target.value)}
+                    className="w-10 text-center focus:outline-none font-bold text-mex-green"
+                  />
+                </div>
               </div>
             )}
           </div>
@@ -1243,6 +1261,11 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
                       <div>
                         <div className="flex items-center gap-1.5">
                           <p className="font-bold text-stone-800">{order.isTakeaway ? 'PARA LLEVAR' : `MESA ${order.tableNumber}`}</p>
+                          {order.subAccount && (
+                            <span className="px-1.5 py-0.5 bg-blue-100/80 text-blue-800 text-[9px] font-black uppercase tracking-wider rounded border border-blue-200">
+                              {order.subAccount}
+                            </span>
+                          )}
                           {isUnconfirmed && (
                             <span className="px-1.5 py-0.5 bg-amber-500/10 text-amber-700 text-[8px] font-black uppercase tracking-wider rounded">POR CONFIRMAR (WP)</span>
                           )}
@@ -1494,7 +1517,7 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-black text-stone-600 uppercase tracking-wider block">
-                    Selecciona Ingredientes (Opción Múltiple)
+                    Selecciona Ingredientes
                   </label>
                   <span className="text-[10px] bg-mex-gold/20 text-stone-800 font-bold px-2 py-0.5 rounded-full">
                     {selectedFillings.length} seleccionado{selectedFillings.length !== 1 ? 's' : ''}

@@ -357,8 +357,7 @@ export const Navbar = ({
                   "transition-transform duration-200 md:h-[20px] md:w-[20px]", 
                   activeTab === item.id && "scale-105",
                   item.id === 'whatsapp' && totalUnreadChats > 0 && "animate-bounce text-emerald-600",
-                  item.id === 'kitchen' && (pendingStations.cocina || pendingStations.plancha || pendingFoodCount > 0) && "animate-pulse text-orange-600 font-bold",
-                  item.id === 'inventory' && (pendingFoodCount > 0 || pendingStations.cocina || pendingStations.plancha) && "animate-pulse text-amber-600 font-bold"
+                  item.id === 'kitchen' && (pendingStations.cocina || pendingStations.plancha || pendingFoodCount > 0) && "animate-pulse text-orange-600 font-bold"
                 )} />
                 
                 {/* Kitchen Badges */}
@@ -378,12 +377,7 @@ export const Navbar = ({
                   </div>
                 )}
 
-                {/* Comidas / Inventory Badge */}
-                {item.id === 'inventory' && (pendingFoodCount > 0 || pendingStations.cocina || pendingStations.plancha) && (
-                  <div className="absolute -top-1.5 -right-1.5 bg-amber-500 text-white text-[8px] md:text-[9px] font-black min-w-[14px] h-3.5 md:h-4 px-1 rounded-full flex items-center justify-center border border-white shadow-sm scale-110 animate-pulse" title="Comidas para preparar en cocina/parrilla">
-                    {pendingFoodCount > 0 ? (pendingFoodCount > 9 ? '+9' : pendingFoodCount) : '!'}
-                  </div>
-                )}
+
 
                 {/* WhatsApp Badge */}
                 {item.id === 'whatsapp' && totalUnreadChats > 0 && (

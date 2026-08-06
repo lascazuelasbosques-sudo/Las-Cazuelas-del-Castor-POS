@@ -10,6 +10,7 @@ import { PWAInstallBanner } from "./PWAInstallBanner";
 import toast from "react-hot-toast";
 import { handleFirestoreError, OperationType } from "@/src/lib/firestoreErrorHandler";
 import { checkIsBistec, analyzeMeatIngredients } from "@/src/lib/orderUtils";
+import { isDrinkItem } from "@/src/lib/drinkUtils";
 
 interface KitchenTicketItem extends OrderItem {
   originalIndex: number;
@@ -70,6 +71,35 @@ const sanitizeItemsForFirestore = (items: OrderItem[]): any[] => {
     }
     return cleaned;
   });
+};
+
+const getTostadaFilling = (item: OrderItem): string => {
+  if (item.fillings && item.fillings.length > 0) {
+    const actualFillings = item.fillings.filter(f => f !== 'Queso Extra');
+    if (actualFillings.length > 0) {
+      return actualFillings.join(', ');
+    }
+  }
+  const nameLower = (item.name || '').toLowerCase();
+  const parenMatch = item.name.match(/\(([^)]+)\)/);
+  if (parenMatch && parenMatch[1]) {
+    const pStr = parenMatch[1].trim();
+    if (pStr.toLowerCase() !== 'queso extra') {
+      return pStr;
+    }
+  }
+  if (nameLower.includes('tinga de pollo') || nameLower.includes('tinga pollo')) return 'Tinga de Pollo';
+  if (nameLower.includes('tinga de res') || nameLower.includes('tinga res')) return 'Tinga de Res';
+  if (nameLower.includes('bistec')) return 'Bistec';
+  if (nameLower.includes('longaniza')) return 'Longaniza';
+  if (nameLower.includes('campechano')) return 'Campechano';
+  if (nameLower.includes('chicharrón') || nameLower.includes('chicharron')) return 'Chicharrón';
+  if (nameLower.includes('champiñon') || nameLower.includes('champiñón')) return 'Champiñones';
+  if (nameLower.includes('papas con longaniza')) return 'Papas con Longaniza';
+  if (nameLower.includes('pollo')) return 'Pollo Deshebrado';
+  if (nameLower.includes('huevo')) return 'Huevo';
+  if (nameLower.includes('sencillo')) return 'Sencillo';
+  return 'Guisado de Tostada';
 };
 
 const DB_NAME = "KitchenMusicDB";
@@ -713,12 +743,13 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
   orders.forEach(order => {
     const itemsWithIndex = order.items.map((item, index) => ({ ...item, originalIndex: index }));
     
-    // First, find if there are active (non-cancelled) specific items for plancha or cocina
-    const activePlanchaSpecific = itemsWithIndex.some(i => i.station === 'plancha' && i.status !== 'cancelled');
-    const activeCocinaSpecific = itemsWithIndex.some(i => (i.station === 'cocina' || !i.station) && i.status !== 'cancelled');
+    // First, find if there are active (non-cancelled) specific items for plancha or cocina (excluding drinks/refrescos)
+    const activePlanchaSpecific = itemsWithIndex.some(i => i.station === 'plancha' && i.status !== 'cancelled' && !isDrinkItem(i, products));
+    const activeCocinaSpecific = itemsWithIndex.some(i => (i.station === 'cocina' || !i.station) && i.status !== 'cancelled' && !isDrinkItem(i, products));
 
     const planchaItems = itemsWithIndex.filter(i => {
       if (i.status === 'cancelled') return false;
+      if (isDrinkItem(i, products)) return false; // Refrescos go directly to cashier/cobro without passing through kitchen
       const isBistec = checkIsBistec(i);
       if (isBistec || i.station === 'plancha') return true;
       if (i.station === 'comun') {
@@ -730,11 +761,12 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
 
     const cocinaItems = itemsWithIndex.filter(i => {
       if (i.status === 'cancelled') return false;
+      if (isDrinkItem(i, products)) return false; // Refrescos go directly to cashier/cobro without passing through kitchen
       const isBistec = checkIsBistec(i);
       if (i.station === 'plancha' && !isBistec) return false;
 
       if (i.station === 'cocina' || !i.station || isBistec) {
-        if (i.station === 'plancha' && !i.name.toLowerCase().includes('chilaquiles') && !i.name.toLowerCase().includes('enchiladas') && !i.name.toLowerCase().includes('pambazo') && !i.name.toLowerCase().includes('gordita') && !i.name.toLowerCase().includes('comida') && !i.name.toLowerCase().includes('platillo') && !i.name.toLowerCase().includes('sopa') && !i.name.toLowerCase().includes('sopes')) {
+        if (i.station === 'plancha' && !i.name.toLowerCase().includes('chilaquiles') && !i.name.toLowerCase().includes('enchiladas') && !i.name.toLowerCase().includes('pambazo') && !i.name.toLowerCase().includes('gordita') && !i.name.toLowerCase().includes('tostada') && !i.name.toLowerCase().includes('taco') && !i.name.toLowerCase().includes('comida') && !i.name.toLowerCase().includes('platillo') && !i.name.toLowerCase().includes('sopa') && !i.name.toLowerCase().includes('sopes')) {
           return false;
         }
         return true;
@@ -1195,7 +1227,7 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
             }
           } else if (station === 'cocina') {
             if (item.station === 'cocina' || !item.station) belongsToStation = true;
-            else if (checkIsBistec(item) && (item.name.toLowerCase().includes('chilaquiles') || item.name.toLowerCase().includes('enchiladas') || item.name.toLowerCase().includes('pambazo') || item.name.toLowerCase().includes('gordita') || item.name.toLowerCase().includes('comida') || item.name.toLowerCase().includes('platillo') || item.name.toLowerCase().includes('sopa') || item.name.toLowerCase().includes('sopes') || (item.station as string) === 'cocina')) {
+            else if (checkIsBistec(item) && (item.name.toLowerCase().includes('chilaquiles') || item.name.toLowerCase().includes('enchiladas') || item.name.toLowerCase().includes('pambazo') || item.name.toLowerCase().includes('gordita') || item.name.toLowerCase().includes('tostada') || item.name.toLowerCase().includes('taco') || item.name.toLowerCase().includes('comida') || item.name.toLowerCase().includes('platillo') || item.name.toLowerCase().includes('sopa') || item.name.toLowerCase().includes('sopes') || (item.station as string) === 'cocina')) {
               belongsToStation = true;
             }
             else if (item.station === 'comun') {
@@ -1235,7 +1267,7 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
             }
           } else if (station === 'cocina') {
             if (item.station === 'cocina' || !item.station) belongsToStation = true;
-            else if (checkIsBistec(item) && (item.name.toLowerCase().includes('chilaquiles') || item.name.toLowerCase().includes('enchiladas') || item.name.toLowerCase().includes('pambazo') || item.name.toLowerCase().includes('gordita') || item.name.toLowerCase().includes('comida') || item.name.toLowerCase().includes('platillo') || item.name.toLowerCase().includes('sopa') || item.name.toLowerCase().includes('sopes') || (item.station as string) === 'cocina')) {
+            else if (checkIsBistec(item) && (item.name.toLowerCase().includes('chilaquiles') || item.name.toLowerCase().includes('enchiladas') || item.name.toLowerCase().includes('pambazo') || item.name.toLowerCase().includes('gordita') || item.name.toLowerCase().includes('tostada') || item.name.toLowerCase().includes('taco') || item.name.toLowerCase().includes('comida') || item.name.toLowerCase().includes('platillo') || item.name.toLowerCase().includes('sopa') || item.name.toLowerCase().includes('sopes') || (item.station as string) === 'cocina')) {
               belongsToStation = true;
             }
             else if (item.station === 'comun') {
@@ -1439,12 +1471,14 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
 
       const trimmedNotes = notes.trim();
       const isBistec = checkIsBistec({ name: product.name, notes: trimmedNotes });
+      const isDrink = isDrinkItem(product, products);
+      const effectiveStatus = isDrink ? 'completed' : itemStatus;
       const newItem: OrderItem = {
         productId: product.id,
         name: product.name,
         price: Number(product.price),
         quantity: Number(quantity),
-        status: itemStatus,
+        status: effectiveStatus,
         station: isBistec ? 'plancha' : (station || product.station || 'cocina'),
         hasExtraCheese: false
       };
@@ -2493,7 +2527,7 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
               <Card 
                 key={ticket.id} 
                 className={cn(
-                  "flex flex-col border border-stone-200 shadow-lg transition-all rounded-[1.5rem] overflow-hidden bg-white",
+                  "flex flex-col border border-stone-200 shadow-lg transition-all rounded-[1.5rem] overflow-hidden bg-white h-[480px] md:h-[520px]",
                   isTicketAlerting
                     ? (flashState 
                         ? "ring-4 ring-amber-500 shadow-amber-200 bg-amber-50/10 scale-[1.01] border-amber-400" 
@@ -2504,7 +2538,7 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
                 )}
               >
                 {/* --- TICKET HEADER --- */}
-                <CardHeader className="flex flex-row items-center justify-between bg-stone-100/90 p-3 border-b border-stone-200">
+                <CardHeader className="flex flex-row items-center justify-between bg-stone-100/90 p-3 border-b border-stone-200 shrink-0">
                   <div className="min-w-0 space-y-0.5">
                     <p className="text-[8px] text-stone-500 uppercase font-black tracking-widest leading-none">Mesa / Orden</p>
                     <p className={cn(
@@ -2563,7 +2597,7 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
                 </CardHeader>
 
               {/* --- TICKET CONTENT (ITEMS) --- */}
-              <CardContent className="p-3 space-y-1.5 flex-1 bg-stone-50/40">
+              <CardContent className="p-3 space-y-1.5 flex-1 min-h-0 bg-stone-50/40 overflow-y-auto no-scrollbar">
                 {ticket.items.map((item, idx) => (
                   <div 
                     key={idx} 
@@ -2665,6 +2699,56 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
                             <span className="truncate font-black">"{item.notes}"</span>
                           </div>
                         )}
+
+                        {/* TOSTADAS INGREDIENTS TABLE */}
+                        {(() => {
+                          const isTostada = (item.name || '').toLowerCase().includes('tostada');
+                          if (!isTostada) return null;
+                          return (
+                            <div className={cn(
+                              "mt-1.5 p-2 rounded-xl border text-[9px] font-bold leading-tight shadow-3xs space-y-1 bg-amber-50/10 border-stone-200/80 w-full text-left",
+                              item.status === 'completed' && "opacity-50"
+                            )}>
+                              <p className="text-[8px] font-black uppercase tracking-wider text-mex-brown flex items-center gap-1 border-b border-stone-250/60 pb-0.5 mb-1">
+                                📋 Tabla de Ingredientes (Armado)
+                              </p>
+                              <div className="space-y-0.5">
+                                <div className="flex justify-between text-stone-600 border-b border-stone-100 pb-0.5">
+                                  <span>Base:</span>
+                                  <span className="font-extrabold text-stone-800">Tostada Crujiente ({item.quantity} pza{item.quantity > 1 ? 's' : ''})</span>
+                                </div>
+                                <div className="flex justify-between text-stone-600 border-b border-stone-100 pb-0.5">
+                                  <span>Untado:</span>
+                                  <span className="font-extrabold text-stone-800">Frijoles Refritos</span>
+                                </div>
+                                <div className="flex justify-between text-stone-600 border-b border-stone-100 pb-0.5">
+                                  <span>Guisado:</span>
+                                  <span className="font-extrabold text-mex-terracotta bg-red-50 px-1 rounded-sm border border-red-100">
+                                    {getTostadaFilling(item)}
+                                  </span>
+                                </div>
+                                <div className="flex justify-between text-stone-600 border-b border-stone-100 pb-0.5">
+                                  <span>Verdura:</span>
+                                  <span className="font-extrabold text-stone-800">Lechuga Rallada</span>
+                                </div>
+                                <div className="flex justify-between text-stone-600 border-b border-stone-100 pb-0.5">
+                                  <span>Crema:</span>
+                                  <span className="font-extrabold text-stone-800">Crema Fresca</span>
+                                </div>
+                                <div className="flex justify-between text-stone-600">
+                                  <span>Queso:</span>
+                                  <span className="font-extrabold text-stone-800">Queso Cotija Espolvoreado</span>
+                                </div>
+                                {(item.hasExtraCheese || (item.fillings && item.fillings.includes('Queso Extra'))) && (
+                                  <div className="flex justify-between text-amber-700 bg-amber-100/60 p-1 rounded-md border border-amber-200 mt-1">
+                                    <span>Extra:</span>
+                                    <span className="font-black">🧀 Queso Extra Fundido</span>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })()}
                       </div>
                     </button>
 

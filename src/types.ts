@@ -60,6 +60,7 @@ export interface Order {
   id: string;
   folio?: string;
   tableNumber: string;
+  subAccount?: string;
   status: OrderStatus;
   items: OrderItem[];
   total: number;
@@ -96,6 +97,7 @@ export interface CashLog {
   userName: string;
   itemsSummary?: { name: string, quantity: number, price: number }[];
   cancelled?: boolean;
+  returned?: boolean;
   cancelledAt?: string;
   cancelledBy?: string;
   cancelReason?: string;
