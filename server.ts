@@ -83,6 +83,28 @@ async function startServer() {
     }
   });
 
+  // API Route to send a movement notification email directly
+  app.post("/api/send-email", async (req, res) => {
+    try {
+      const { logId, data } = req.body || {};
+      if (!data) {
+        return res.status(400).json({ success: false, error: "Faltan datos del movimiento (data)" });
+      }
+
+      const id = logId || ("LOG-" + Date.now());
+      const result = await sendMovementEmail(id, data);
+
+      res.json({
+        success: true,
+        logId: id,
+        details: result
+      });
+    } catch (err: any) {
+      console.error("Error sending movement email via API:", err);
+      res.status(500).json({ success: false, error: err?.message || String(err) });
+    }
+  });
+
   // --- BACKGROUND ROUTINE: FIRESTORE LIVE AUDIT LISTENER ---
   if (firebaseConfig.projectId) {
     try {
@@ -157,8 +179,22 @@ async function startServer() {
   });
 }
 
+const sentEmailLogIds = new Set<string>();
+
 // Send Email Utility
 async function sendMovementEmail(logId: string, data: any) {
+  if (logId && sentEmailLogIds.has(logId)) {
+    console.log(`[Email] Correo para log ID ${logId} ya fue enviado previamente. Omitiendo duplicado.`);
+    return { status: "already_sent", recipient: "lascazuelasbosques@gmail.com", logId };
+  }
+  if (logId) {
+    sentEmailLogIds.add(logId);
+    if (sentEmailLogIds.size > 500) {
+      const firstKey = sentEmailLogIds.values().next().value;
+      if (firstKey) sentEmailLogIds.delete(firstKey);
+    }
+  }
+
   const mailTo = "lascazuelasbosques@gmail.com";
   
   // SMTP credentials

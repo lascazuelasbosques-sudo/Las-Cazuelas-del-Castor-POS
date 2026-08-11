@@ -11,6 +11,7 @@ import { collection, onSnapshot, query, where, orderBy, doc, updateDoc, addDoc, 
 import { handleFirestoreError, OperationType } from "../lib/firestoreErrorHandler";
 import { isDrinkItem } from "../lib/drinkUtils";
 import toast from "react-hot-toast";
+import { sendMovementNotification } from "../lib/emailService";
 import { 
   addOfflineDoc, 
   updateOfflineDoc, 
@@ -1002,16 +1003,19 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
       });
 
       const logRef = doc(collection(db, "cashLogs"));
-      batch.set(logRef, {
+      const loanLogData = {
         type: 'expense',
         amount: amount,
         reason: `PRÉSTAMO PROPINAS: ${loanReason}${loanBorrower ? ` (A: ${loanBorrower})` : ''}`,
         timestamp: new Date().toISOString(),
         userId: auth.currentUser.uid,
         userName: getLoggedUserName()
-      });
+      };
+      batch.set(logRef, loanLogData);
 
       await batch.commit();
+
+      sendMovementNotification({ id: logRef.id, ...loanLogData });
 
       toast.success("Préstamo registrado en caja", { id: toastId });
       setShowLoanModal(false);
@@ -1040,16 +1044,19 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
       });
 
       const logRef = doc(collection(db, "cashLogs"));
-      batch.set(logRef, {
+      const returnLogData = {
         type: 'income',
         amount: loan.amount,
         reason: `DEVOLUCIÓN PRÉSTAMO PROPINAS: ${loan.reason}`,
         timestamp: new Date().toISOString(),
         userId: auth.currentUser.uid,
         userName: getLoggedUserName()
-      });
+      };
+      batch.set(logRef, returnLogData);
 
       await batch.commit();
+
+      sendMovementNotification({ id: logRef.id, ...returnLogData });
 
       toast.success("Dinero regresado a caja", { id: toastId });
     } catch (error) {
@@ -1145,7 +1152,7 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
       const logRef = doc(collection(db, "cashLogs"));
       const displayMethod = paymentMethod === 'card' ? 'Tarjeta' : paymentMethod === 'transfer' ? 'Transferencia' : paymentMethod === 'credit' ? 'Crédito' : 'Efectivo';
       const reasonSuffix = paymentMethod === 'credit' ? `Crédito: ${clientName.trim()}` : displayMethod;
-      batch.set(logRef, {
+      const paymentLogData = {
         type: 'income',
         amount: finalTotal,
         reason: `Pago ${selectedGroup.displayTitle} (${reasonSuffix}) - Folios: ${selectedGroup.folios.join(', ')}`,
@@ -1159,9 +1166,12 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
         cancelled: false,
         clientName: paymentMethod === 'credit' ? clientName.trim() : null,
         paymentMethod: paymentMethod
-      });
+      };
+      batch.set(logRef, paymentLogData);
 
       await batch.commit();
+
+      sendMovementNotification({ id: logRef.id, ...paymentLogData });
 
       setLastPaymentData({ group: selectedGroup, method: paymentMethod, total: finalTotal });
       setShowPaymentModal(false);
@@ -1231,7 +1241,7 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
         reason += ` (Ajustes: P:${formatCurrency(creditTip)} I:${formatCurrency(creditInterest)} E:${formatCurrency(creditExtra)})`;
       }
       
-      batch.set(logRef, {
+      const creditLogData = {
         type: 'income',
         amount: totalPaid,
         reason: reason,
@@ -1244,9 +1254,12 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
         clientName: selectedCreditOrder.clientName || null,
         isCreditSettlement: true,
         paymentMethod: creditPaymentMethod
-      });
+      };
+      batch.set(logRef, creditLogData);
 
       await batch.commit();
+
+      sendMovementNotification({ id: logRef.id, ...creditLogData });
 
       setShowCreditPaymentModal(false);
       setSelectedCreditOrder(null);
@@ -1297,9 +1310,11 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
       if (editingLog) {
         await updateDoc(doc(db, "cashLogs", editingLog.id), logData);
         toast.success("Registro actualizado");
+        sendMovementNotification({ id: editingLog.id, ...logData });
       } else {
-        await addDoc(collection(db, "cashLogs"), logData);
+        const docRef = await addDoc(collection(db, "cashLogs"), logData);
         toast.success("Registro guardado");
+        sendMovementNotification({ id: docRef.id, ...logData });
       }
 
       setShowLogModal(false);
@@ -2422,7 +2437,7 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
           }
 
           // Create an opening log
-          await addDoc(collection(db, "cashLogs"), {
+          const openingData = {
             type: 'opening',
             amount: physicalTotal,
             reason: `Arqueo de Apertura - Caja iniciada con ${formatCurrency(physicalTotal)}. ${differenceText}${auditNotes.trim() ? ` Notas: ${auditNotes.trim()}` : ''}`,
@@ -2431,18 +2446,22 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
             userName: auth.currentUser.displayName || auth.currentUser.email || "Usuario",
             openingDifference: openingDifference,
             previousClosingAmount: lastClosingAmount
-          });
+          };
+          const docRefOpening = await addDoc(collection(db, "cashLogs"), openingData);
+          sendMovementNotification({ id: docRefOpening.id, ...openingData });
           toast.success("Apertura de caja registrada con el arqueo inicial", { id: toastId });
         } else if (auditType === 'closing') {
           // Create a closing record
-          await addDoc(collection(db, "cashLogs"), {
+          const closingData = {
             type: 'closing',
             amount: physicalTotal,
             reason: `Arqueo de Cierre - Efectivo Esperado: ${formatCurrency(expectedTotal)}, Efectivo Físico: ${formatCurrency(physicalTotal)} (${difference < 0 ? 'FALTANTE' : 'SOBRANTE'}: ${formatCurrency(difference)}). Notas: ${auditNotes.trim() || 'Sin notas.'}`,
             timestamp: new Date().toISOString(),
             userId: auth.currentUser.uid,
             userName: auth.currentUser.displayName || auth.currentUser.email || "Usuario"
-          });
+          };
+          const docRefClosing = await addDoc(collection(db, "cashLogs"), closingData);
+          sendMovementNotification({ id: docRefClosing.id, ...closingData });
           toast.success("Cierre de caja registrado con el arqueo final", { id: toastId });
         } else {
           toast.success("Arqueo de control guardado correctamente", { id: toastId });
@@ -2471,14 +2490,16 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
     if (!auth.currentUser) return;
     
     try {
-      await addDoc(collection(db, "cashLogs"), {
+      const closingLogData = {
         type: 'closing',
         amount: totalCash,
         reason: `Cierre de Caja - Ventas Efectivo: ${formatCurrency(sessionStats.cashSales)}, Tarjeta: ${formatCurrency(sessionStats.cardSales)}, Transferencia: ${formatCurrency(sessionStats.transferSales)}, Crédito: ${formatCurrency(sessionStats.creditSales)}, Gastos: ${formatCurrency(sessionStats.expenses)}. Créditos pendientes al cierre: ${creditOrders.map(co => `${co.clientName}: ${formatCurrency(co.total)}`).join(', ')}`,
         timestamp: new Date().toISOString(),
         userId: auth.currentUser.uid,
         userName: auth.currentUser.displayName || auth.currentUser.email
-      });
+      };
+      const docRefClose = await addDoc(collection(db, "cashLogs"), closingLogData);
+      sendMovementNotification({ id: docRefClose.id, ...closingLogData });
       
       setShowClosingModal(false);
       toast.success("Caja cerrada correctamente");

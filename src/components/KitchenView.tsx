@@ -2527,7 +2527,7 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
               <Card 
                 key={ticket.id} 
                 className={cn(
-                  "flex flex-col border border-stone-200 shadow-lg transition-all rounded-[1.5rem] overflow-hidden bg-white h-[480px] md:h-[520px]",
+                  "flex flex-col border border-stone-200 shadow-lg transition-all rounded-2xl overflow-hidden bg-white h-auto max-h-[460px] md:max-h-[500px] self-start",
                   isTicketAlerting
                     ? (flashState 
                         ? "ring-4 ring-amber-500 shadow-amber-200 bg-amber-50/10 scale-[1.01] border-amber-400" 
@@ -2538,7 +2538,7 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
                 )}
               >
                 {/* --- TICKET HEADER --- */}
-                <CardHeader className="flex flex-row items-center justify-between bg-stone-100/90 p-3 border-b border-stone-200 shrink-0">
+                <CardHeader className="flex flex-row items-center justify-between bg-stone-100/90 p-2.5 px-3 border-b border-stone-200 shrink-0">
                   <div className="min-w-0 space-y-0.5">
                     <p className="text-[8px] text-stone-500 uppercase font-black tracking-widest leading-none">Mesa / Orden</p>
                     <p className={cn(
@@ -2597,12 +2597,12 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
                 </CardHeader>
 
               {/* --- TICKET CONTENT (ITEMS) --- */}
-              <CardContent className="p-3 space-y-1.5 flex-1 min-h-0 bg-stone-50/40 overflow-y-auto no-scrollbar">
+              <CardContent className="p-2 space-y-1 bg-stone-50/40 overflow-y-auto max-h-[360px] no-scrollbar">
                 {ticket.items.map((item, idx) => (
                   <div 
                     key={idx} 
                     className={cn(
-                      "w-full flex justify-between items-center p-2 rounded-xl border transition-all group bg-white shadow-xs", 
+                      "w-full flex justify-between items-center p-1.5 px-2 rounded-xl border transition-all group bg-white shadow-xs", 
                       item.status === 'completed' 
                         ? "bg-stone-50/70 opacity-35 border-stone-200" 
                         : (item.status === 'pending' || !item.status)
