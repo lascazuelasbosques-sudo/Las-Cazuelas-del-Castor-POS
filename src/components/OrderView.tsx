@@ -224,13 +224,11 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
       handleFirestoreError(error, OperationType.LIST, "products");
     });
 
-    const qActive = query(
-      collection(db, "orders"), 
-      where("status", "in", ["pending", "preparing", "ready", "served"]),
-      orderBy("createdAt", "desc")
-    );
-    const unsubActive = onOfflineSnapshot("orders", qActive, (allOrders) => {
-      setActiveOrders(allOrders);
+    const unsubActive = onOfflineSnapshot("orders", collection(db, "orders"), (allOrders) => {
+      const active = (allOrders || [])
+        .filter(order => order && ['pending', 'preparing', 'ready', 'served'].includes(order.status || 'pending'))
+        .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+      setActiveOrders(active);
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, "orders");
     });

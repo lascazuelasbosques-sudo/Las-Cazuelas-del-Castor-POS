@@ -5,6 +5,7 @@ import { Order, OrderStatus, OrderItem, Product } from "@/src/types";
 import { Clock, CheckCircle2, PlayCircle, ClipboardList, PlusCircle, Trash2, Ban, X, XCircle, Bell, BellOff, Volume2, VolumeX, Smartphone, Music, FileAudio, Search, Play, Pause, Plus, FolderOpen, ListMusic, Globe, Save, Shuffle } from "lucide-react";
 import { db, auth } from "../firebase";
 import { collection, onSnapshot, query, where, orderBy, doc, updateDoc, addDoc, arrayUnion } from "firebase/firestore";
+import { onOfflineSnapshot, updateOfflineDoc } from "@/src/lib/offlineService";
 import { cn, customRound } from "@/src/lib/utils";
 import { PWAInstallBanner } from "./PWAInstallBanner";
 import toast from "react-hot-toast";
@@ -741,17 +742,18 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
   // Compute tickets and pending alerts
   const tickets: KitchenTicket[] = [];
   orders.forEach(order => {
+    if (!order || !order.items || !Array.isArray(order.items) || order.items.length === 0) return;
     const itemsWithIndex = order.items.map((item, index) => ({ ...item, originalIndex: index }));
     
     // First, find if there are active (non-cancelled) specific items for plancha or cocina (excluding drinks/refrescos)
-    const activePlanchaSpecific = itemsWithIndex.some(i => i.station === 'plancha' && i.status !== 'cancelled' && !isDrinkItem(i, products));
+    const activePlanchaSpecific = itemsWithIndex.some(i => (i.station === 'plancha' || (i.station as string) === 'parrilla') && i.status !== 'cancelled' && !isDrinkItem(i, products));
     const activeCocinaSpecific = itemsWithIndex.some(i => (i.station === 'cocina' || !i.station) && i.status !== 'cancelled' && !isDrinkItem(i, products));
 
     const planchaItems = itemsWithIndex.filter(i => {
       if (i.status === 'cancelled') return false;
       if (isDrinkItem(i, products)) return false; // Refrescos go directly to cashier/cobro without passing through kitchen
       const isBistec = checkIsBistec(i);
-      if (isBistec || i.station === 'plancha') return true;
+      if (isBistec || i.station === 'plancha' || (i.station as string) === 'parrilla') return true;
       if (i.station === 'comun') {
         // Only route to plancha if plancha has active specific items and cocina does not
         return activePlanchaSpecific && !activeCocinaSpecific;
@@ -763,10 +765,10 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
       if (i.status === 'cancelled') return false;
       if (isDrinkItem(i, products)) return false; // Refrescos go directly to cashier/cobro without passing through kitchen
       const isBistec = checkIsBistec(i);
-      if (i.station === 'plancha' && !isBistec) return false;
+      if ((i.station === 'plancha' || (i.station as string) === 'parrilla') && !isBistec) return false;
 
       if (i.station === 'cocina' || !i.station || isBistec) {
-        if (i.station === 'plancha' && !i.name.toLowerCase().includes('chilaquiles') && !i.name.toLowerCase().includes('enchiladas') && !i.name.toLowerCase().includes('pambazo') && !i.name.toLowerCase().includes('gordita') && !i.name.toLowerCase().includes('tostada') && !i.name.toLowerCase().includes('taco') && !i.name.toLowerCase().includes('comida') && !i.name.toLowerCase().includes('platillo') && !i.name.toLowerCase().includes('sopa') && !i.name.toLowerCase().includes('sopes')) {
+        if ((i.station === 'plancha' || (i.station as string) === 'parrilla') && !i.name.toLowerCase().includes('chilaquiles') && !i.name.toLowerCase().includes('enchiladas') && !i.name.toLowerCase().includes('pambazo') && !i.name.toLowerCase().includes('gordita') && !i.name.toLowerCase().includes('tostada') && !i.name.toLowerCase().includes('taco') && !i.name.toLowerCase().includes('comida') && !i.name.toLowerCase().includes('platillo') && !i.name.toLowerCase().includes('sopa') && !i.name.toLowerCase().includes('sopes')) {
           return false;
         }
         return true;
@@ -774,6 +776,10 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
       if (i.station === 'comun') {
         // Route to cocina if cocina has active specific items, or if both have active items (to avoid duplication), or if neither does
         return activeCocinaSpecific || !activePlanchaSpecific;
+      }
+      // Safety fallback: if not in plancha and not a drink, route to cocina so it's never lost
+      if (!planchaItems.some(pi => pi.originalIndex === i.originalIndex)) {
+        return true;
       }
       return false;
     });
@@ -910,8 +916,7 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
   // Subscribe to products on mount
   useEffect(() => {
     const qProd = query(collection(db, "products"), orderBy("name", "asc"));
-    const unsubscribe = onSnapshot(qProd, (snapshot) => {
-      const prods = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Product));
+    const unsubscribe = onOfflineSnapshot("products", qProd, (prods) => {
       setProducts(prods);
     }, (error) => {
       console.error("Error loading products for kitchen:", error);
@@ -920,21 +925,24 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
   }, []);
 
   useEffect(() => {
-    const q = query(
-      collection(db, "orders"),
-      where("status", "in", ["pending", "preparing", "ready", "served"]),
-      orderBy("createdAt", "asc")
-    );
-
-    const unsubscribe = onSnapshot(q, async (snapshot) => {
-      const orderData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Order));
-      // Filter out WhatsApp/takeaway orders that have not been confirmed yet by the operator
-      const visibleOrders = orderData.filter(order => {
-        if (order.isTakeaway && order.whatsAppConfirmed === false) {
-          return false;
-        }
-        return true;
-      });
+    const unsubscribe = onOfflineSnapshot("orders", collection(db, "orders"), async (orderData) => {
+      const allOrders = orderData as Order[];
+      // Filter out completed, cancelled or non-kitchen statuses, and sort by creation time
+      const visibleOrders = (allOrders || [])
+        .filter(order => {
+          if (!order) return false;
+          if (order.status === 'cancelled') return false;
+          const status = order.status || 'pending';
+          if (!['pending', 'preparing', 'ready', 'served'].includes(status)) {
+            return false;
+          }
+          // Filter out WhatsApp/takeaway orders that have not been confirmed yet by the operator
+          if (order.isTakeaway && order.whatsAppConfirmed === false) {
+            return false;
+          }
+          return true;
+        })
+        .sort((a, b) => new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime());
 
       // --- DETECT CANCELLED ORDERS ---
       const prevOrders = prevOrdersRef.current;
@@ -1254,14 +1262,14 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
         };
         updateData.movementLogs = arrayUnion(movementLog);
 
-        await updateDoc(doc(db, "orders", orderId), updateData);
+        await updateOfflineDoc("orders", orderId, updateData);
         toast.success(`Comanda de ${station === 'plancha' ? 'Parrilla' : 'Cocina'} en preparación`);
       } else if (action === 'finish_station') {
         // Mark items for this station as completed
         const updatedItems = order.items.map(item => {
           let belongsToStation = false;
           if (station === 'plancha') {
-            if (item.station === 'plancha' || checkIsBistec(item)) belongsToStation = true;
+            if (item.station === 'plancha' || (item.station as string) === 'parrilla' || checkIsBistec(item)) belongsToStation = true;
             else if (item.station === 'comun') {
               belongsToStation = activePlanchaSpecific && !activeCocinaSpecific;
             }
@@ -1300,7 +1308,7 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
         };
         updateData.movementLogs = arrayUnion(movementLog);
 
-        await updateDoc(doc(db, "orders", orderId), updateData);
+        await updateOfflineDoc("orders", orderId, updateData);
         if (updateData.status === 'ready') {
           await notifyWhatsAppReady(orderId, order);
         }
@@ -1351,7 +1359,7 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
       };
       updateData.movementLogs = arrayUnion(movementLog);
 
-      await updateDoc(doc(db, "orders", orderId), updateData);
+      await updateOfflineDoc("orders", orderId, updateData);
       if (updateData.status === 'ready') {
         await notifyWhatsAppReady(orderId, order);
       }
@@ -1410,7 +1418,7 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
       };
       updateData.movementLogs = arrayUnion(movementLog);
 
-      await updateDoc(doc(db, "orders", orderId), updateData);
+      await updateOfflineDoc("orders", orderId, updateData);
       if (updateData.status === 'ready') {
         await notifyWhatsAppReady(orderId, order);
       }
@@ -1448,7 +1456,7 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
       };
       updateData.movementLogs = arrayUnion(movementLog);
 
-      await updateDoc(doc(db, "orders", orderId), updateData);
+      await updateOfflineDoc("orders", orderId, updateData);
       toast.success(`Comanda de Mesa ${order.tableNumber} ha sido cancelada por completo`);
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, "orders");
@@ -1521,9 +1529,8 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
         userRole: userInfo.userRole
       };
 
-      // We update the order in Firestore.
-      const orderRef = doc(db, "orders", latestOrder.id);
-      await updateDoc(orderRef, {
+      // We update the order using offline sync
+      await updateOfflineDoc("orders", latestOrder.id, {
         items: sanitizedItems,
         subtotal: newSubtotal,
         total: newTotal,

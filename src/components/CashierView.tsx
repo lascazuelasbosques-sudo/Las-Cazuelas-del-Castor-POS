@@ -872,14 +872,11 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
   const CARD_FEE_PERCENTAGE = 0.04; // 4% fee for card payments as requested
 
   useEffect(() => {
-    const qOrders = query(
-      collection(db, "orders"),
-      where("status", "in", ["pending", "preparing", "ready", "served"]),
-      orderBy("createdAt", "asc")
-    );
-
-    const unsubOrders = onOfflineSnapshot("orders", qOrders, (orderData) => {
-      setOrders(orderData);
+    const unsubOrders = onOfflineSnapshot("orders", collection(db, "orders"), (orderData) => {
+      const activeOrders = (orderData || [])
+        .filter(order => order && ['pending', 'preparing', 'ready', 'served'].includes(order.status || 'pending'))
+        .sort((a, b) => new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime());
+      setOrders(activeOrders);
       setLoading(false);
     }, (error) => {
       setLoading(false);
@@ -998,7 +995,7 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
         borrowerName: loanBorrower,
         status: 'pending',
         createdAt: new Date().toISOString(),
-        userId: auth.currentUser.uid,
+        userId: auth.currentUser?.uid || "anon",
         userName: getLoggedUserName()
       });
 
@@ -1008,7 +1005,7 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
         amount: amount,
         reason: `PRÉSTAMO PROPINAS: ${loanReason}${loanBorrower ? ` (A: ${loanBorrower})` : ''}`,
         timestamp: new Date().toISOString(),
-        userId: auth.currentUser.uid,
+        userId: auth.currentUser?.uid || "anon",
         userName: getLoggedUserName()
       };
       batch.set(logRef, loanLogData);
@@ -1049,7 +1046,7 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
         amount: loan.amount,
         reason: `DEVOLUCIÓN PRÉSTAMO PROPINAS: ${loan.reason}`,
         timestamp: new Date().toISOString(),
-        userId: auth.currentUser.uid,
+        userId: auth.currentUser?.uid || "anon",
         userName: getLoggedUserName()
       };
       batch.set(logRef, returnLogData);
@@ -1157,7 +1154,7 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
         amount: finalTotal,
         reason: `Pago ${selectedGroup.displayTitle} (${reasonSuffix}) - Folios: ${selectedGroup.folios.join(', ')}`,
         timestamp: new Date().toISOString(),
-        userId: auth.currentUser.uid,
+        userId: auth.currentUser?.uid || "anon",
         userName: getLoggedUserName(),
         itemsSummary,
         disposableQuantity: paymentDisposableQuantity,
@@ -1246,7 +1243,7 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
         amount: totalPaid,
         reason: reason,
         timestamp: new Date().toISOString(),
-        userId: auth.currentUser.uid,
+        userId: auth.currentUser?.uid || "anon",
         userName: getLoggedUserName(),
         transferReceiptUrl: creditPaymentMethod === 'transfer' ? (creditTransferReceipt || "") : null,
         orderIds: [selectedCreditOrder.id],
@@ -1298,7 +1295,7 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
         amount: amount,
         reason: logForm.reason.trim(),
         timestamp: editingLog ? editingLog.timestamp : new Date().toISOString(),
-        userId: auth.currentUser.uid,
+        userId: auth.currentUser?.uid || "anon",
         userName: getLoggedUserName()
       };
 
@@ -2383,8 +2380,8 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
       const auditData = {
         type: auditType,
         timestamp: new Date().toISOString(),
-        userId: auth.currentUser.uid,
-        userName: auth.currentUser.displayName || auth.currentUser.email || "Usuario",
+        userId: auth.currentUser?.uid || "anon",
+        userName: auth.currentUser?.displayName || auth.currentUser?.email || "Usuario",
         counts: auditCounts,
         totalSystem: expectedTotal,
         totalPhysical: physicalTotal,
@@ -2442,8 +2439,8 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
             amount: physicalTotal,
             reason: `Arqueo de Apertura - Caja iniciada con ${formatCurrency(physicalTotal)}. ${differenceText}${auditNotes.trim() ? ` Notas: ${auditNotes.trim()}` : ''}`,
             timestamp: new Date().toISOString(),
-            userId: auth.currentUser.uid,
-            userName: auth.currentUser.displayName || auth.currentUser.email || "Usuario",
+            userId: auth.currentUser?.uid || "anon",
+            userName: auth.currentUser?.displayName || auth.currentUser?.email || "Usuario",
             openingDifference: openingDifference,
             previousClosingAmount: lastClosingAmount
           };
@@ -2457,8 +2454,8 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
             amount: physicalTotal,
             reason: `Arqueo de Cierre - Efectivo Esperado: ${formatCurrency(expectedTotal)}, Efectivo Físico: ${formatCurrency(physicalTotal)} (${difference < 0 ? 'FALTANTE' : 'SOBRANTE'}: ${formatCurrency(difference)}). Notas: ${auditNotes.trim() || 'Sin notas.'}`,
             timestamp: new Date().toISOString(),
-            userId: auth.currentUser.uid,
-            userName: auth.currentUser.displayName || auth.currentUser.email || "Usuario"
+            userId: auth.currentUser?.uid || "anon",
+            userName: auth.currentUser?.displayName || auth.currentUser?.email || "Usuario"
           };
           const docRefClosing = await addDoc(collection(db, "cashLogs"), closingData);
           sendMovementNotification({ id: docRefClosing.id, ...closingData });
@@ -2495,8 +2492,8 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
         amount: totalCash,
         reason: `Cierre de Caja - Ventas Efectivo: ${formatCurrency(sessionStats.cashSales)}, Tarjeta: ${formatCurrency(sessionStats.cardSales)}, Transferencia: ${formatCurrency(sessionStats.transferSales)}, Crédito: ${formatCurrency(sessionStats.creditSales)}, Gastos: ${formatCurrency(sessionStats.expenses)}. Créditos pendientes al cierre: ${creditOrders.map(co => `${co.clientName}: ${formatCurrency(co.total)}`).join(', ')}`,
         timestamp: new Date().toISOString(),
-        userId: auth.currentUser.uid,
-        userName: auth.currentUser.displayName || auth.currentUser.email
+        userId: auth.currentUser?.uid || "anon",
+        userName: auth.currentUser?.displayName || auth.currentUser?.email || "Usuario"
       };
       const docRefClose = await addDoc(collection(db, "cashLogs"), closingLogData);
       sendMovementNotification({ id: docRefClose.id, ...closingLogData });
