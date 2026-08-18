@@ -5,11 +5,12 @@ import { Button } from "./Button";
 import { Card, CardContent } from "./Card";
 import { User, DEFAULT_USERS } from "../types";
 import { auth, db } from "../firebase";
-import { LogIn, User as UserIcon, Lock, RefreshCw, MessageCircle, Shield, ChefHat, Flame, ChevronRight, ArrowLeft } from "lucide-react";
+import { LogIn, User as UserIcon, Lock, RefreshCw, MessageCircle, Shield, ChefHat, Flame, ChevronRight, ArrowLeft, Smartphone } from "lucide-react";
 import toast from "react-hot-toast";
 import { useBranding } from "../lib/useBranding";
 import { motion, AnimatePresence } from "motion/react";
 import { cn } from "../lib/utils";
+import { OfflineInstallerModal } from "./OfflineInstallerModal";
 
 interface LoginProps {
   onLogin: (user: User) => void;
@@ -23,6 +24,7 @@ export const Login = ({ onLogin, onEnterPortal }: LoginProps) => {
   const [loginMode, setLoginMode] = useState<'landing' | 'credentials' | 'google'>('landing');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [showInstaller, setShowInstaller] = useState(false);
 
   const { branding } = useBranding();
 
@@ -376,6 +378,13 @@ export const Login = ({ onLogin, onEnterPortal }: LoginProps) => {
                   <span className="font-serif italic lowercase font-black text-xs">g</span>
                   Admin
                 </button>
+                <button 
+                  onClick={() => setShowInstaller(true)}
+                  className="flex items-center gap-1.5 px-3 py-1 bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 border border-amber-500/30 rounded-full text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer"
+                >
+                  <Smartphone size={12} className="text-amber-600" />
+                  Instalar / Offline
+                </button>
               </div>
             </div>
           </motion.div>
@@ -464,6 +473,11 @@ export const Login = ({ onLogin, onEnterPortal }: LoginProps) => {
       <p className="text-[9px] text-stone-300 font-bold uppercase tracking-[0.3em] fixed bottom-8 text-center w-full">
         v.4.0 • SISTEMA OFICIAL CAZUELAS
       </p>
+
+      <OfflineInstallerModal 
+        isOpen={showInstaller} 
+        onClose={() => setShowInstaller(false)} 
+      />
     </div>
   );
 };

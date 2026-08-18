@@ -14,6 +14,7 @@ import {
 } from "firebase/firestore";
 import { db } from "../firebase";
 import toast from "react-hot-toast";
+import { DEFAULT_FALLBACK_CATEGORIES, DEFAULT_FALLBACK_PRODUCTS } from "./defaultMenuData";
 
 export interface OfflineOperation {
   id: string;
@@ -98,13 +99,28 @@ function notifyStateChange() {
 // Local cache methods
 export function getLocalCache(collectionName: string): any[] {
   const dataStr = safeStorage.getItem(`offline_cache_col_${collectionName}`);
-  if (!dataStr) return [];
-  try {
-    return JSON.parse(dataStr);
-  } catch (e) {
-    console.error(`Error parsing local cache for ${collectionName}:`, e);
-    return [];
+  if (dataStr) {
+    try {
+      const parsed = JSON.parse(dataStr);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed;
+      }
+    } catch (e) {
+      console.error(`Error parsing local cache for ${collectionName}:`, e);
+    }
   }
+
+  // If local cache is empty or unavailable, provide default standard menu data immediately
+  if (collectionName === 'products') {
+    saveLocalCache('products', DEFAULT_FALLBACK_PRODUCTS);
+    return DEFAULT_FALLBACK_PRODUCTS;
+  }
+  if (collectionName === 'categories') {
+    saveLocalCache('categories', DEFAULT_FALLBACK_CATEGORIES);
+    return DEFAULT_FALLBACK_CATEGORIES;
+  }
+
+  return [];
 }
 
 export function saveLocalCache(collectionName: string, data: any[]) {
@@ -115,6 +131,29 @@ export function saveLocalCache(collectionName: string, data: any[]) {
     console.error(`Error saving local cache for ${collectionName}:`, e);
   }
 }
+
+/**
+ * Preloads and warms up the offline cache for all foods and categories
+ * ensuring zero data loss and immediate offline usability on any device.
+ */
+export function preloadMenuCache() {
+  try {
+    const cachedProducts = getLocalCache('products');
+    const cachedCategories = getLocalCache('categories');
+    
+    if (!cachedProducts || cachedProducts.length === 0) {
+      saveLocalCache('products', DEFAULT_FALLBACK_PRODUCTS);
+    }
+    if (!cachedCategories || cachedCategories.length === 0) {
+      saveLocalCache('categories', DEFAULT_FALLBACK_CATEGORIES);
+    }
+  } catch (err) {
+    console.warn("Failed to warm up menu cache:", err);
+  }
+}
+
+// Auto-run cache preload on load
+preloadMenuCache();
 
 // Cache listeners subscription
 export function subscribeToCollectionCache(collectionName: string, listener: CacheListener) {

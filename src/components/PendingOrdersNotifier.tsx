@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { collection, query, where, onSnapshot, orderBy } from "firebase/firestore";
+import { onOfflineSnapshot } from "../lib/offlineService";
 import { db } from "../firebase";
 import { Order, Category, Product } from "../types";
 import { Bell, BellOff, Volume2, VolumeX, AlertTriangle, Clock, ChevronDown, ChevronUp, Eye, CheckCircle2, Mic } from "lucide-react";
@@ -172,11 +173,11 @@ export function PendingOrdersNotifier({ userRole = 'waiter' }: { userRole?: stri
 
   // Load products and categories to identify drinks vs dishes
   useEffect(() => {
-    const unsubscribeCat = onSnapshot(collection(db, "categories"), (snapshot) => {
-      setCategories(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Category)));
+    const unsubscribeCat = onOfflineSnapshot("categories", collection(db, "categories"), (cats) => {
+      setCategories(cats as Category[]);
     });
-    const unsubscribeProd = onSnapshot(collection(db, "products"), (snapshot) => {
-      setProducts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Product)));
+    const unsubscribeProd = onOfflineSnapshot("products", collection(db, "products"), (prods) => {
+      setProducts(prods as Product[]);
     });
     return () => {
       unsubscribeCat();
@@ -186,9 +187,8 @@ export function PendingOrdersNotifier({ userRole = 'waiter' }: { userRole?: stri
 
   // Subscribe to unattended/unfinished orders
   useEffect(() => {
-    const unsubscribe = onSnapshot(collection(db, "orders"), async (snapshot) => {
-      const orders = snapshot.docs
-        .map(doc => ({ id: doc.id, ...doc.data() } as Order))
+    const unsubscribe = onOfflineSnapshot("orders", collection(db, "orders"), async (ordersList) => {
+      const orders = (ordersList as Order[])
         .filter(o => o.status === 'pending' || o.status === 'preparing')
         .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
 

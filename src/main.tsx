@@ -34,16 +34,22 @@ function AppWrapper() {
   return isStaff ? <App /> : <CustomerPortal />;
 }
 
-// Service Worker Registration for background communication (Only in production standalone)
+// Service Worker Registration for offline capability and background communication
 if ('serviceWorker' in navigator) {
-  if (import.meta.env.PROD && !window.location.hostname.includes('run.app') && !window.location.hostname.includes('localhost')) {
+  const isInsideIframe = window.self !== window.top;
+  // If we are not embedded in an editor iframe, register service worker
+  if (!isInsideIframe) {
     window.addEventListener('load', () => {
       navigator.serviceWorker.register('/sw.js')
-        .then(reg => console.log('Radio Service Worker registrado:', reg.scope))
+        .then(reg => {
+          console.log('PWA Offline Service Worker activo:', reg.scope);
+          // Check for updates
+          reg.update().catch(() => {});
+        })
         .catch(err => console.log('Error al registrar Service Worker:', err));
     });
   } else {
-    // Unregister stale service workers in dev/iframe preview to prevent blank screen or cached script conflicts
+    // Inside AI Studio iframe editor, avoid stale worker interception
     navigator.serviceWorker.getRegistrations().then(registrations => {
       for (let registration of registrations) {
         registration.unregister();

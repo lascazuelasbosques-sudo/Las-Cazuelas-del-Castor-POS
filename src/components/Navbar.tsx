@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Utensils, ClipboardList, Package, CreditCard, Settings, LogOut, Menu, ChefHat, MessageSquare, Bell, Maximize2, Minimize2, Radio } from "lucide-react";
+import { Utensils, ClipboardList, Package, CreditCard, Settings, LogOut, Menu, ChefHat, MessageSquare, Bell, Maximize2, Minimize2, Radio, Smartphone, Download } from "lucide-react";
 import { Button } from "./Button";
 import { cn, getRoleLabel } from "@/src/lib/utils";
 import { auth, db } from "../firebase";
@@ -7,6 +7,7 @@ import { collection, query, where, onSnapshot } from "firebase/firestore";
 import { Order } from "../types";
 import { useBranding } from "../lib/useBranding";
 import { PWAInstallBanner } from "./PWAInstallBanner";
+import { OfflineInstallerModal } from "./OfflineInstallerModal";
 import { WeatherClockWidget } from "./WeatherClockWidget";
 import { FullScreenLockControl } from "./FullScreenLockControl";
 import toast from "react-hot-toast";
@@ -51,6 +52,7 @@ export const Navbar = ({
   const [localIsFullscreen, setLocalIsFullscreen] = useState(false);
   const [isOffline, setIsOffline] = useState(getOfflineStatus());
   const [pendingOps, setPendingOps] = useState(getPendingOperationsCount());
+  const [isInstallerOpen, setIsInstallerOpen] = useState(false);
   
   const { branding } = useBranding();
 
@@ -452,6 +454,15 @@ export const Navbar = ({
           </button>
 
           <button
+            onClick={() => setIsInstallerOpen(true)}
+            className="flex flex-col items-center gap-1 p-2 rounded-xl text-amber-600 hover:bg-amber-50 shrink-0"
+            title="Instalar App / Preparar Offline"
+          >
+            <Download size={21} />
+            <span className="text-[9px] font-extrabold whitespace-nowrap">Instalar</span>
+          </button>
+
+          <button
             onClick={toggleFullscreen}
             className="flex flex-col items-center gap-1 p-2 rounded-xl text-stone-600 hover:bg-stone-50 shrink-0"
             title={isFullscreen ? "Salir de Pantalla Completa" : "Pantalla Completa"}
@@ -574,6 +585,17 @@ export const Navbar = ({
         {/* Lock Screen Button */}
         <FullScreenLockControl />
 
+        {/* PWA / Offline Installer Button */}
+        <Button 
+          variant="outline" 
+          className="justify-center lg:justify-start gap-2.5 w-full border-amber-300/80 bg-amber-50/70 text-amber-900 hover:bg-amber-100 px-0 lg:px-3 h-[36px] rounded-xl text-xs font-bold transition-all shadow-sm"
+          title="Instalador del Sistema Offline"
+          onClick={() => setIsInstallerOpen(true)}
+        >
+          <Smartphone size={16} className="text-amber-600 shrink-0" />
+          <span className="hidden lg:inline">Instalar / Offline</span>
+        </Button>
+
         <Button 
           variant="ghost" 
           className="justify-center lg:justify-start gap-2.5 w-full text-stone-500 hover:text-red-600 hover:bg-red-50 px-0 lg:px-3 h-[36px] text-xs font-semibold"
@@ -584,6 +606,12 @@ export const Navbar = ({
           <span className="hidden lg:inline">Cerrar Sesión</span>
         </Button>
       </div>
+
+      {/* Offline PWA Installer Modal */}
+      <OfflineInstallerModal
+        isOpen={isInstallerOpen}
+        onClose={() => setIsInstallerOpen(false)}
+      />
     </nav>
   );
 };

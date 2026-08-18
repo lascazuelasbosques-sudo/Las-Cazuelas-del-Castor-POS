@@ -14,7 +14,7 @@ import {
   updateDoc, deleteDoc, doc, where, limit, runTransaction, getDocs,
   increment
 } from "firebase/firestore";
-import { updateOfflineDoc, addOfflineDoc } from "../lib/offlineService";
+import { updateOfflineDoc, addOfflineDoc, onOfflineSnapshot } from "../lib/offlineService";
 import { Order, Product, Category, Client, ChatChannel, ChatMessage } from "../types";
 import { formatCurrency, cn } from "@/src/lib/utils";
 import toast from "react-hot-toast";
@@ -168,9 +168,8 @@ export default function WhatsAppInternoView({ userRole, mode = 'staff' }: WhatsA
 
   // 1. Fetch products & categories
   useEffect(() => {
-    const unsubCats = onSnapshot(query(collection(db, "categories"), orderBy("order", "asc")), (snapshot) => {
-      const cats = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Category));
-      setCategories(cats);
+    const unsubCats = onOfflineSnapshot("categories", query(collection(db, "categories"), orderBy("order", "asc")), (cats) => {
+      setCategories(cats as Category[]);
       if (cats.length > 0 && !portalMenuCategory) {
         setPortalMenuCategory(cats[0].id);
       }
@@ -178,8 +177,8 @@ export default function WhatsAppInternoView({ userRole, mode = 'staff' }: WhatsA
       handleFirestoreError(error, OperationType.LIST, "categories");
     });
 
-    const unsubProds = onSnapshot(query(collection(db, "products"), orderBy("name", "asc")), (snapshot) => {
-      setProducts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Product)));
+    const unsubProds = onOfflineSnapshot("products", query(collection(db, "products"), orderBy("name", "asc")), (prods) => {
+      setProducts(prods as Product[]);
       setLoading(false);
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, "products");
