@@ -200,28 +200,68 @@ export function addToQueue(type: 'create' | 'update' | 'delete' | 'set', collect
   applyOperationToLocalCache(type, collectionName, docId, data);
 }
 
+function sanitizeDataForLocalCache(existingItem: any, data: any) {
+  if (!data) return data;
+  const cleanData: any = { ...data };
+  
+  // Handle arrayUnion / FieldValue for movementLogs or arrays
+  for (const key of Object.keys(cleanData)) {
+    const val = cleanData[key];
+    if (val && typeof val === 'object') {
+      // Check if it is a FieldValue / arrayUnion
+      if (val._methodName === 'arrayUnion' || val._elements || (val.constructor && val.constructor.name === 'FieldValue')) {
+        const elements = val._elements || (Array.isArray(val) ? val : []);
+        const existingArray = Array.isArray(existingItem?.[key]) ? existingItem[key] : [];
+        cleanData[key] = [...existingArray, ...elements];
+      }
+    }
+  }
+  return cleanData;
+}
+
+function withTimeout<T>(promise: Promise<T>, ms: number = 2500): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error(`Firestore operation timed out after ${ms}ms`));
+    }, ms);
+    promise
+      .then((res) => {
+        clearTimeout(timer);
+        resolve(res);
+      })
+      .catch((err) => {
+        clearTimeout(timer);
+        reject(err);
+      });
+  });
+}
+
 function applyOperationToLocalCache(type: 'create' | 'update' | 'delete' | 'set', collectionName: string, docId: string, data?: any) {
   const cache = getLocalCache(collectionName);
   let updatedCache = [...cache];
 
   if (type === 'create' || type === 'set') {
     const idx = updatedCache.findIndex(item => item.id === docId);
-    const itemData = { id: docId, ...data, updatedAt: Date.now() };
+    const existing = idx >= 0 ? updatedCache[idx] : null;
+    const cleanData = sanitizeDataForLocalCache(existing, data);
+    const itemData = { ...(existing || {}), id: docId, ...cleanData, updatedAt: Date.now() };
     if (type === 'create') {
       itemData.createdAt = itemData.createdAt || Date.now();
     }
     if (idx >= 0) {
-      updatedCache[idx] = { ...updatedCache[idx], ...itemData };
+      updatedCache[idx] = itemData;
     } else {
       updatedCache.push(itemData);
     }
   } else if (type === 'update') {
     const idx = updatedCache.findIndex(item => item.id === docId);
+    const existing = idx >= 0 ? updatedCache[idx] : null;
+    const cleanData = sanitizeDataForLocalCache(existing, data);
     if (idx >= 0) {
-      updatedCache[idx] = { ...updatedCache[idx], ...data, updatedAt: Date.now() };
+      updatedCache[idx] = { ...updatedCache[idx], ...cleanData, updatedAt: Date.now() };
     } else {
       // If not in cache, create stub with what we have
-      updatedCache.push({ id: docId, ...data, updatedAt: Date.now() });
+      updatedCache.push({ id: docId, ...cleanData, updatedAt: Date.now() });
     }
   } else if (type === 'delete') {
     updatedCache = updatedCache.filter(item => item.id !== docId);
@@ -240,6 +280,9 @@ export function generateDocId(collectionName: string): string {
 export async function addOfflineDoc(collectionName: string, data: any): Promise<{ id: string }> {
   const docId = generateDocId(collectionName);
   
+  // Mirror into local cache immediately
+  applyOperationToLocalCache('create', collectionName, docId, data);
+
   if (getOfflineStatus()) {
     addToQueue('create', collectionName, docId, data);
     toast.success("Guardado localmente (sin conexión)", { id: `offline-save-${docId}` });
@@ -248,12 +291,10 @@ export async function addOfflineDoc(collectionName: string, data: any): Promise<
 
   try {
     const docRef = doc(db, collectionName, docId);
-    await firestoreSetDoc(docRef, { ...data, createdAt: Date.now(), updatedAt: Date.now() });
-    // Mirror into local cache
-    applyOperationToLocalCache('create', collectionName, docId, data);
+    await withTimeout(firestoreSetDoc(docRef, { ...data, createdAt: Date.now(), updatedAt: Date.now() }), 2500);
     return { id: docId };
   } catch (error: any) {
-    console.warn("Firestore write failed, fallback to offline queue:", error);
+    console.warn("Firestore write failed or timed out, fallback to offline queue:", error);
     addToQueue('create', collectionName, docId, data);
     toast.success("Conexión inestable. Guardado localmente.", { id: `offline-fallback-${docId}` });
     return { id: docId };
@@ -261,6 +302,9 @@ export async function addOfflineDoc(collectionName: string, data: any): Promise<
 }
 
 export async function updateOfflineDoc(collectionName: string, docId: string, data: any): Promise<void> {
+  // Mirror into local cache immediately so UI updates instantly without lag
+  applyOperationToLocalCache('update', collectionName, docId, data);
+
   if (getOfflineStatus()) {
     addToQueue('update', collectionName, docId, data);
     toast.success("Modificación guardada localmente", { id: `offline-update-${docId}` });
@@ -269,16 +313,18 @@ export async function updateOfflineDoc(collectionName: string, docId: string, da
 
   try {
     const docRef = doc(db, collectionName, docId);
-    await firestoreUpdateDoc(docRef, { ...data, updatedAt: Date.now() });
-    applyOperationToLocalCache('update', collectionName, docId, data);
+    await withTimeout(firestoreUpdateDoc(docRef, { ...data, updatedAt: Date.now() }), 2500);
   } catch (error: any) {
-    console.warn("Firestore update failed, fallback to offline queue:", error);
+    console.warn("Firestore update failed or timed out, fallback to offline queue:", error);
     addToQueue('update', collectionName, docId, data);
     toast.success("Sin conexión. Modificación guardada localmente.", { id: `offline-fallback-${docId}` });
   }
 }
 
 export async function setOfflineDoc(collectionName: string, docId: string, data: any): Promise<void> {
+  // Mirror into local cache immediately
+  applyOperationToLocalCache('set', collectionName, docId, data);
+
   if (getOfflineStatus()) {
     addToQueue('set', collectionName, docId, data);
     toast.success("Guardado localmente", { id: `offline-set-${docId}` });
@@ -287,16 +333,18 @@ export async function setOfflineDoc(collectionName: string, docId: string, data:
 
   try {
     const docRef = doc(db, collectionName, docId);
-    await firestoreSetDoc(docRef, { ...data, updatedAt: Date.now() }, { merge: true });
-    applyOperationToLocalCache('set', collectionName, docId, data);
+    await withTimeout(firestoreSetDoc(docRef, { ...data, updatedAt: Date.now() }, { merge: true }), 2500);
   } catch (error: any) {
-    console.warn("Firestore set failed, fallback to offline queue:", error);
+    console.warn("Firestore set failed or timed out, fallback to offline queue:", error);
     addToQueue('set', collectionName, docId, data);
     toast.success("Sin conexión. Guardado localmente.", { id: `offline-fallback-${docId}` });
   }
 }
 
 export async function deleteOfflineDoc(collectionName: string, docId: string): Promise<void> {
+  // Mirror into local cache immediately so UI deletes instantly
+  applyOperationToLocalCache('delete', collectionName, docId);
+
   if (getOfflineStatus()) {
     addToQueue('delete', collectionName, docId);
     toast.success("Eliminado localmente", { id: `offline-delete-${docId}` });
@@ -305,10 +353,9 @@ export async function deleteOfflineDoc(collectionName: string, docId: string): P
 
   try {
     const docRef = doc(db, collectionName, docId);
-    await firestoreDeleteDoc(docRef);
-    applyOperationToLocalCache('delete', collectionName, docId);
+    await withTimeout(firestoreDeleteDoc(docRef), 2500);
   } catch (error: any) {
-    console.warn("Firestore delete failed, fallback to offline queue:", error);
+    console.warn("Firestore delete failed or timed out, fallback to offline queue:", error);
     addToQueue('delete', collectionName, docId);
     toast.success("Sin conexión. Eliminado localmente.", { id: `offline-fallback-${docId}` });
   }

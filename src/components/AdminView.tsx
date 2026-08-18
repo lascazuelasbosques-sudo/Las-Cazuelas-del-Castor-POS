@@ -1072,10 +1072,16 @@ export const AdminView = () => {
                                     title: "Eliminar Usuario",
                                     message: `¿Estás seguro de eliminar a ${u.name}? Esta acción no se puede deshacer.`,
                                     action: async () => {
-                                      await deleteDoc(doc(db, "users", u.id));
-                                      toast.success("Usuario eliminado");
-                                      fetchUsers();
-                                      setShowConfirmModal(false);
+                                      try {
+                                        await deleteDoc(doc(db, "users", u.id));
+                                        toast.success("Usuario eliminado");
+                                        fetchUsers();
+                                      } catch (err) {
+                                        console.error("Error deleting user:", err);
+                                        toast.error("Error al eliminar usuario");
+                                      } finally {
+                                        setShowConfirmModal(false);
+                                      }
                                     }
                                   });
                                   setShowConfirmModal(true);

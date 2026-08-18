@@ -173,6 +173,18 @@
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["senderName", "senderRole", "channel", "type", "createdAt"]
+    },
+    "RadioPresence": {
+      "title": "RadioPresence",
+      "description": "Presencia y estado de operadores conectados al Walkie-Talkie",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "role": { "type": "string" },
+        "lastSeen": { "type": "string", "format": "date-time" },
+        "status": { "type": "string", "enum": ["active", "offline"] }
+      },
+      "required": ["name", "role", "lastSeen", "status"]
     }
   },
   "firestore": {
@@ -187,6 +199,7 @@
     "/clients": { "schema": "Client", "description": "Colección de clientes registrados" },
     "/chats": { "schema": "ChatChannel", "description": "Canales de chat de clientes" },
     "/chats/{chatId}/messages": { "schema": "ChatMessage", "description": "Mensajes individuales de un canal" },
-    "/walkieMessages": { "schema": "WalkieMessage", "description": "Mensajes de audio y preestablecidos de Walkie-Talkie" }
+    "/walkieMessages": { "schema": "WalkieMessage", "description": "Mensajes de audio y preestablecidos de Walkie-Talkie" },
+    "/radioPresence": { "schema": "RadioPresence", "description": "Estado de presencia en tiempo real del Walkie-Talkie" }
   }
 }

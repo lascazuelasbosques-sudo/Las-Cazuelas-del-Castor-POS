@@ -15,6 +15,8 @@ import { sendMovementNotification } from "../lib/emailService";
 import { 
   addOfflineDoc, 
   updateOfflineDoc, 
+  setOfflineDoc,
+  deleteOfflineDoc,
   onOfflineSnapshot 
 } from "../lib/offlineService";
 
@@ -187,7 +189,7 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
         userRole: userInfo.userRole
       };
 
-      await updateDoc(orderRef, {
+      await updateOfflineDoc("orders", orderId, {
         items: newItems,
         total: newTotal,
         updatedAt: new Date().toISOString(),
@@ -1067,7 +1069,7 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
     
     const toastId = toast.loading("Eliminando registro...");
     try {
-      await deleteDoc(doc(db, "tipLoans", loanId));
+      await deleteOfflineDoc("tipLoans", loanId);
       toast.success("Préstamo eliminado", { id: toastId });
     } catch (error) {
       console.error("Error deleting tip loan:", error);
@@ -1335,7 +1337,7 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
       action: async (reason) => {
         const toastId = toast.loading("Eliminando/Cancelando registro...");
         try {
-          await updateDoc(doc(db, "cashLogs", id), {
+          await updateOfflineDoc("cashLogs", id, {
             cancelled: true,
             cancelledAt: new Date().toISOString(),
             cancelledBy: auth.currentUser?.displayName || auth.currentUser?.email || "Usuario",
@@ -1361,8 +1363,6 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
       action: async () => {
         const toastId = toast.loading("Cancelando pedidos...");
         try {
-          const batch = writeBatch(db);
-          
           const userInfo = getLoggedUserForLog();
           const cancelLog = {
             action: 'Cancelación de cuenta (Caja)',
@@ -1372,15 +1372,13 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
             userRole: userInfo.userRole
           };
 
-          group.orders.forEach(order => {
-            const orderRef = doc(db, "orders", order.id);
-            batch.update(orderRef, {
+          for (const order of group.orders) {
+            await updateOfflineDoc("orders", order.id, {
               status: "cancelled",
               updatedAt: new Date().toISOString(),
               movementLogs: arrayUnion(cancelLog)
             });
-          });
-          await batch.commit();
+          }
           toast.success("Pedidos cancelados correctamente", { id: toastId });
         } catch (error) {
           console.error("Error cancelling group orders:", error);
@@ -1397,8 +1395,6 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
   const handleAcceptGroupOrders = async (group: GroupedOrder) => {
     const toastId = toast.loading("Confirmando pedido...");
     try {
-      const batch = writeBatch(db);
-      
       const userInfo = getLoggedUserForLog();
       const confirmLog = {
         action: 'Pedido de WhatsApp aceptado (Caja)',
@@ -1408,15 +1404,13 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
         userRole: userInfo.userRole
       };
 
-      group.orders.forEach(order => {
-        const orderRef = doc(db, "orders", order.id);
-        batch.update(orderRef, {
+      for (const order of group.orders) {
+        await updateOfflineDoc("orders", order.id, {
           whatsAppConfirmed: true,
           updatedAt: new Date().toISOString(),
           movementLogs: arrayUnion(confirmLog)
         });
-      });
-      await batch.commit();
+      }
       
       // Notify the customer on WhatsApp if the order is from WhatsApp
       for (const order of group.orders) {
@@ -1425,13 +1419,13 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
           const notificationTxt = "👨‍🍳 *ACEPTADO:* Tu pedido ya fue aceptado por Las Cazuelas y está en espera en la cocina para ser preparado. ¡Te avisamos cuando iniciemos!";
           
           try {
-            await addDoc(collection(db, "chats", cleanPhone, "messages"), {
+            await addOfflineDoc(`chats/${cleanPhone}/messages`, {
               sender: "staff",
               text: notificationTxt,
               timestamp: new Date().toISOString(),
               status: "sent"
             });
-            await updateDoc(doc(db, "chats", cleanPhone), {
+            await updateOfflineDoc("chats", cleanPhone, {
               lastMessage: notificationTxt,
               lastMessageAt: new Date().toISOString(),
               unreadCount: 0
@@ -1458,11 +1452,8 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
       action: async (reason) => {
         const toastId = toast.loading("Cancelando cobro/registro...");
         try {
-          const batch = writeBatch(db);
-          
           // 1. Mark CashLog as cancelled
-          const logRef = doc(db, "cashLogs", log.id);
-          batch.update(logRef, {
+          await updateOfflineDoc("cashLogs", log.id, {
             cancelled: true,
             cancelledAt: new Date().toISOString(),
             cancelledBy: auth.currentUser?.displayName || auth.currentUser?.email || "Usuario",
@@ -1481,17 +1472,15 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
               userRole: userInfo.userRole
             };
 
-            log.orderIds.forEach(orderId => {
-              const orderRef = doc(db, "orders", orderId);
-              batch.update(orderRef, {
+            for (const orderId of log.orderIds) {
+              await updateOfflineDoc("orders", orderId, {
                 status: "cancelled",
                 updatedAt: new Date().toISOString(),
                 movementLogs: arrayUnion(cancelLog)
               });
-            });
+            }
           }
 
-          await batch.commit();
           toast.success("Registro/Cobro cancelado correctamente", { id: toastId });
         } catch (error) {
           console.error("Error cancelling log/cobro:", error);
@@ -1517,11 +1506,8 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
       action: async (reason) => {
         const toastId = toast.loading("Regresando ingreso...");
         try {
-          const batch = writeBatch(db);
-          
           // 1. Mark CashLog as cancelled and returned
-          const logRef = doc(db, "cashLogs", log.id);
-          batch.update(logRef, {
+          await updateOfflineDoc("cashLogs", log.id, {
             cancelled: true,
             returned: true,
             cancelledAt: new Date().toISOString(),
@@ -1541,16 +1527,15 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
               userRole: userInfo.userRole
             };
 
-            log.orderIds.forEach(orderId => {
-              const orderRef = doc(db, "orders", orderId);
+            for (const orderId of log.orderIds) {
               if (log.isCreditSettlement) {
-                batch.update(orderRef, {
+                await updateOfflineDoc("orders", orderId, {
                   creditStatus: 'pending',
                   updatedAt: new Date().toISOString(),
                   movementLogs: arrayUnion(returnLog)
                 });
               } else {
-                batch.update(orderRef, {
+                await updateOfflineDoc("orders", orderId, {
                   status: "served",
                   paymentMethod: null,
                   creditStatus: null,
@@ -1558,10 +1543,9 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
                   movementLogs: arrayUnion(returnLog)
                 });
               }
-            });
+            }
           }
 
-          await batch.commit();
           toast.success(
             hasOrders 
               ? "Ingreso regresado correctamente. La comanda/mesa ha reaparecido en consumo activo." 

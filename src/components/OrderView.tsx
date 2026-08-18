@@ -626,7 +626,9 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
         movementLogs: arrayUnion(cancelLog)
       });
       toast.success("Pedido cancelado correctamente");
-      
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, "orders");
+    } finally {
       // Clear state
       setCart([]);
       setTableNumber('');
@@ -637,8 +639,6 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
       setEditingOrderWhatsAppUnconfirmed(false);
       setShowCartMobile(false);
       setShowConfirmCancel(false);
-    } catch (error) {
-      handleFirestoreError(error, OperationType.UPDATE, "orders");
     }
   };
 

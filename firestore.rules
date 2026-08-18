@@ -162,5 +162,9 @@ service cloud.firestore {
     match /walkieMessages/{msgId} {
       allow read, write: if true;
     }
+
+    match /radioPresence/{userId} {
+      allow read, write: if true;
+    }
   }
 }

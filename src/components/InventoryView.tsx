@@ -12,6 +12,7 @@ import { useBranding } from "../lib/useBranding";
 import toast from "react-hot-toast";
 import { restoreDeletedProducts } from "../seed";
 import { getFallbackProductImage, PRESET_FOOD_GALLERY } from "../lib/presetImages";
+import { onOfflineSnapshot, addOfflineDoc, updateOfflineDoc, deleteOfflineDoc } from "../lib/offlineService";
 
 interface InventoryViewProps {
   userRole?: string;
@@ -38,16 +39,16 @@ export const InventoryView = ({ userRole = 'waiter' }: InventoryViewProps) => {
   } | null>(null);
 
   useEffect(() => {
-    const unsubProd = onSnapshot(query(collection(db, "products"), orderBy("name", "asc")), (snapshot) => {
-      setProducts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Product)));
+    const unsubProd = onOfflineSnapshot("products", query(collection(db, "products"), orderBy("name", "asc")), (data) => {
+      setProducts(data as Product[]);
       setLoading(false);
     }, (error) => {
       setLoading(false);
       handleFirestoreError(error, OperationType.LIST, "products");
     });
 
-    const unsubCat = onSnapshot(query(collection(db, "categories"), orderBy("order", "asc")), (snapshot) => {
-      setCategories(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Category)));
+    const unsubCat = onOfflineSnapshot("categories", query(collection(db, "categories"), orderBy("order", "asc")), (data) => {
+      setCategories(data as Category[]);
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, "categories");
     });
@@ -66,7 +67,7 @@ export const InventoryView = ({ userRole = 'waiter' }: InventoryViewProps) => {
       message: "¿Estás seguro de que deseas eliminar esta comida/antojito? Esta acción no se puede deshacer.",
       action: async () => {
         try {
-          await deleteDoc(doc(db, "products", id));
+          await deleteOfflineDoc("products", id);
           toast.success("Comida eliminada con éxito");
         } catch (error) {
           handleFirestoreError(error, OperationType.DELETE, "products");
@@ -149,10 +150,10 @@ export const InventoryView = ({ userRole = 'waiter' }: InventoryViewProps) => {
 
       if (editingProduct.id) {
         const { id, ...data } = productData;
-        await updateDoc(doc(db, "products", id), data);
+        await updateOfflineDoc("products", id, data);
         toast.success("Comida/Antojito actualizado");
       } else {
-        await addDoc(collection(db, "products"), {
+        await addOfflineDoc("products", {
           ...productData,
           available: editingProduct.available ?? true,
         });

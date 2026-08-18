@@ -14,6 +14,7 @@ import {
   updateDoc, deleteDoc, doc, where, limit, runTransaction, getDocs,
   increment
 } from "firebase/firestore";
+import { updateOfflineDoc, addOfflineDoc } from "../lib/offlineService";
 import { Order, Product, Category, Client, ChatChannel, ChatMessage } from "../types";
 import { formatCurrency, cn } from "@/src/lib/utils";
 import toast from "react-hot-toast";
@@ -844,25 +845,24 @@ export default function WhatsAppInternoView({ userRole, mode = 'staff' }: WhatsA
   // --- Cancel an order from the control panel ---
   const handleCancelOrder = async (orderId: string) => {
     try {
-      await updateDoc(doc(db, "orders", orderId), {
+      await updateOfflineDoc("orders", orderId, {
         status: 'cancelled',
         whatsAppConfirmed: true, // Mark resolved
         updatedAt: new Date().toISOString()
       });
 
-      setCancellingOrderId(null);
       toast.error("¡Pedido cancelado y notificado al cliente!");
 
       const notificationTxt = "❌ *PEDIDO CANCELADO:* Tu pedido en Las Cazuelas ha sido cancelado por la mesa de control. Si tienes dudas, por favor contáctanos por aquí.";
 
       if (notificationTxt && selectedChatId) {
-        await addDoc(collection(db, "chats", selectedChatId, "messages"), {
+        await addOfflineDoc(`chats/${selectedChatId}/messages`, {
           sender: "staff",
           text: notificationTxt,
           timestamp: new Date().toISOString(),
           status: "sent"
         });
-        await updateDoc(doc(db, "chats", selectedChatId), {
+        await updateOfflineDoc("chats", selectedChatId, {
           lastMessage: notificationTxt,
           lastMessageAt: new Date().toISOString(),
           unreadCount: 0
@@ -870,13 +870,15 @@ export default function WhatsAppInternoView({ userRole, mode = 'staff' }: WhatsA
       }
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, `orders/${orderId}`);
+    } finally {
+      setCancellingOrderId(null);
     }
   };
 
   // --- Explicitly accept a WhatsApp order, releasing it to the Kitchen as Pending ---
   const handleAcceptOrder = async (orderId: string) => {
     try {
-      await updateDoc(doc(db, "orders", orderId), {
+      await updateOfflineDoc("orders", orderId, {
         whatsAppConfirmed: true,
         updatedAt: new Date().toISOString()
       });
@@ -885,13 +887,13 @@ export default function WhatsAppInternoView({ userRole, mode = 'staff' }: WhatsA
       const notificationTxt = "👨‍🍳 *ACEPTADO:* Tu pedido ya fue aceptado por Las Cazuelas y está en espera en la cocina para ser preparado. ¡Te avisamos cuando iniciemos!";
 
       if (notificationTxt && selectedChatId) {
-        await addDoc(collection(db, "chats", selectedChatId, "messages"), {
+        await addOfflineDoc(`chats/${selectedChatId}/messages`, {
           sender: "staff",
           text: notificationTxt,
           timestamp: new Date().toISOString(),
           status: "sent"
         });
-        await updateDoc(doc(db, "chats", selectedChatId), {
+        await updateOfflineDoc("chats", selectedChatId, {
           lastMessage: notificationTxt,
           lastMessageAt: new Date().toISOString(),
           unreadCount: 0
