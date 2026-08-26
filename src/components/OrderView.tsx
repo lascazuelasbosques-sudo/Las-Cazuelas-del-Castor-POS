@@ -343,7 +343,7 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
 
   const formatFillings = (fillings: string | string[]): string => {
     if (!fillings) return '';
-    const arr = (typeof fillings === 'string' ? [fillings] : fillings).filter(f => f !== 'Queso Extra');
+    const arr = typeof fillings === 'string' ? [fillings] : fillings;
     if (arr.length === 0) return '';
     if (arr.length === 1) return arr[0];
     if (arr.length === 2) return `${arr[0]} y ${arr[1]}`;
@@ -351,18 +351,6 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
   };
 
   const toggleFilling = (fillingId: string) => {
-    if (fillingId === 'Queso Extra') {
-      const isSelected = selectedFillings.includes('Queso Extra');
-      if (isSelected) {
-        setSelectedFillings(prev => prev.filter(f => f !== 'Queso Extra'));
-        setHasExtraCheeseOpt(false);
-      } else {
-        setSelectedFillings(prev => [...prev.filter(f => f !== 'Sencillo'), 'Queso Extra']);
-        setHasExtraCheeseOpt(true);
-      }
-      return;
-    }
-
     if (fillingId === 'Sencillo' || fillingId === 'Tradicional') {
       if (selectedFillings.includes(fillingId)) {
         setSelectedFillings([]);
@@ -384,15 +372,7 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
   };
 
   const toggleExtraCheeseButton = () => {
-    if (hasExtraCheeseOpt) {
-      setHasExtraCheeseOpt(false);
-      setSelectedFillings(prev => prev.filter(f => f !== 'Queso Extra'));
-    } else {
-      setHasExtraCheeseOpt(true);
-      if (!selectedFillings.includes('Queso Extra')) {
-        setSelectedFillings(prev => [...prev.filter(f => f !== 'Sencillo'), 'Queso Extra']);
-      }
-    }
+    toggleFilling('Queso');
   };
 
   const handleProductClick = (product: Product) => {
@@ -1542,7 +1522,7 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
                     { id: 'Pollo', label: 'Pollo', icon: '🍗' },
                     { id: 'Longaniza', label: 'Longaniza', icon: '🌭' },
                     { id: 'Campechano (Bistec y Longaniza)', label: 'Campechano (Bistec y Longaniza)', icon: '🔥' },
-                    { id: 'Queso Extra', label: 'Queso Extra (+$8)', icon: '🧀' },
+                    { id: 'Queso', label: 'Queso', icon: '🧀' },
                     { id: 'Chicharrón', label: 'Chicharrón', icon: '🥓' },
                     { id: 'Tinga de Pollo', label: 'Tinga de Pollo', icon: '🍗' },
                     { id: 'Tinga de Res', label: 'Tinga de Res', icon: '🥩' },
@@ -1579,13 +1559,13 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
 
               <div className="border-t border-stone-200/60 pt-4 space-y-3">
                 <label className="text-xs font-bold text-stone-500 uppercase tracking-wider block">
-                  Extras
+                  Adicionales / Queso Extra
                 </label>
                 <button
                   type="button"
-                  onClick={toggleExtraCheeseButton}
+                  onClick={() => setHasExtraCheeseOpt(!hasExtraCheeseOpt)}
                   className={`w-full p-4 rounded-xl border flex items-center justify-between transition-all ${
-                    (hasExtraCheeseOpt || selectedFillings.includes('Queso Extra'))
+                    hasExtraCheeseOpt
                       ? 'bg-yellow-50/80 border-amber-400 text-amber-900 font-bold shadow-xs'
                       : 'bg-white border-stone-200 text-stone-700 hover:border-stone-300'
                   }`}
@@ -1593,13 +1573,20 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
                   <div className="flex items-center gap-3">
                     <span className="text-2xl">🧀</span>
                     <div className="text-left">
-                      <p className="text-sm font-semibold">Queso / Quesillo Extra</p>
-                      <p className="text-[10px] text-stone-500 font-normal">Agrega doble queso fundido</p>
+                      <p className="text-sm font-semibold">Queso Extra Fundido</p>
+                      <p className="text-[10px] text-stone-500 font-normal">Agrega doble porción de queso</p>
                     </div>
                   </div>
-                  <span className="text-sm bg-amber-100 text-amber-800 px-2.5 py-1 rounded-lg font-bold">
-                    +$8 pesos
-                  </span>
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm bg-amber-100 text-amber-800 px-2.5 py-1 rounded-lg font-bold">
+                      +$8 pesos
+                    </span>
+                    <div className={`w-5 h-5 rounded-md flex items-center justify-center shrink-0 text-xs font-bold transition-all ${
+                      hasExtraCheeseOpt ? 'bg-amber-500 text-white shadow-3xs' : 'border border-stone-300 bg-stone-100 text-transparent'
+                    }`}>
+                      ✓
+                    </div>
+                  </div>
                 </button>
               </div>
             </CardContent>
@@ -1638,12 +1625,11 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
                 disabled={selectedFillings.length === 0}
                 className="flex-1 bg-mex-gold hover:bg-yellow-600 border-mex-gold text-white font-bold disabled:opacity-50 cursor-pointer text-xs" 
                 onClick={() => {
-                  const effectiveHasExtra = hasExtraCheeseOpt || selectedFillings.includes('Queso Extra');
-                  addToCart(productToCustomize, effectiveHasExtra, selectedFillings, customizeQuantity);
+                  addToCart(productToCustomize, hasExtraCheeseOpt, selectedFillings, customizeQuantity);
                   setProductToCustomize(null);
                 }}
               >
-                Agregar {customizeQuantity > 1 ? `(${customizeQuantity}) ` : ''}{formatCurrency((productToCustomize.price + ((hasExtraCheeseOpt || selectedFillings.includes('Queso Extra')) ? 8 : 0)) * customizeQuantity)}
+                Agregar {customizeQuantity > 1 ? `(${customizeQuantity}) ` : ''}{formatCurrency((productToCustomize.price + (hasExtraCheeseOpt ? 8 : 0)) * customizeQuantity)}
               </Button>
             </CardFooter>
           </Card>
