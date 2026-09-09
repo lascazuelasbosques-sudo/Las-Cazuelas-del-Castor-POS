@@ -785,6 +785,7 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
 
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [lastPaymentData, setLastPaymentData] = useState<{group: GroupedOrder, method: 'cash' | 'card' | 'transfer' | 'credit', total: number} | null>(null);
+  const [preAccountData, setPreAccountData] = useState<{group: GroupedOrder, total: number} | null>(null);
 
 
 
@@ -1176,6 +1177,15 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
       setLastPaymentData({ group: selectedGroup, method: paymentMethod, total: finalTotal });
       setShowPaymentModal(false);
       setShowSuccessModal(true);
+
+      // Auto print ticket immediately upon payment confirmation
+      triggerAutoPrintTicket({
+        group: selectedGroup,
+        method: paymentMethod,
+        total: finalTotal,
+        isPreAccount: false
+      });
+
       setSelectedGroup(null);
       setPaymentMethod('cash');
       setCashReceived('');
@@ -1260,6 +1270,23 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
       await batch.commit();
 
       sendMovementNotification({ id: logRef.id, ...creditLogData });
+
+      const creditGroup: GroupedOrder = {
+        id: selectedCreditOrder.id,
+        displayTitle: selectedCreditOrder.tableNumber || selectedCreditOrder.clientName || 'Crédito',
+        isTakeaway: !!selectedCreditOrder.isTakeaway,
+        total: totalPaid,
+        orders: [selectedCreditOrder],
+        waiterNames: [selectedCreditOrder.waiterName || 'Mesero'],
+        folios: [selectedCreditOrder.folio || '0']
+      };
+
+      triggerAutoPrintTicket({
+        group: creditGroup,
+        method: creditPaymentMethod,
+        total: totalPaid,
+        isPreAccount: false
+      });
 
       setShowCreditPaymentModal(false);
       setSelectedCreditOrder(null);
@@ -1790,6 +1817,147 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
       console.error("Error generating PDF:", error);
       toast.error("Error al generar el PDF");
       return null;
+    }
+  };
+
+  const generatePreAccountPDF = async (shouldDownload = true) => {
+    if (!preAccountData) return null;
+    const element = document.getElementById("preaccount-ticket-content");
+    if (!element) return null;
+
+    try {
+      const canvas = await html2canvas(element, { scale: 2 });
+      const imgData = canvas.toDataURL("image/png");
+      const pdf = new jsPDF({
+        orientation: "portrait",
+        unit: "mm",
+        format: [80, 160]
+      });
+
+      const width = pdf.internal.pageSize.getWidth();
+      const height = (canvas.height * width) / canvas.width;
+      
+      pdf.addImage(imgData, "PNG", 0, 0, width, height);
+      if (shouldDownload) {
+        pdf.save(`precuenta-${preAccountData.group.folios.join("-")}.pdf`);
+      }
+      return pdf;
+    } catch (error) {
+      console.error("Error generating pre-account PDF:", error);
+      toast.error("Error al generar el PDF");
+      return null;
+    }
+  };
+
+  const triggerAutoPrintTicket = async (ticketInfo: {
+    group: GroupedOrder;
+    method?: 'cash' | 'card' | 'transfer' | 'credit';
+    total: number;
+    isPreAccount?: boolean;
+  }) => {
+    try {
+      const g = ticketInfo.group;
+      const allItems = g.orders 
+        ? g.orders.flatMap(o => o.items || []) 
+        : ((g as any).items || []);
+
+      const usbDiag = getUsbPrinterDiagnostic();
+      if (usbDiag.connected && (usbDiag.connectionType === 'webusb' || usbDiag.connectionType === 'webserial')) {
+        const bytes = build50x60TicketBytes({
+          folio: g.folios?.[0] || '1',
+          customerName: g.displayTitle || 'General',
+          tableNumber: g.displayTitle || '',
+          orderType: g.isTakeaway ? 'takeout' : 'dine_in',
+          items: allItems,
+          total: ticketInfo.total,
+          paymentMethod: ticketInfo.method || 'cash',
+          isPreAccount: ticketInfo.isPreAccount
+        });
+        await sendUsbRawData(bytes);
+        toast.success(ticketInfo.isPreAccount ? "¡Pre-cuenta impresa por USB!" : "¡Ticket de venta impreso por USB!");
+      } else {
+        print50x60ViaSystem({
+          folio: g.folios?.[0] || '1',
+          tableNumber: g.displayTitle || '',
+          orderType: g.isTakeaway ? 'takeout' : 'dine_in',
+          items: allItems,
+          total: ticketInfo.total,
+          paymentMethod: ticketInfo.method || 'cash',
+          isPreAccount: ticketInfo.isPreAccount
+        });
+        toast.success(ticketInfo.isPreAccount ? "¡Imprimiendo recibo de pre-cuenta!" : "¡Imprimiendo ticket de venta!");
+      }
+    } catch (err: any) {
+      console.error("Error en impresión automática:", err);
+      const g = ticketInfo.group;
+      const allItems = g.orders ? g.orders.flatMap(o => o.items || []) : ((g as any).items || []);
+      print50x60ViaSystem({
+        folio: g.folios?.[0] || '1',
+        tableNumber: g.displayTitle || '',
+        orderType: g.isTakeaway ? 'takeout' : 'dine_in',
+        items: allItems,
+        total: ticketInfo.total,
+        paymentMethod: ticketInfo.method || 'cash',
+        isPreAccount: ticketInfo.isPreAccount
+      });
+    }
+  };
+
+  const handlePrintPreAccount = async (group: GroupedOrder, printType: 'usb' | 'standard' = 'usb') => {
+    const userInfo = getLoggedUserForLog();
+    const printLog = {
+      action: "Recibo de consumo (Pre-cuenta) impreso",
+      timestamp: new Date().toISOString(),
+      userId: userInfo.userId,
+      userName: userInfo.userName,
+      userRole: userInfo.userRole
+    };
+
+    try {
+      const batch = writeBatch(db);
+      group.orders.forEach(order => {
+        const orderRef = doc(db, "orders", order.id);
+        batch.update(orderRef, {
+          billPrintedAt: new Date().toISOString(),
+          movementLogs: arrayUnion(printLog)
+        });
+      });
+      await batch.commit();
+    } catch (err) {
+      console.error("Error al registrar impresión de pre-cuenta:", err);
+    }
+
+    await triggerAutoPrintTicket({
+      group,
+      total: group.total,
+      isPreAccount: true
+    });
+  };
+
+  const handleMarkPreAccountDelivered = async (group: GroupedOrder) => {
+    const userInfo = getLoggedUserForLog();
+    const printLog = {
+      action: "Recibo entregado al cliente (Cobro pendiente)",
+      timestamp: new Date().toISOString(),
+      userId: userInfo.userId,
+      userName: userInfo.userName,
+      userRole: userInfo.userRole
+    };
+
+    try {
+      const batch = writeBatch(db);
+      group.orders.forEach(order => {
+        const orderRef = doc(db, "orders", order.id);
+        batch.update(orderRef, {
+          billPrintedAt: new Date().toISOString(),
+          movementLogs: arrayUnion(printLog)
+        });
+      });
+      await batch.commit();
+      toast.success(`Recibo entregado a ${group.displayTitle}. Mesa con cobro pendiente.`);
+    } catch (err) {
+      console.error("Error al marcar recibo entregado:", err);
+      toast.error("Error al actualizar pedido.");
     }
   };
 
@@ -2788,13 +2956,19 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
                   <Card key={group.id} className={cn("border-none shadow-md hover:shadow-xl transition-all group overflow-hidden", group.isUnconfirmed && "ring-2 ring-amber-400 bg-amber-50/10")}>
                     <div className="p-5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                       <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2 mb-1">
+                        <div className="flex items-center gap-2 mb-1 flex-wrap">
                           <p className={cn("text-2xl font-black", group.isTakeaway ? "text-mex-terracotta" : "text-mex-green")}>
                             {group.displayTitle}
                           </p>
                           {group.isTakeaway && (
                             <span className={cn("px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest", group.isUnconfirmed ? "bg-amber-500/10 text-amber-600" : "bg-mex-terracotta/10 text-mex-terracotta")}>
                               {group.isUnconfirmed ? 'POR CONFIRMAR (WP)' : 'PARA LLEVAR'}
+                            </span>
+                          )}
+                          {group.orders.some(o => !!o.billPrintedAt) && (
+                            <span className="px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest bg-amber-100 text-amber-900 border border-amber-300 flex items-center gap-1 shadow-xs">
+                              <Receipt size={11} className="text-amber-700" />
+                              RECIBO ENTREGADO (PENDIENTE)
                             </span>
                           )}
                         </div>
@@ -2848,6 +3022,27 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
                             <Eye size={16} />
                             <span className="hidden sm:inline">{expandedGroups[group.id] ? 'OCULTAR' : 'VER COMIDAS'}</span>
                           </Button>
+                          {!group.isUnconfirmed && (
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              className={cn(
+                                "h-11 px-3 rounded-xl border font-black text-[10px] uppercase flex items-center justify-center gap-1.5 shrink-0 transition-all cursor-pointer",
+                                group.orders.some(o => !!o.billPrintedAt)
+                                  ? "bg-amber-100 border-amber-400 text-amber-900 shadow-xs hover:bg-amber-200"
+                                  : "border-amber-300 bg-amber-50/70 hover:bg-amber-100 text-amber-900"
+                              )}
+                              onClick={() => {
+                                setPreAccountData({ group, total: group.total });
+                              }}
+                              title="Imprimir Recibo de consumo / Pre-cuenta y dejar cobro pendiente"
+                            >
+                              <Receipt size={16} className="text-amber-700" />
+                              <span className="hidden sm:inline">
+                                {group.orders.some(o => !!o.billPrintedAt) ? 'RE-IMPRIMIR RECIBO' : 'PRE-CUENTA'}
+                              </span>
+                            </Button>
+                          )}
                           {group.isUnconfirmed ? (
                             <Button 
                               variant="primary" 
@@ -5099,7 +5294,7 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
                   </div>
                 </div>
 
-                <div className="pt-2">
+                <div className="pt-2 space-y-2">
                   <Button 
                     variant="primary" 
                     className="w-full h-14 text-lg font-black rounded-xl bg-mex-green hover:bg-mex-green/90 shadow-lg shadow-mex-green/20 tracking-widest disabled:grayscale disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer" 
@@ -5114,6 +5309,21 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
                     ) : paymentMethod === 'cash' && Number(cashReceived || 0) < finalTotal && Number(cashReceived || 0) > 0
                       ? `Faltan ${formatCurrency(finalTotal - Number(cashReceived || 0))}`
                       : 'CONFIRMAR PAGO'}
+                  </Button>
+
+                  <Button 
+                    type="button"
+                    variant="outline"
+                    className="w-full h-12 text-xs font-black rounded-xl border-2 border-amber-300 bg-amber-50/70 hover:bg-amber-100 text-amber-900 tracking-wider flex items-center justify-center gap-2 cursor-pointer transition-all"
+                    onClick={() => {
+                      if (selectedGroup) {
+                        setShowPaymentModal(false);
+                        setPreAccountData({ group: selectedGroup, total: finalTotal });
+                      }
+                    }}
+                  >
+                    <Receipt size={17} className="text-amber-700" />
+                    <span>IMPRIMIR RECIBO (DEJAR COBRO PENDIENTE)</span>
                   </Button>
                 </div>
               </div>
@@ -5191,6 +5401,202 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
         </div>
       )}
 
+      {/* Pre-Account / Receipt with Pending Payment Modal */}
+      {preAccountData && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[210] p-4 backdrop-blur-sm overflow-y-auto">
+          <Card className="w-full max-w-md rounded-[2rem] shadow-2xl bg-white border border-stone-200 overflow-hidden animate-in zoom-in-95 duration-200 my-auto">
+            <CardHeader className="bg-amber-600 text-white p-5 text-center relative">
+              <button 
+                type="button"
+                onClick={() => setPreAccountData(null)}
+                className="absolute top-4 right-4 text-white/80 hover:text-white bg-black/15 hover:bg-black/25 p-1.5 rounded-full transition-colors cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+              <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-2">
+                <Receipt size={24} />
+              </div>
+              <h3 className="text-xl font-black uppercase tracking-tight">Recibo de Consumo / Pre-Cuenta</h3>
+              <p className="text-white/90 text-xs mt-0.5 font-bold">Cobro pendiente — Imprime para que el cliente revise y pague</p>
+            </CardHeader>
+            <CardContent className="p-5 max-h-[75vh] overflow-y-auto space-y-4">
+              {/* Ticket Preview on Screen */}
+              <div id="preaccount-ticket-content" className="bg-white border-2 border-dashed border-stone-300 p-5 rounded-xl font-mono text-xs space-y-3 shadow-xs">
+                <div className="text-center space-y-1">
+                  <img 
+                    src="/logo_las_cazuelas_del_castor.jpg" 
+                    alt="Logo Las Cazuelas del Castor" 
+                    style={{ width: '20mm', height: '20mm', filter: 'grayscale(100%) contrast(140%)', WebkitFilter: 'grayscale(100%) contrast(140%)' }}
+                    className="rounded-full object-cover mx-auto mb-1.5 border border-stone-300 shadow-xs" 
+                  />
+                  <p className="font-black text-sm tracking-tight text-black">LAS CAZUELAS DEL CASTOR</p>
+                  <p className="font-extrabold text-[11px] text-amber-800 uppercase tracking-wider bg-amber-50 py-1 rounded border border-amber-200">
+                    PRE-CUENTA / COBRO PENDIENTE
+                  </p>
+                  <p className="text-[10px] text-stone-500">{new Date().toLocaleString()}</p>
+                </div>
+
+                <div className="border-t border-stone-200 pt-2 space-y-0.5 text-[11px]">
+                  <p>Mesa: <span className="font-semibold">{preAccountData.group.displayTitle}</span></p>
+                  <p>Folios: <span className="font-semibold">{preAccountData.group.folios.join(", ")}</span></p>
+                  <p>Mesero: <span className="font-semibold">{preAccountData.group.waiterNames[0] || 'Atendido'}</span></p>
+                </div>
+
+                <div className="border-t border-stone-200 pt-2 space-y-1 text-xs">
+                  {preAccountData.group.orders.flatMap(order => 
+                    order.items.map((item, idx) => (
+                      <div key={idx} className="flex justify-between">
+                        <span>{item.quantity}x {item.name}</span>
+                        <span className="font-semibold">{formatCurrency(item.price * item.quantity)}</span>
+                      </div>
+                    ))
+                  )}
+                </div>
+
+                <div className="border-t border-stone-200 pt-2 space-y-1.5 font-bold text-sm">
+                  <div className="flex justify-between text-base">
+                    <span>TOTAL A PAGAR:</span>
+                    <span className="text-mex-brown font-black">{formatCurrency(preAccountData.total)}</span>
+                  </div>
+                  <div className="text-center pt-2 text-[10px] text-stone-500 font-sans leading-tight">
+                    <p className="font-bold text-amber-800 uppercase">* CUENTA PENDIENTE DE PAGO *</p>
+                    <p>Favor de pagar en caja o con su mesero.</p>
+                    <p className="italic mt-1 text-stone-400">¡Gracias por su compra! Vuelva pronto</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Specialized System Print Portals for Pre-Account */}
+              {createPortal(
+                <div id="print-ticket" className="print-only" style={{ fontFamily: 'monospace', fontSize: '13px', lineHeight: '1.3', padding: '15px', width: '300px', margin: '0 auto' }}>
+                  <div style={{ textAlign: 'center', marginBottom: '12px' }}>
+                    <img 
+                      src="/logo_las_cazuelas_del_castor.jpg" 
+                      alt="Logo Las Cazuelas del Castor" 
+                      style={{ width: '20mm', height: '20mm', borderRadius: '50%', objectFit: 'cover', margin: '0 auto 6px auto', display: 'block', filter: 'grayscale(100%) contrast(150%)', WebkitFilter: 'grayscale(100%) contrast(150%)' }} 
+                    />
+                    <p style={{ fontWeight: 'bold', fontSize: '15px', margin: '3px 0' }}>LAS CAZUELAS DEL CASTOR</p>
+                    <p style={{ fontWeight: 'bold', fontSize: '12.5px', margin: '2px 0' }}>PRE-CUENTA / RECIBO DE CONSUMO</p>
+                    <p style={{ margin: '2px 0', fontSize: '11px', color: '#555' }}>(COBRO PENDIENTE)</p>
+                    <p style={{ margin: '2px 0', fontSize: '12px' }}>{new Date().toLocaleString()}</p>
+                  </div>
+                  <div style={{ borderTop: '1px dashed #000', borderBottom: '1px dashed #000', padding: '8px 0', margin: '8px 0', fontSize: '12.5px' }}>
+                    <p style={{ margin: '2px 0' }}>Mesa: {preAccountData.group.displayTitle}</p>
+                    <p style={{ margin: '2px 0' }}>Folios: {preAccountData.group.folios.join(", ")}</p>
+                    <p style={{ margin: '2px 0' }}>Mesero: {preAccountData.group.waiterNames[0] || 'Atendido'}</p>
+                  </div>
+                  <div style={{ borderBottom: '1px dashed #000', paddingBottom: '8px', marginBottom: '8px', fontSize: '12.5px' }}>
+                    {preAccountData.group.orders.flatMap(order => 
+                      order.items.map((item, idx) => (
+                        <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', margin: '3px 0' }}>
+                          <span>{item.quantity}x {item.name}</span>
+                          <span style={{ fontWeight: 'bold' }}>{formatCurrency(item.price * item.quantity)}</span>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                  <div style={{ fontWeight: 'bold', fontSize: '15px', paddingTop: '4px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span>TOTAL A PAGAR:</span>
+                      <span>{formatCurrency(preAccountData.total)}</span>
+                    </div>
+                  </div>
+                  <div style={{ textAlign: 'center', marginTop: '14px', fontSize: '11px', color: '#333' }}>
+                    <p style={{ fontWeight: 'bold', marginBottom: '2px' }}>* CUENTA PENDIENTE DE PAGO *</p>
+                    <p style={{ margin: '2px 0' }}>Favor de liquidar en caja o con su mesero</p>
+                    <p style={{ fontStyle: 'italic', marginTop: '6px' }}>¡Gracias por su visita! Vuelva pronto</p>
+                  </div>
+                </div>,
+                document.body
+              )}
+
+              {createPortal(
+                <div id="print-ticket-50x60" className="print-only">
+                  <div style={{ textAlign: 'center', marginBottom: '2px' }}>
+                    <img 
+                      src="/logo_las_cazuelas_del_castor.jpg" 
+                      alt="Logo Las Cazuelas del Castor" 
+                      style={{ width: '20mm', height: '20mm', borderRadius: '50%', objectFit: 'cover', margin: '0 auto 2px auto', display: 'block', filter: 'grayscale(100%) contrast(150%)', WebkitFilter: 'grayscale(100%) contrast(150%)' }} 
+                    />
+                    <div style={{ fontWeight: 'bold', fontSize: '10px', lineHeight: '1.15' }}>LAS CAZUELAS DEL CASTOR</div>
+                    <div style={{ fontWeight: '800', fontSize: '8.5px', marginTop: '1px' }}>PRE-CUENTA / PENDIENTE</div>
+                  </div>
+                  <div style={{ textAlign: 'center', fontSize: '8.5px' }}>Folio:#{preAccountData.group.folios[0] || '1'} | {preAccountData.group.displayTitle}</div>
+                  <div style={{ textAlign: 'center', fontSize: '8.5px' }}>{new Date().toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}</div>
+                  <div style={{ borderTop: '1px dashed #000', margin: '3px 0' }} />
+                  <div>
+                    {preAccountData.group.orders.flatMap(o => o.items || []).slice(0, 5).map((item, idx) => (
+                      <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '9px', margin: '1.5px 0' }}>
+                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '30mm' }}>{item.quantity} {item.name}</span>
+                        <span style={{ fontWeight: 'bold' }}>${(item.price * item.quantity).toFixed(0)}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{ borderTop: '1px dashed #000', margin: '3px 0' }} />
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold', fontSize: '11px' }}>
+                    <span>TOTAL A PAGAR:</span>
+                    <span>{formatCurrency(preAccountData.total)}</span>
+                  </div>
+                  <div style={{ textAlign: 'center', fontSize: '8.5px', marginTop: '3px', fontStyle: 'italic', fontWeight: 'bold' }}>
+                    Cuenta pendiente de cobro<br />Favor de liquidar en caja
+                  </div>
+                </div>,
+                document.body
+              )}
+
+              {/* Action Buttons */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                <Button 
+                  variant="outline" 
+                  className="flex items-center justify-center gap-2 h-14 rounded-xl border-stone-200 hover:bg-stone-50 text-stone-800 font-bold cursor-pointer"
+                  onClick={() => handlePrintPreAccount(preAccountData.group, 'usb')}
+                >
+                  <Usb size={18} className="text-amber-700" />
+                  <div className="text-left">
+                    <p className="text-[10px] font-black uppercase">Impresora Cable USB</p>
+                    <p className="text-[9px] text-stone-400 font-normal">Formato 50x60 mm</p>
+                  </div>
+                </Button>
+
+                <Button 
+                  variant="outline" 
+                  className="flex items-center justify-center gap-2 h-14 rounded-xl border-stone-200 hover:bg-stone-50 text-stone-800 font-bold cursor-pointer"
+                  onClick={() => handlePrintPreAccount(preAccountData.group, 'standard')}
+                >
+                  <Printer size={18} className="text-stone-600" />
+                  <div className="text-left">
+                    <p className="text-[10px] font-black uppercase">Ticket Estándar</p>
+                    <p className="text-[9px] text-stone-400 font-normal">Imprimir en Papel</p>
+                  </div>
+                </Button>
+
+                <Button 
+                  variant="outline" 
+                  className="flex items-center justify-center gap-2 h-12 rounded-xl border-stone-200 hover:bg-stone-50 text-stone-700 font-bold sm:col-span-2 cursor-pointer"
+                  onClick={() => generatePreAccountPDF(true)}
+                >
+                  <DownloadCloud size={16} className="text-amber-700" />
+                  <span className="text-[11px] font-black uppercase">Descargar Recibo en PDF</span>
+                </Button>
+              </div>
+            </CardContent>
+            <CardFooter className="p-5 pt-0 flex flex-col gap-2">
+              <Button 
+                variant="primary" 
+                className="w-full h-12 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-black text-xs uppercase tracking-wider shadow-md shadow-amber-600/20 flex items-center justify-center gap-2 cursor-pointer"
+                onClick={() => {
+                  handleMarkPreAccountDelivered(preAccountData.group);
+                  setPreAccountData(null);
+                }}
+              >
+                <CheckCircle2 size={16} />
+                <span>Dejar Cobro Pendiente (Entregar al Cliente)</span>
+              </Button>
+            </CardFooter>
+          </Card>
+        </div>
+      )}
+
       {/* Success Modal */}
       {showSuccessModal && lastPaymentData && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[200] p-4 backdrop-blur-sm">
@@ -5203,21 +5609,22 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
               <p className="text-white/80 text-sm mt-1">El pago ha sido registrado</p>
             </CardHeader>
             <CardContent className="p-6">
-              <div id="ticket-content" className="bg-white border-2 border-dashed border-stone-200 p-6 rounded-xl font-mono text-[10px] space-y-4 shadow-sm mb-6">
-                <div className="text-center space-y-1">
+              <div id="ticket-content" className="bg-white border-2 border-dashed border-stone-200 p-6 rounded-xl font-mono text-xs sm:text-sm space-y-4 shadow-sm mb-6">
+                <div className="text-center space-y-1.5">
                   <img 
                     src="/logo_las_cazuelas_del_castor.jpg" 
                     alt="Logo Las Cazuelas del Castor" 
-                    className="w-12 h-12 rounded-full object-cover mx-auto mb-1.5 border border-stone-200 shadow-xs" 
+                    style={{ width: '20mm', height: '20mm', filter: 'grayscale(100%) contrast(140%)', WebkitFilter: 'grayscale(100%) contrast(140%)' }}
+                    className="rounded-full object-cover mx-auto mb-2 border border-stone-300 shadow-xs" 
                   />
-                  <p className="font-black text-xs tracking-tight">LAS CAZUELAS DEL CASTOR</p>
-                  <p>Ticket de Venta</p>
-                  <p>{new Date().toLocaleString()}</p>
+                  <p className="font-black text-sm sm:text-base tracking-tight text-black">LAS CAZUELAS DEL CASTOR</p>
+                  <p className="text-xs text-stone-600">Ticket de Venta</p>
+                  <p className="text-xs text-stone-600">{new Date().toLocaleString()}</p>
                 </div>
-                <div className="border-t border-stone-200 pt-2 space-y-1">
-                  <p>Mesa: {lastPaymentData.group.displayTitle}</p>
-                  <p>Folios: {lastPaymentData.group.folios.join(", ")}</p>
-                  <p>Mesero: {lastPaymentData.group.waiterNames[0] || 'Atendido'}</p>
+                <div className="border-t border-stone-200 pt-2.5 space-y-1">
+                  <p>Mesa: <span className="font-semibold">{lastPaymentData.group.displayTitle}</span></p>
+                  <p>Folios: <span className="font-semibold">{lastPaymentData.group.folios.join(", ")}</span></p>
+                  <p>Mesero: <span className="font-semibold">{lastPaymentData.group.waiterNames[0] || 'Atendido'}</span></p>
                   {lastPaymentData.method === 'credit' && (
                     <>
                       <p className="font-bold text-red-700">MÉTODO: CRÉDITO</p>
@@ -5227,19 +5634,19 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
                     </>
                   )}
                 </div>
-                <div className="border-t border-stone-200 pt-2 space-y-1">
+                <div className="border-t border-stone-200 pt-2.5 space-y-1.5">
                   {lastPaymentData.group.orders.map(order => 
                     order.items.map((item, idx) => (
                       <div key={idx} className="flex justify-between">
                         <span>{item.quantity}x {item.name}</span>
-                        <span>{formatCurrency(item.price * item.quantity)}</span>
+                        <span className="font-semibold">{formatCurrency(item.price * item.quantity)}</span>
                       </div>
                     ))
                   )}
                 </div>
                 {lastPaymentData.group.orders.some(o => o.movementLogs && o.movementLogs.length > 0) && (
-                  <div className="border-t border-stone-250 pt-2 space-y-1 text-[8px] text-stone-600 font-mono leading-tight">
-                    <p className="font-bold uppercase tracking-wider text-[7px] text-stone-500">Historial de Comanda:</p>
+                  <div className="border-t border-stone-250 pt-2 space-y-1 text-[9px] text-stone-600 font-mono leading-tight">
+                    <p className="font-bold uppercase tracking-wider text-[8px] text-stone-500">Historial de Comanda:</p>
                     {lastPaymentData.group.orders.flatMap(o => o.movementLogs || []).sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()).map((log, idx) => (
                       <div key={idx} className="flex justify-between gap-2 border-b border-stone-100 pb-0.5 last:border-0">
                         <span>{log.action} ({log.userName} - {log.userRole})</span>
@@ -5248,45 +5655,45 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
                     ))}
                   </div>
                 )}
-                <div className="border-t border-stone-200 pt-2 space-y-1 font-bold text-xs">
-                  <div className="flex justify-between">
+                <div className="border-t border-stone-200 pt-3 space-y-2 font-bold text-sm">
+                  <div className="flex justify-between text-base">
                     <span>Total</span>
                     <span>{formatCurrency(lastPaymentData.total)}</span>
                   </div>
-                  <p className="text-center pt-4 italic font-normal text-stone-600">¡Gracias por su compra! Vuelva pronto</p>
+                  <p className="text-center pt-3 italic font-normal text-xs text-stone-600">¡Gracias por su compra! Vuelva pronto</p>
                 </div>
               </div>
 
               {createPortal(
-                <div id="print-ticket" className="print-only" style={{ fontFamily: 'monospace', fontSize: '11px', padding: '15px', width: '280px', margin: '0 auto' }}>
-                  <div style={{ textAlign: 'center', marginBottom: '10px' }}>
+                <div id="print-ticket" className="print-only" style={{ fontFamily: 'monospace', fontSize: '13px', lineHeight: '1.3', padding: '15px', width: '300px', margin: '0 auto' }}>
+                  <div style={{ textAlign: 'center', marginBottom: '12px' }}>
                     <img 
                       src="/logo_las_cazuelas_del_castor.jpg" 
                       alt="Logo Las Cazuelas del Castor" 
-                      style={{ width: '48px', height: '48px', borderRadius: '50%', objectFit: 'cover', margin: '0 auto 4px auto', display: 'block' }} 
+                      style={{ width: '20mm', height: '20mm', borderRadius: '50%', objectFit: 'cover', margin: '0 auto 6px auto', display: 'block', filter: 'grayscale(100%) contrast(150%)', WebkitFilter: 'grayscale(100%) contrast(150%)' }} 
                     />
-                    <p style={{ fontWeight: 'bold', fontSize: '13px', margin: '2px 0' }}>LAS CAZUELAS DEL CASTOR</p>
-                    <p style={{ margin: '2px 0' }}>Ticket de Venta</p>
-                    <p style={{ margin: '2px 0' }}>{new Date().toLocaleString()}</p>
+                    <p style={{ fontWeight: 'bold', fontSize: '15px', margin: '3px 0' }}>LAS CAZUELAS DEL CASTOR</p>
+                    <p style={{ margin: '2px 0', fontSize: '12px' }}>Ticket de Venta</p>
+                    <p style={{ margin: '2px 0', fontSize: '12px' }}>{new Date().toLocaleString()}</p>
                   </div>
-                  <div style={{ borderTop: '1px dashed #000', borderBottom: '1px dashed #000', padding: '8px 0', margin: '8px 0' }}>
+                  <div style={{ borderTop: '1px dashed #000', borderBottom: '1px dashed #000', padding: '8px 0', margin: '8px 0', fontSize: '12.5px' }}>
                     <p style={{ margin: '2px 0' }}>Mesa: {lastPaymentData.group.displayTitle}</p>
                     <p style={{ margin: '2px 0' }}>Folios: {lastPaymentData.group.folios.join(", ")}</p>
                     <p style={{ margin: '2px 0' }}>Mesero: {lastPaymentData.group.waiterNames[0] || 'Atendido'}</p>
                   </div>
-                  <div style={{ borderBottom: '1px dashed #000', paddingBottom: '8px', marginBottom: '8px' }}>
+                  <div style={{ borderBottom: '1px dashed #000', paddingBottom: '8px', marginBottom: '8px', fontSize: '12.5px' }}>
                     {lastPaymentData.group.orders.map(order => 
                       order.items.map((item, idx) => (
-                        <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', margin: '2px 0' }}>
+                        <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', margin: '3px 0' }}>
                           <span>{item.quantity}x {item.name}</span>
-                          <span>{formatCurrency(item.price * item.quantity)}</span>
+                          <span style={{ fontWeight: 'bold' }}>{formatCurrency(item.price * item.quantity)}</span>
                         </div>
                       ))
                     )}
                   </div>
                   {lastPaymentData.group.orders.some(o => o.movementLogs && o.movementLogs.length > 0) && (
-                    <div style={{ borderBottom: '1px dashed #000', paddingBottom: '8px', marginBottom: '8px', fontSize: '8px', color: '#333' }}>
-                      <p style={{ fontWeight: 'bold', margin: '2px 0', fontSize: '9px' }}>Historial de Comanda:</p>
+                    <div style={{ borderBottom: '1px dashed #000', paddingBottom: '8px', marginBottom: '8px', fontSize: '9px', color: '#333' }}>
+                      <p style={{ fontWeight: 'bold', margin: '2px 0', fontSize: '10px' }}>Historial de Comanda:</p>
                       {lastPaymentData.group.orders.flatMap(o => o.movementLogs || []).sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()).map((log, idx) => (
                         <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', margin: '2px 0' }}>
                           <span>{log.action} ({log.userName} - {log.userRole})</span>
@@ -5295,13 +5702,13 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
                       ))}
                     </div>
                   )}
-                  <div style={{ fontWeight: 'bold' }}>
+                  <div style={{ fontWeight: 'bold', fontSize: '15px', paddingTop: '4px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span>Total</span>
+                      <span>Total:</span>
                       <span>{formatCurrency(lastPaymentData.total)}</span>
                     </div>
                   </div>
-                  <p style={{ textAlign: 'center', marginTop: '15px', fontStyle: 'italic' }}>¡Gracias por su compra! Vuelva pronto</p>
+                  <p style={{ textAlign: 'center', marginTop: '15px', fontStyle: 'italic', fontSize: '12px' }}>¡Gracias por su compra! Vuelva pronto</p>
                 </div>,
                 document.body
               )}
@@ -5309,31 +5716,31 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
               {/* Specialized 50mm x 60mm Thermal Ticket Portal */}
               {createPortal(
                 <div id="print-ticket-50x60" className="print-only">
-                  <div style={{ textAlign: 'center', marginBottom: '1px' }}>
+                  <div style={{ textAlign: 'center', marginBottom: '2px' }}>
                     <img 
                       src="/logo_las_cazuelas_del_castor.jpg" 
                       alt="Logo Las Cazuelas del Castor" 
-                      style={{ width: '26px', height: '26px', borderRadius: '50%', objectFit: 'cover', margin: '0 auto 1px auto', display: 'block' }} 
+                      style={{ width: '20mm', height: '20mm', borderRadius: '50%', objectFit: 'cover', margin: '0 auto 2px auto', display: 'block', filter: 'grayscale(100%) contrast(150%)', WebkitFilter: 'grayscale(100%) contrast(150%)' }} 
                     />
-                    <div style={{ fontWeight: 'bold', fontSize: '8.5px', lineHeight: '1.1' }}>LAS CAZUELAS DEL CASTOR</div>
+                    <div style={{ fontWeight: 'bold', fontSize: '10px', lineHeight: '1.15' }}>LAS CAZUELAS DEL CASTOR</div>
                   </div>
-                  <div style={{ textAlign: 'center', fontSize: '7px' }}>Folio:#{lastPaymentData.group.folios[0] || '1'} | {lastPaymentData.group.displayTitle}</div>
-                  <div style={{ textAlign: 'center', fontSize: '7px' }}>{new Date().toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}</div>
-                  <div style={{ borderTop: '1px dashed #000', margin: '2px 0' }} />
+                  <div style={{ textAlign: 'center', fontSize: '8.5px' }}>Folio:#{lastPaymentData.group.folios[0] || '1'} | {lastPaymentData.group.displayTitle}</div>
+                  <div style={{ textAlign: 'center', fontSize: '8.5px' }}>{new Date().toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}</div>
+                  <div style={{ borderTop: '1px dashed #000', margin: '3px 0' }} />
                   <div>
                     {lastPaymentData.group.orders.flatMap(o => o.items || []).slice(0, 5).map((item, idx) => (
-                      <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '7.5px', margin: '1px 0' }}>
+                      <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '9px', margin: '1.5px 0' }}>
                         <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '30mm' }}>{item.quantity} {item.name}</span>
-                        <span>${(item.price * item.quantity).toFixed(0)}</span>
+                        <span style={{ fontWeight: 'bold' }}>${(item.price * item.quantity).toFixed(0)}</span>
                       </div>
                     ))}
                   </div>
-                  <div style={{ borderTop: '1px dashed #000', margin: '2px 0' }} />
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold', fontSize: '9px' }}>
+                  <div style={{ borderTop: '1px dashed #000', margin: '3px 0' }} />
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold', fontSize: '11px' }}>
                     <span>TOTAL:</span>
                     <span>{formatCurrency(lastPaymentData.total)}</span>
                   </div>
-                  <div style={{ textAlign: 'center', fontSize: '7px', marginTop: '2px', fontStyle: 'italic' }}>¡Gracias por su compra! Vuelva pronto</div>
+                  <div style={{ textAlign: 'center', fontSize: '8.5px', marginTop: '3px', fontStyle: 'italic', fontWeight: 'bold' }}>¡Gracias por su compra! Vuelva pronto</div>
                 </div>,
                 document.body
               )}

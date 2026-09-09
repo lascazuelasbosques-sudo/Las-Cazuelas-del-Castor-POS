@@ -271,6 +271,7 @@ export function build50x60TicketBytes(order: {
   total?: number;
   paymentMethod?: string;
   createdAt?: any;
+  isPreAccount?: boolean;
 }): Uint8Array {
   const ESC = '\x1B';
 
@@ -292,6 +293,12 @@ export function build50x60TicketBytes(order: {
   const dateStr = new Date().toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
   const typeLabel = order.orderType === 'takeout' ? 'Llevar' : (order.tableNumber || 'Mesa');
 
+  const headerTitle = order.isPreAccount ? "PRE-CUENTA / PENDIENTE\n" : "";
+  const totalLabel = order.isPreAccount ? "TOTAL A PAGAR:" : "TOTAL:";
+  const footerText = order.isPreAccount 
+    ? "CUENTA PENDIENTE DE COBRO\nFavor liquidar en caja\n" 
+    : "Gracias por su compra!\nVuelva pronto\n";
+
   const commands =
     ESC + '\x40' +                      // Init
     ESC + '\x33\x12' +                  // Compact line spacing (18 dots) for 60mm height limit
@@ -299,6 +306,7 @@ export function build50x60TicketBytes(order: {
     ESC + '\x45\x01' +                  // Bold ON
     "LAS CAZUELAS DEL CASTOR\n" +
     ESC + '\x45\x00' +                  // Bold OFF
+    headerTitle +
     `Folio:#${order.folio || '0'} | ${typeLabel}\n` +
     `Hora:${dateStr}\n` +
     "----------------------------\n" +   // 28 dashes (50mm width)
@@ -306,11 +314,10 @@ export function build50x60TicketBytes(order: {
     itemsBody +
     "----------------------------\n" +
     ESC + '\x45\x01' +
-    format28Columns("TOTAL:", `$${(order.total || 0).toFixed(2)}`) +
+    format28Columns(totalLabel, `$${(order.total || 0).toFixed(2)}`) +
     ESC + '\x45\x00' +
     ESC + '\x61\x01' +
-    "Gracias por su compra!\n" +
-    "Vuelva pronto\n" +
+    footerText +
     "\n\n\n";                           // 3 line feeds for tear
 
   return new TextEncoder().encode(commands);
@@ -370,6 +377,7 @@ export function print50x60ViaSystem(ticketData: {
   items?: Array<{ name: string; quantity: number; price: number; fillings?: string[]; hasExtraCheese?: boolean }>;
   total?: number;
   paymentMethod?: string;
+  isPreAccount?: boolean;
 }): void {
   // Ensure the dedicated 50x60 print container exists in document
   let printEl = document.getElementById('print-ticket-50x60');
@@ -382,28 +390,38 @@ export function print50x60ViaSystem(ticketData: {
 
   const itemsList = ticketData.items && ticketData.items.length > 0 
     ? ticketData.items.slice(0, 5).map(it => `
-        <div style="display: flex; justify-content: space-between; font-size: 7.5px; margin: 1px 0;">
+        <div style="display: flex; justify-content: space-between; font-size: 9px; margin: 1.5px 0;">
           <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 30mm;">${it.quantity} ${it.name}</span>
-          <span>$${((it.price || 0) * (it.quantity || 1)).toFixed(0)}</span>
+          <span style="font-weight: bold;">$${((it.price || 0) * (it.quantity || 1)).toFixed(0)}</span>
         </div>
       `).join('')
-    : '<div style="text-align: center; font-size: 7.5px;">Consumo General</div>';
+    : '<div style="text-align: center; font-size: 9px;">Consumo General</div>';
+
+  const preAccountHeader = ticketData.isPreAccount 
+    ? '<div style="font-weight: 800; font-size: 8.5px; margin-top: 1px; text-transform: uppercase;">PRE-CUENTA / PENDIENTE</div>'
+    : '';
+
+  const totalLabel = ticketData.isPreAccount ? 'TOTAL A PAGAR:' : 'TOTAL:';
+  const footerNote = ticketData.isPreAccount
+    ? 'Cuenta pendiente de cobro<br/>Favor de liquidar en caja'
+    : '¡Gracias por su compra! Vuelva pronto';
 
   printEl.innerHTML = `
-    <div style="text-align: center; margin-bottom: 1px;">
-      <img src="/logo_las_cazuelas_del_castor.jpg" alt="Logo Las Cazuelas del Castor" style="width: 26px; height: 26px; border-radius: 50%; object-fit: cover; margin: 0 auto 1px auto; display: block;" />
-      <div style="font-weight: bold; font-size: 8.5px; line-height: 1.1;">LAS CAZUELAS DEL CASTOR</div>
+    <div style="text-align: center; margin-bottom: 2px;">
+      <img src="/logo_las_cazuelas_del_castor.jpg" alt="Logo Las Cazuelas del Castor" style="width: 20mm; height: 20mm; border-radius: 50%; object-fit: cover; margin: 0 auto 2px auto; display: block; filter: grayscale(100%) contrast(150%); -webkit-filter: grayscale(100%) contrast(150%);" />
+      <div style="font-weight: bold; font-size: 10px; line-height: 1.15;">LAS CAZUELAS DEL CASTOR</div>
+      ${preAccountHeader}
     </div>
-    <div style="text-align: center; font-size: 7px;">Folio:#${ticketData.folio || '0001'} | ${ticketData.tableNumber || 'Mesa'}</div>
-    <div style="text-align: center; font-size: 7px;">${new Date().toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}</div>
-    <div style="border-top: 1px dashed #000; margin: 2px 0;"></div>
+    <div style="text-align: center; font-size: 8.5px;">Folio:#${ticketData.folio || '0001'} | ${ticketData.tableNumber || 'Mesa'}</div>
+    <div style="text-align: center; font-size: 8.5px;">${new Date().toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}</div>
+    <div style="border-top: 1px dashed #000; margin: 3px 0;"></div>
     <div>${itemsList}</div>
-    <div style="border-top: 1px dashed #000; margin: 2px 0;"></div>
-    <div style="display: flex; justify-content: space-between; font-weight: bold; font-size: 9px;">
-      <span>TOTAL:</span>
+    <div style="border-top: 1px dashed #000; margin: 3px 0;"></div>
+    <div style="display: flex; justify-content: space-between; font-weight: bold; font-size: 11px;">
+      <span>${totalLabel}</span>
       <span>$${(ticketData.total || 0).toFixed(2)}</span>
     </div>
-    <div style="text-align: center; font-size: 7px; margin-top: 2px; font-style: italic;">¡Gracias por su compra! Vuelva pronto</div>
+    <div style="text-align: center; font-size: 8.5px; margin-top: 3px; font-style: italic; font-weight: bold;">${footerNote}</div>
   `;
 
   // Add printing class to body to scope CSS

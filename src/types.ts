@@ -82,6 +82,7 @@ export interface Order {
   waiterName: string;
   notes?: string;
   whatsAppConfirmed?: boolean;
+  billPrintedAt?: string;
   movementLogs?: OrderMovementLog[];
 }
 

@@ -199,40 +199,41 @@ export const UsbPrinterModal: React.FC<UsbPrinterModalProps> = ({ isOpen, onClos
               Vista Previa a Escala del Recibo (50x60 mm)
             </span>
             <div 
-              className="bg-white border border-stone-300 shadow-md p-2 rounded-xs font-mono text-[8px] leading-tight text-black"
-              style={{ width: '188px', height: '226px', boxSizing: 'border-box', overflow: 'hidden' }}
+              className="bg-white border border-stone-300 shadow-md p-2.5 rounded-xs font-mono text-[9px] leading-tight text-black"
+              style={{ width: '188px', boxSizing: 'border-box' }}
             >
-              <div className="text-center mb-1">
+              <div className="text-center mb-1.5">
                 <img 
                   src="/logo_las_cazuelas_del_castor.jpg" 
                   alt="Logo" 
-                  className="w-7 h-7 rounded-full object-cover mx-auto mb-0.5 border border-stone-200" 
+                  style={{ width: '20mm', height: '20mm', filter: 'grayscale(100%) contrast(150%)', WebkitFilter: 'grayscale(100%) contrast(150%)' }}
+                  className="rounded-full object-cover mx-auto mb-1 border border-stone-300" 
                 />
-                <div className="font-bold text-[8.5px] leading-tight">LAS CAZUELAS DEL CASTOR</div>
+                <div className="font-bold text-[10px] leading-tight">LAS CAZUELAS DEL CASTOR</div>
               </div>
-              <div className="text-center text-[7px] text-stone-600">Folio:#0001 | Mesa 1</div>
-              <div className="text-center text-[7px] text-stone-600">Hora: 14:30</div>
-              <div className="border-t border-dashed border-black my-1"></div>
-              <div className="space-y-0.5">
+              <div className="text-center text-[8px] text-stone-600">Folio:#0001 | Mesa 1</div>
+              <div className="text-center text-[8px] text-stone-600">Hora: 14:30</div>
+              <div className="border-t border-dashed border-black my-1.5"></div>
+              <div className="space-y-1 text-[8.5px]">
                 <div className="flex justify-between">
                   <span>1 Cazuela Pastor</span>
-                  <span>$95</span>
+                  <span className="font-bold">$95</span>
                 </div>
                 <div className="flex justify-between">
                   <span>1 Queso Extra</span>
-                  <span>$15</span>
+                  <span className="font-bold">$15</span>
                 </div>
                 <div className="flex justify-between">
                   <span>1 Refresco</span>
-                  <span>$30</span>
+                  <span className="font-bold">$30</span>
                 </div>
               </div>
-              <div className="border-t border-dashed border-black my-1"></div>
-              <div className="flex justify-between font-bold text-[9px]">
+              <div className="border-t border-dashed border-black my-1.5"></div>
+              <div className="flex justify-between font-bold text-[11px]">
                 <span>TOTAL:</span>
                 <span>$140.00</span>
               </div>
-              <div className="text-center text-[7px] italic mt-1.5">¡Gracias por su compra! Vuelva pronto</div>
+              <div className="text-center text-[8.5px] italic font-bold mt-2">¡Gracias por su compra! Vuelva pronto</div>
             </div>
           </div>
 
