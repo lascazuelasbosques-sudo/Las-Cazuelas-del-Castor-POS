@@ -202,7 +202,14 @@ export const UsbPrinterModal: React.FC<UsbPrinterModalProps> = ({ isOpen, onClos
               className="bg-white border border-stone-300 shadow-md p-2 rounded-xs font-mono text-[8px] leading-tight text-black"
               style={{ width: '188px', height: '226px', boxSizing: 'border-box', overflow: 'hidden' }}
             >
-              <div className="text-center font-bold text-[9px] mb-0.5">LAS CAZUELAS</div>
+              <div className="text-center mb-1">
+                <img 
+                  src="/logo_las_cazuelas_del_castor.jpg" 
+                  alt="Logo" 
+                  className="w-7 h-7 rounded-full object-cover mx-auto mb-0.5 border border-stone-200" 
+                />
+                <div className="font-bold text-[8.5px] leading-tight">LAS CAZUELAS DEL CASTOR</div>
+              </div>
               <div className="text-center text-[7px] text-stone-600">Folio:#0001 | Mesa 1</div>
               <div className="text-center text-[7px] text-stone-600">Hora: 14:30</div>
               <div className="border-t border-dashed border-black my-1"></div>
@@ -225,7 +232,7 @@ export const UsbPrinterModal: React.FC<UsbPrinterModalProps> = ({ isOpen, onClos
                 <span>TOTAL:</span>
                 <span>$140.00</span>
               </div>
-              <div className="text-center text-[7px] italic mt-1.5">¡Gracias por su compra!</div>
+              <div className="text-center text-[7px] italic mt-1.5">¡Gracias por su compra! Vuelva pronto</div>
             </div>
           </div>
 

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { motion } from "motion/react";
-import { CreditCard, DollarSign, Receipt, TrendingUp, TrendingDown, Clock, CheckCircle2, Trash2, Edit2, Plus, X, AlertTriangle, History, Package, UploadCloud, DownloadCloud, Eye, Image as LucideImage, Calculator, ClipboardCheck, User, BarChart3, PieChart as PieChartIcon, Utensils, ArrowUpRight, Sparkles, Calendar, Share2, RefreshCw, Printer, BookOpen, Loader2, ShieldAlert, Split, Users, Scissors, Layers, RotateCcw, Bluetooth, Usb } from "lucide-react";
+import { CreditCard, DollarSign, Receipt, TrendingUp, TrendingDown, Clock, CheckCircle2, Trash2, Edit2, Plus, X, AlertTriangle, History, Package, UploadCloud, DownloadCloud, Eye, Image as LucideImage, Calculator, ClipboardCheck, User, BarChart3, PieChart as PieChartIcon, Utensils, ArrowUpRight, Sparkles, Calendar, Share2, RefreshCw, Printer, BookOpen, Loader2, ShieldAlert, Split, Users, Scissors, Layers, RotateCcw, Usb } from "lucide-react";
 import { Button } from "./Button";
 import { Card, CardContent, CardHeader, CardFooter } from "./Card";
 import { formatCurrency, cn, customRound } from "@/src/lib/utils";
@@ -10,7 +10,6 @@ import { db, auth } from "../firebase";
 import { collection, onSnapshot, query, where, orderBy, doc, updateDoc, addDoc, deleteDoc, writeBatch, getDocs, getDocsFromServer, arrayUnion } from "firebase/firestore";
 import { handleFirestoreError, OperationType } from "../lib/firestoreErrorHandler";
 import { isDrinkItem } from "../lib/drinkUtils";
-import { printOrderTicket } from "../lib/bluetoothPrinter";
 import { getUsbPrinterDiagnostic, sendUsbRawData, build50x60TicketBytes, print50x60ViaSystem } from "../lib/usbPrinter";
 import { sendMovementNotification } from "../lib/emailService";
 import toast from "react-hot-toast";
@@ -5206,7 +5205,12 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
             <CardContent className="p-6">
               <div id="ticket-content" className="bg-white border-2 border-dashed border-stone-200 p-6 rounded-xl font-mono text-[10px] space-y-4 shadow-sm mb-6">
                 <div className="text-center space-y-1">
-                  <p className="font-bold text-xs">LAS CAZUELAS DEL CASTOR</p>
+                  <img 
+                    src="/logo_las_cazuelas_del_castor.jpg" 
+                    alt="Logo Las Cazuelas del Castor" 
+                    className="w-12 h-12 rounded-full object-cover mx-auto mb-1.5 border border-stone-200 shadow-xs" 
+                  />
+                  <p className="font-black text-xs tracking-tight">LAS CAZUELAS DEL CASTOR</p>
                   <p>Ticket de Venta</p>
                   <p>{new Date().toLocaleString()}</p>
                 </div>
@@ -5249,13 +5253,18 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
                     <span>Total</span>
                     <span>{formatCurrency(lastPaymentData.total)}</span>
                   </div>
-                  <p className="text-center pt-4 italic">¡Gracias por su visita!</p>
+                  <p className="text-center pt-4 italic font-normal text-stone-600">¡Gracias por su compra! Vuelva pronto</p>
                 </div>
               </div>
 
               {createPortal(
                 <div id="print-ticket" className="print-only" style={{ fontFamily: 'monospace', fontSize: '11px', padding: '15px', width: '280px', margin: '0 auto' }}>
                   <div style={{ textAlign: 'center', marginBottom: '10px' }}>
+                    <img 
+                      src="/logo_las_cazuelas_del_castor.jpg" 
+                      alt="Logo Las Cazuelas del Castor" 
+                      style={{ width: '48px', height: '48px', borderRadius: '50%', objectFit: 'cover', margin: '0 auto 4px auto', display: 'block' }} 
+                    />
                     <p style={{ fontWeight: 'bold', fontSize: '13px', margin: '2px 0' }}>LAS CAZUELAS DEL CASTOR</p>
                     <p style={{ margin: '2px 0' }}>Ticket de Venta</p>
                     <p style={{ margin: '2px 0' }}>{new Date().toLocaleString()}</p>
@@ -5292,7 +5301,7 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
                       <span>{formatCurrency(lastPaymentData.total)}</span>
                     </div>
                   </div>
-                  <p style={{ textAlign: 'center', marginTop: '15px', fontStyle: 'italic' }}>¡Gracias por su visita!</p>
+                  <p style={{ textAlign: 'center', marginTop: '15px', fontStyle: 'italic' }}>¡Gracias por su compra! Vuelva pronto</p>
                 </div>,
                 document.body
               )}
@@ -5300,7 +5309,14 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
               {/* Specialized 50mm x 60mm Thermal Ticket Portal */}
               {createPortal(
                 <div id="print-ticket-50x60" className="print-only">
-                  <div style={{ textAlign: 'center', fontWeight: 'bold', fontSize: '9px', marginBottom: '1px' }}>LAS CAZUELAS</div>
+                  <div style={{ textAlign: 'center', marginBottom: '1px' }}>
+                    <img 
+                      src="/logo_las_cazuelas_del_castor.jpg" 
+                      alt="Logo Las Cazuelas del Castor" 
+                      style={{ width: '26px', height: '26px', borderRadius: '50%', objectFit: 'cover', margin: '0 auto 1px auto', display: 'block' }} 
+                    />
+                    <div style={{ fontWeight: 'bold', fontSize: '8.5px', lineHeight: '1.1' }}>LAS CAZUELAS DEL CASTOR</div>
+                  </div>
                   <div style={{ textAlign: 'center', fontSize: '7px' }}>Folio:#{lastPaymentData.group.folios[0] || '1'} | {lastPaymentData.group.displayTitle}</div>
                   <div style={{ textAlign: 'center', fontSize: '7px' }}>{new Date().toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}</div>
                   <div style={{ borderTop: '1px dashed #000', margin: '2px 0' }} />
@@ -5317,7 +5333,7 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
                     <span>TOTAL:</span>
                     <span>{formatCurrency(lastPaymentData.total)}</span>
                   </div>
-                  <div style={{ textAlign: 'center', fontSize: '7px', marginTop: '2px', fontStyle: 'italic' }}>¡Gracias por su visita!</div>
+                  <div style={{ textAlign: 'center', fontSize: '7px', marginTop: '2px', fontStyle: 'italic' }}>¡Gracias por su compra! Vuelva pronto</div>
                 </div>,
                 document.body
               )}
@@ -5395,41 +5411,6 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
                 >
                   <History size={20} className="text-stone-400" />
                   <span className="text-[10px] font-black uppercase">Imprimir Ticket Estándar (PDF/Papel)</span>
-                </Button>
-                <Button 
-                  variant="outline" 
-                  className="flex-col gap-2 h-20 rounded-2xl border-blue-200 bg-blue-50/50 hover:bg-blue-100 text-blue-900 md:col-span-2"
-                  onClick={async () => {
-                    const toastId = toast.loading("Enviando ticket a impresora 57mm...");
-                    try {
-                      const g = lastPaymentData?.group as any;
-                      const allItems = g?.orders 
-                        ? g.orders.flatMap((o: any) => o.items || []) 
-                        : (g?.items || []);
-
-                      await printOrderTicket({
-                        folio: g?.folios?.[0] || '1',
-                        customerName: g?.customerName || g?.displayTitle || 'General',
-                        tableNumber: g?.displayTitle || '',
-                        orderType: g?.isTakeaway ? 'takeout' : 'dine_in',
-                        items: allItems,
-                        total: lastPaymentData?.total || 0,
-                        amountPaid: lastPaymentData?.total || 0,
-                        changeDue: 0,
-                        paymentMethod: lastPaymentData?.method || 'cash',
-                        waiterName: g?.waiterNames?.[0] || 'Caja',
-                        createdAt: { seconds: Math.floor(Date.now() / 1000) }
-                      });
-                      toast.dismiss(toastId);
-                      toast.success("¡Ticket enviado a la impresora Bluetooth!");
-                    } catch (err: any) {
-                      toast.dismiss(toastId);
-                      toast.error(err.message || "Error al imprimir por Bluetooth. Conecte su impresora desde el menú.");
-                    }
-                  }}
-                >
-                  <Bluetooth size={20} className="text-blue-600" />
-                  <span className="text-[10px] font-black uppercase">Imprimir en Impresora Bluetooth 57mm (ESC/POS)</span>
                 </Button>
               </div>
             </CardContent>

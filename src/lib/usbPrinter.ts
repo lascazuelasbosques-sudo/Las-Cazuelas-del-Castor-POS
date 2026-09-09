@@ -297,7 +297,7 @@ export function build50x60TicketBytes(order: {
     ESC + '\x33\x12' +                  // Compact line spacing (18 dots) for 60mm height limit
     ESC + '\x61\x01' +                  // Center
     ESC + '\x45\x01' +                  // Bold ON
-    "LAS CAZUELAS\n" +
+    "LAS CAZUELAS DEL CASTOR\n" +
     ESC + '\x45\x00' +                  // Bold OFF
     `Folio:#${order.folio || '0'} | ${typeLabel}\n` +
     `Hora:${dateStr}\n` +
@@ -309,7 +309,8 @@ export function build50x60TicketBytes(order: {
     format28Columns("TOTAL:", `$${(order.total || 0).toFixed(2)}`) +
     ESC + '\x45\x00' +
     ESC + '\x61\x01' +
-    "¡Gracias por su compra!\n" +
+    "Gracias por su compra!\n" +
+    "Vuelva pronto\n" +
     "\n\n\n";                           // 3 line feeds for tear
 
   return new TextEncoder().encode(commands);
@@ -324,7 +325,7 @@ export async function printUsbTestTicket(): Promise<void> {
       ESC + '\x33\x12' +                  // Compact line spacing
       ESC + '\x61\x01' +                  // Center
       ESC + '\x45\x01' +                  // Bold ON
-      "LAS CAZUELAS\n" +
+      "LAS CAZUELAS DEL CASTOR\n" +
       ESC + '\x45\x00' +
       "PRUEBA USB 50X60\n" +
       `Fecha: ${new Date().toLocaleDateString('es-MX')}\n` +
@@ -338,7 +339,8 @@ export async function printUsbTestTicket(): Promise<void> {
       format28Columns("TOTAL:", "$0.00") +
       ESC + '\x45\x00' +
       ESC + '\x61\x01' +
-      "IMPRESION EXITOSA\n" +
+      "Gracias por su compra!\n" +
+      "Vuelva pronto\n" +
       "\n\n\n";
 
     const bytes = new TextEncoder().encode(commands);
@@ -388,7 +390,10 @@ export function print50x60ViaSystem(ticketData: {
     : '<div style="text-align: center; font-size: 7.5px;">Consumo General</div>';
 
   printEl.innerHTML = `
-    <div style="text-align: center; font-weight: bold; font-size: 9px; margin-bottom: 1px;">LAS CAZUELAS</div>
+    <div style="text-align: center; margin-bottom: 1px;">
+      <img src="/logo_las_cazuelas_del_castor.jpg" alt="Logo Las Cazuelas del Castor" style="width: 26px; height: 26px; border-radius: 50%; object-fit: cover; margin: 0 auto 1px auto; display: block;" />
+      <div style="font-weight: bold; font-size: 8.5px; line-height: 1.1;">LAS CAZUELAS DEL CASTOR</div>
+    </div>
     <div style="text-align: center; font-size: 7px;">Folio:#${ticketData.folio || '0001'} | ${ticketData.tableNumber || 'Mesa'}</div>
     <div style="text-align: center; font-size: 7px;">${new Date().toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}</div>
     <div style="border-top: 1px dashed #000; margin: 2px 0;"></div>
@@ -398,7 +403,7 @@ export function print50x60ViaSystem(ticketData: {
       <span>TOTAL:</span>
       <span>$${(ticketData.total || 0).toFixed(2)}</span>
     </div>
-    <div style="text-align: center; font-size: 7px; margin-top: 2px; font-style: italic;">¡Gracias por su compra!</div>
+    <div style="text-align: center; font-size: 7px; margin-top: 2px; font-style: italic;">¡Gracias por su compra! Vuelva pronto</div>
   `;
 
   // Add printing class to body to scope CSS
