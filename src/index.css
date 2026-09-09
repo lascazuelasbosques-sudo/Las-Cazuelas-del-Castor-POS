@@ -36,12 +36,38 @@
 }
 
 @media print {
+  @page {
+    margin: 0;
+  }
+  
+  body.printing-50x60 {
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
   body > * { display: none !important; }
   .print-only, .print-only *, .print-modal, .print-modal * {
     display: block !important;
   }
   .no-print, .no-print * {
     display: none !important;
+  }
+
+  #print-ticket-50x60 {
+    display: block !important;
+    width: 50mm !important;
+    max-width: 50mm !important;
+    height: 60mm !important;
+    max-height: 60mm !important;
+    overflow: hidden !important;
+    margin: 0 auto !important;
+    padding: 1.5mm !important;
+    font-size: 8px !important;
+    line-height: 1.15 !important;
+    font-family: 'Courier New', Courier, monospace !important;
+    color: #000 !important;
+    background: #fff !important;
+    box-sizing: border-box !important;
   }
 }
 

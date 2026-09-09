@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Utensils, ClipboardList, Package, CreditCard, Settings, LogOut, Menu, ChefHat, MessageSquare, Bell, Maximize2, Minimize2, Radio, Smartphone, Download } from "lucide-react";
+import { Utensils, ClipboardList, Package, CreditCard, Settings, LogOut, Menu, ChefHat, MessageSquare, Bell, Maximize2, Minimize2, Radio, Smartphone, Download, Bluetooth, Printer, Usb } from "lucide-react";
 import { Button } from "./Button";
 import { cn, getRoleLabel } from "@/src/lib/utils";
 import { auth, db } from "../firebase";
@@ -8,6 +8,8 @@ import { Order } from "../types";
 import { useBranding } from "../lib/useBranding";
 import { PWAInstallBanner } from "./PWAInstallBanner";
 import { OfflineInstallerModal } from "./OfflineInstallerModal";
+import { BluetoothPrinterModal } from "./BluetoothPrinterModal";
+import { UsbPrinterModal } from "./UsbPrinterModal";
 import { WeatherClockWidget } from "./WeatherClockWidget";
 import { FullScreenLockControl } from "./FullScreenLockControl";
 import toast from "react-hot-toast";
@@ -53,6 +55,8 @@ export const Navbar = ({
   const [isOffline, setIsOffline] = useState(getOfflineStatus());
   const [pendingOps, setPendingOps] = useState(getPendingOperationsCount());
   const [isInstallerOpen, setIsInstallerOpen] = useState(false);
+  const [isPrinterModalOpen, setIsPrinterModalOpen] = useState(false);
+  const [isUsbModalOpen, setIsUsbModalOpen] = useState(false);
   
   const { branding } = useBranding();
 
@@ -596,6 +600,28 @@ export const Navbar = ({
           <span className="hidden lg:inline">Instalar / Offline</span>
         </Button>
 
+        {/* USB Cable Printer Button (50x60) */}
+        <Button 
+          variant="outline" 
+          className="justify-center lg:justify-start gap-2.5 w-full border-amber-300/80 bg-amber-50 text-amber-900 hover:bg-amber-100 px-0 lg:px-3 h-[36px] rounded-xl text-xs font-bold transition-all shadow-sm"
+          title="Impresora por Cable USB (50x60mm)"
+          onClick={() => setIsUsbModalOpen(true)}
+        >
+          <Usb size={16} className="text-amber-700 shrink-0" />
+          <span className="hidden lg:inline">Impresora USB (50x60)</span>
+        </Button>
+
+        {/* Bluetooth Printer Button */}
+        <Button 
+          variant="outline" 
+          className="justify-center lg:justify-start gap-2.5 w-full border-stone-300 bg-stone-50 text-stone-800 hover:bg-stone-100 px-0 lg:px-3 h-[36px] rounded-xl text-xs font-bold transition-all shadow-sm"
+          title="Impresora Térmica Bluetooth (ESC/POS)"
+          onClick={() => setIsPrinterModalOpen(true)}
+        >
+          <Bluetooth size={16} className="text-blue-600 shrink-0" />
+          <span className="hidden lg:inline">Impresora BT</span>
+        </Button>
+
         <Button 
           variant="ghost" 
           className="justify-center lg:justify-start gap-2.5 w-full text-stone-500 hover:text-red-600 hover:bg-red-50 px-0 lg:px-3 h-[36px] text-xs font-semibold"
@@ -611,6 +637,18 @@ export const Navbar = ({
       <OfflineInstallerModal
         isOpen={isInstallerOpen}
         onClose={() => setIsInstallerOpen(false)}
+      />
+
+      {/* Bluetooth Printer Modal */}
+      <BluetoothPrinterModal
+        isOpen={isPrinterModalOpen}
+        onClose={() => setIsPrinterModalOpen(false)}
+      />
+
+      {/* USB Cable Printer Modal (50x60) */}
+      <UsbPrinterModal
+        isOpen={isUsbModalOpen}
+        onClose={() => setIsUsbModalOpen(false)}
       />
     </nav>
   );

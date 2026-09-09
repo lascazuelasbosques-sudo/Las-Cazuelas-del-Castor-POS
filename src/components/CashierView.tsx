@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { motion } from "motion/react";
-import { CreditCard, DollarSign, Receipt, TrendingUp, TrendingDown, Clock, CheckCircle2, Trash2, Edit2, Plus, X, AlertTriangle, History, Package, UploadCloud, DownloadCloud, Eye, Image as LucideImage, Calculator, ClipboardCheck, User, BarChart3, PieChart as PieChartIcon, Utensils, ArrowUpRight, Sparkles, Calendar, Share2, RefreshCw, Printer, BookOpen, Loader2, ShieldAlert, Split, Users, Scissors, Layers, RotateCcw } from "lucide-react";
+import { CreditCard, DollarSign, Receipt, TrendingUp, TrendingDown, Clock, CheckCircle2, Trash2, Edit2, Plus, X, AlertTriangle, History, Package, UploadCloud, DownloadCloud, Eye, Image as LucideImage, Calculator, ClipboardCheck, User, BarChart3, PieChart as PieChartIcon, Utensils, ArrowUpRight, Sparkles, Calendar, Share2, RefreshCw, Printer, BookOpen, Loader2, ShieldAlert, Split, Users, Scissors, Layers, RotateCcw, Bluetooth, Usb } from "lucide-react";
 import { Button } from "./Button";
 import { Card, CardContent, CardHeader, CardFooter } from "./Card";
 import { formatCurrency, cn, customRound } from "@/src/lib/utils";
@@ -10,8 +10,10 @@ import { db, auth } from "../firebase";
 import { collection, onSnapshot, query, where, orderBy, doc, updateDoc, addDoc, deleteDoc, writeBatch, getDocs, getDocsFromServer, arrayUnion } from "firebase/firestore";
 import { handleFirestoreError, OperationType } from "../lib/firestoreErrorHandler";
 import { isDrinkItem } from "../lib/drinkUtils";
-import toast from "react-hot-toast";
+import { printOrderTicket } from "../lib/bluetoothPrinter";
+import { getUsbPrinterDiagnostic, sendUsbRawData, build50x60TicketBytes, print50x60ViaSystem } from "../lib/usbPrinter";
 import { sendMovementNotification } from "../lib/emailService";
+import toast from "react-hot-toast";
 import { 
   addOfflineDoc, 
   updateOfflineDoc, 
@@ -5295,6 +5297,31 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
                 document.body
               )}
 
+              {/* Specialized 50mm x 60mm Thermal Ticket Portal */}
+              {createPortal(
+                <div id="print-ticket-50x60" className="print-only">
+                  <div style={{ textAlign: 'center', fontWeight: 'bold', fontSize: '9px', marginBottom: '1px' }}>LAS CAZUELAS</div>
+                  <div style={{ textAlign: 'center', fontSize: '7px' }}>Folio:#{lastPaymentData.group.folios[0] || '1'} | {lastPaymentData.group.displayTitle}</div>
+                  <div style={{ textAlign: 'center', fontSize: '7px' }}>{new Date().toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}</div>
+                  <div style={{ borderTop: '1px dashed #000', margin: '2px 0' }} />
+                  <div>
+                    {lastPaymentData.group.orders.flatMap(o => o.items || []).slice(0, 5).map((item, idx) => (
+                      <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '7.5px', margin: '1px 0' }}>
+                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '30mm' }}>{item.quantity} {item.name}</span>
+                        <span>${(item.price * item.quantity).toFixed(0)}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{ borderTop: '1px dashed #000', margin: '2px 0' }} />
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold', fontSize: '9px' }}>
+                    <span>TOTAL:</span>
+                    <span>{formatCurrency(lastPaymentData.total)}</span>
+                  </div>
+                  <div style={{ textAlign: 'center', fontSize: '7px', marginTop: '2px', fontStyle: 'italic' }}>¡Gracias por su visita!</div>
+                </div>,
+                document.body
+              )}
+
               <div className="grid grid-cols-2 gap-3">
                 <Button 
                   variant="outline" 
@@ -5312,13 +5339,97 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
                   <Receipt size={20} className="text-blue-500" />
                   <span className="text-[10px] font-black uppercase">Enviar Mail</span>
                 </Button>
+
+                {/* USB Cable 50x60mm Print Button */}
+                <Button 
+                  variant="outline" 
+                  className="flex-col gap-2 h-20 rounded-2xl border-amber-300 bg-amber-50/90 hover:bg-amber-100 text-amber-950 md:col-span-2 shadow-xs"
+                  onClick={async () => {
+                    const toastId = toast.loading("Enviando ticket a impresora USB 50x60mm...");
+                    try {
+                      const g = lastPaymentData?.group as any;
+                      const allItems = g?.orders 
+                        ? g.orders.flatMap((o: any) => o.items || []) 
+                        : (g?.items || []);
+
+                      const usbDiag = getUsbPrinterDiagnostic();
+                      if (usbDiag.connected) {
+                        const bytes = build50x60TicketBytes({
+                          folio: g?.folios?.[0] || '1',
+                          customerName: g?.customerName || g?.displayTitle || 'General',
+                          tableNumber: g?.displayTitle || '',
+                          orderType: g?.isTakeaway ? 'takeout' : 'dine_in',
+                          items: allItems,
+                          total: lastPaymentData?.total || 0,
+                          paymentMethod: lastPaymentData?.method || 'cash'
+                        });
+                        await sendUsbRawData(bytes);
+                        toast.dismiss(toastId);
+                        toast.success("¡Ticket 50x60mm enviado por cable USB!");
+                      } else {
+                        toast.dismiss(toastId);
+                        print50x60ViaSystem({
+                          folio: g?.folios?.[0] || '1',
+                          tableNumber: g?.displayTitle || '',
+                          orderType: g?.isTakeaway ? 'takeout' : 'dine_in',
+                          items: allItems,
+                          total: lastPaymentData?.total || 0,
+                          paymentMethod: lastPaymentData?.method || 'cash'
+                        });
+                        toast.success("¡Abriendo impresión 50x60mm para impresora USB!");
+                      }
+                    } catch (err: any) {
+                      toast.dismiss(toastId);
+                      toast.error(err.message || "Error al imprimir por USB.");
+                    }
+                  }}
+                >
+                  <Usb size={20} className="text-amber-700" />
+                  <span className="text-[10px] font-black uppercase">Imprimir en Impresora Cable USB (50x60 mm)</span>
+                </Button>
+
                 <Button 
                   variant="outline" 
                   className="flex-col gap-2 h-20 rounded-2xl border-stone-100 hover:bg-stone-50 md:col-span-2"
                   onClick={handlePrint}
                 >
                   <History size={20} className="text-stone-400" />
-                  <span className="text-[10px] font-black uppercase">Imprimir Ticket</span>
+                  <span className="text-[10px] font-black uppercase">Imprimir Ticket Estándar (PDF/Papel)</span>
+                </Button>
+                <Button 
+                  variant="outline" 
+                  className="flex-col gap-2 h-20 rounded-2xl border-blue-200 bg-blue-50/50 hover:bg-blue-100 text-blue-900 md:col-span-2"
+                  onClick={async () => {
+                    const toastId = toast.loading("Enviando ticket a impresora 57mm...");
+                    try {
+                      const g = lastPaymentData?.group as any;
+                      const allItems = g?.orders 
+                        ? g.orders.flatMap((o: any) => o.items || []) 
+                        : (g?.items || []);
+
+                      await printOrderTicket({
+                        folio: g?.folios?.[0] || '1',
+                        customerName: g?.customerName || g?.displayTitle || 'General',
+                        tableNumber: g?.displayTitle || '',
+                        orderType: g?.isTakeaway ? 'takeout' : 'dine_in',
+                        items: allItems,
+                        total: lastPaymentData?.total || 0,
+                        amountPaid: lastPaymentData?.total || 0,
+                        changeDue: 0,
+                        paymentMethod: lastPaymentData?.method || 'cash',
+                        waiterName: g?.waiterNames?.[0] || 'Caja',
+                        createdAt: { seconds: Math.floor(Date.now() / 1000) }
+                      });
+                      toast.dismiss(toastId);
+                      toast.success("¡Ticket enviado a la impresora Bluetooth!");
+                    } catch (err: any) {
+                      toast.dismiss(toastId);
+                      toast.error(err.message || "Error al imprimir por Bluetooth. Conecte su impresora desde el menú.");
+                    }
+                  }}
+                >
+                  <Bluetooth size={20} className="text-blue-600" />
+                  <span className="text-[10px] font-black uppercase">Imprimir en Impresora Bluetooth 57mm (ESC/POS)</span>
                 </Button>
               </div>
             </CardContent>
