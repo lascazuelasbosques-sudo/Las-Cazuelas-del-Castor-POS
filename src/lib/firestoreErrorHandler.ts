@@ -31,6 +31,11 @@ export interface FirestoreErrorInfo {
 
 export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
   const message = error instanceof Error ? error.message : String(error);
+  if (message.includes("unavailable") || message.includes("Could not reach Cloud Firestore backend") || message.includes("offline")) {
+    console.warn("Firestore operando en modo offline. Sincronización diferida activada.");
+    toast("Modo Sin Conexión: Los datos se están guardando localmente.", { id: "offline-firestore-toast", icon: "📶" });
+    return;
+  }
   if (message.includes("Quota limit exceeded") || message.includes("quota") || message.includes("RESOURCE_EXHAUSTED")) {
     toast.error("Límite de cuota diaria de Firestore alcanzado. Los cambios locales se sincronizarán al restablecerse la cuota.", { id: "quota-limit-toast" });
   }

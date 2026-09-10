@@ -1,6 +1,6 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
-import { initializeFirestore, memoryLocalCache, getFirestore, disableNetwork, enableNetwork } from 'firebase/firestore';
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, memoryLocalCache, getFirestore, disableNetwork, enableNetwork } from 'firebase/firestore';
 
 // This file will be created by the set_up_firebase tool
 import firebaseConfig from '../firebase-applet-config.json';
@@ -10,11 +10,18 @@ const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 let firestoreInstance;
 try {
   firestoreInstance = initializeFirestore(app, {
-    localCache: memoryLocalCache(),
-    experimentalForceLongPolling: true,
+    localCache: persistentLocalCache({
+      tabManager: persistentMultipleTabManager()
+    })
   }, firebaseConfig.firestoreDatabaseId);
 } catch (e) {
-  firestoreInstance = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+  try {
+    firestoreInstance = initializeFirestore(app, {
+      localCache: memoryLocalCache()
+    }, firebaseConfig.firestoreDatabaseId);
+  } catch (err) {
+    firestoreInstance = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+  }
 }
 
 export const db = firestoreInstance;
