@@ -25,33 +25,97 @@ export function getUsbPrinterDiagnostic(): UsbPrinterDiagnostic {
   return { ...currentDiagnostic };
 }
 
-// Connect via WebUSB (Direct USB Cable)
-export async function connectWebUsbPrinter(): Promise<UsbPrinterDiagnostic> {
+// Auto-connect to previously authorized WebUSB / WebSerial printer on app load
+export async function autoConnectUsbPrinter(): Promise<UsbPrinterDiagnostic> {
   const nav = navigator as any;
-  
-  // Check if running in restricted iframe
-  if (typeof window !== 'undefined' && window.self !== window.top) {
-    currentDiagnostic = {
-      connected: true,
-      deviceName: "Impresora USB (Driver de Sistema 50x60)",
-      connectionType: 'system',
-      isIframeRestricted: true
-    };
-    return currentDiagnostic;
+
+  // Try auto-reconnecting existing WebUSB device
+  if (nav?.usb?.getDevices) {
+    try {
+      const devices = await nav.usb.getDevices();
+      if (devices && devices.length > 0) {
+        const device = devices[0];
+        await device.open();
+        if (!device.configuration) {
+          await device.selectConfiguration(1);
+        }
+        const interfaces = device.configuration?.interfaces || [];
+        let claimedIface: any = null;
+        let foundOutEndpoint: any = null;
+
+        for (const iface of interfaces) {
+          for (const alt of (iface.alternates || [])) {
+            const outEp = alt.endpoints?.find((e: any) => e.direction === 'out');
+            if (outEp) {
+              try {
+                await device.claimInterface(iface.interfaceNumber);
+                claimedIface = iface;
+                foundOutEndpoint = outEp;
+                break;
+              } catch (claimErr) {
+                console.warn(`[USB Printer] Auto-connect couldn't claim iface ${iface.interfaceNumber}:`, claimErr);
+              }
+            }
+          }
+          if (claimedIface && foundOutEndpoint) break;
+        }
+
+        if (claimedIface && foundOutEndpoint) {
+          usbInterfaceNumber = claimedIface.interfaceNumber;
+          usbEndpointNumber = foundOutEndpoint.endpointNumber;
+          connectedUsbDevice = device;
+          connectedSerialPort = null;
+          currentDiagnostic = {
+            connected: true,
+            deviceName: device.productName || device.manufacturerName || "DeTong DP27 / Impresora USB Directa",
+            connectionType: 'webusb',
+            isIframeRestricted: false
+          };
+          console.log("[USB Printer] Re-conexión WebUSB automática exitosa:", currentDiagnostic);
+          return currentDiagnostic;
+        }
+      }
+    } catch (err) {
+      console.warn("[USB Printer] No se pudo reconectar WebUSB automáticamente:", err);
+    }
   }
 
+  // Try auto-reconnecting existing WebSerial port
+  if (nav?.serial?.getPorts) {
+    try {
+      const ports = await nav.serial.getPorts();
+      if (ports && ports.length > 0) {
+        const port = ports[0];
+        await port.open({ baudRate: 9600 });
+        connectedSerialPort = port;
+        connectedUsbDevice = null;
+        currentDiagnostic = {
+          connected: true,
+          deviceName: "Impresora Cable USB (Puerto Serie/COM)",
+          connectionType: 'webserial',
+          isIframeRestricted: false
+        };
+        console.log("[USB Printer] Re-conexión WebSerial automática exitosa");
+        return currentDiagnostic;
+      }
+    } catch (err) {
+      console.warn("[USB Printer] No se pudo reconectar WebSerial automáticamente:", err);
+    }
+  }
+
+  return currentDiagnostic;
+}
+
+// Connect via WebUSB (Direct USB Cable - Bypasses OS Print Spooler)
+export async function connectWebUsbPrinter(): Promise<UsbPrinterDiagnostic> {
+  const nav = navigator as any;
+
   if (!nav.usb) {
-    // If WebUSB not supported, default to System Print for USB printer
-    currentDiagnostic = {
-      connected: true,
-      deviceName: "Impresora USB (Driver de Sistema 50x60)",
-      connectionType: 'system'
-    };
-    return currentDiagnostic;
+    throw new Error("Su navegador no soporta WebUSB. Utilice Google Chrome o Microsoft Edge.");
   }
 
   try {
-    console.log("[USB Printer] Solicitando dispositivo USB...");
+    console.log("[USB Printer] Solicitando dispositivo USB directo (DeTong DP27 / Térmica)...");
     const device = await nav.usb.requestDevice({ filters: [] });
     
     await device.open();
@@ -59,54 +123,69 @@ export async function connectWebUsbPrinter(): Promise<UsbPrinterDiagnostic> {
       await device.selectConfiguration(1);
     }
 
-    // Find printer interface (Class 7 = Printer, or first available)
     const interfaces = device.configuration?.interfaces || [];
-    let selectedIface = interfaces.find((i: any) => 
-      i.alternates?.some((a: any) => a.interfaceClass === 7)
-    ) || interfaces[0];
+    let claimedIface: any = null;
+    let foundOutEndpoint: any = null;
 
-    if (!selectedIface) {
-      throw new Error("No se encontró una interfaz válida en el dispositivo USB.");
+    // 1. Try finding interface with Printer Class (7) or Vendor Class (255 / 0xFF) or any interface with an OUT endpoint
+    for (const iface of interfaces) {
+      for (const alt of (iface.alternates || [])) {
+        const outEp = alt.endpoints?.find((e: any) => e.direction === 'out');
+        if (outEp) {
+          try {
+            await device.claimInterface(iface.interfaceNumber);
+            claimedIface = iface;
+            foundOutEndpoint = outEp;
+            break;
+          } catch (claimErr) {
+            console.warn(`[USB Printer] No se pudo reclamar interfaz ${iface.interfaceNumber}:`, claimErr);
+          }
+        }
+      }
+      if (claimedIface && foundOutEndpoint) break;
     }
 
-    usbInterfaceNumber = selectedIface.interfaceNumber;
-    await device.claimInterface(usbInterfaceNumber);
-
-    // Find OUT endpoint for writing data
-    const alt = selectedIface.alternates?.[0];
-    const outEndpoint = alt?.endpoints?.find((e: any) => e.direction === 'out');
-    if (!outEndpoint) {
-      throw new Error("No se encontró un canal de salida (OUT Endpoint) para la impresora USB.");
+    if (!claimedIface || !foundOutEndpoint) {
+      // If WebUSB interface claim failed due to OS driver lock (e.g. DeTong Windows Driver active)
+      console.warn("[USB Printer] Interfaz bloqueada por el driver del SO. Usando modo Driver de Sistema.");
+      currentDiagnostic = {
+        connected: true,
+        deviceName: device.productName || device.manufacturerName || "DeTong DP27 (Driver del Sistema)",
+        connectionType: 'system',
+        isIframeRestricted: false
+      };
+      return currentDiagnostic;
     }
 
-    usbEndpointNumber = outEndpoint.endpointNumber;
+    usbInterfaceNumber = claimedIface.interfaceNumber;
+    usbEndpointNumber = foundOutEndpoint.endpointNumber;
     connectedUsbDevice = device;
     connectedSerialPort = null;
 
     currentDiagnostic = {
       connected: true,
-      deviceName: device.productName || device.manufacturerName || "Impresora USB 50x60",
+      deviceName: device.productName || device.manufacturerName || "DeTong DP27 / Impresora USB Directa",
       connectionType: 'webusb',
       isIframeRestricted: false
     };
 
-    console.log("[USB Printer] Conexión WebUSB exitosa:", currentDiagnostic);
+    console.log("[USB Printer] Conexión WebUSB directa exitosa con DeTong DP27 / Impresora:", currentDiagnostic);
     return currentDiagnostic;
   } catch (error: any) {
-    console.warn("[USB Printer] WebUSB no disponible en este contexto:", error);
+    console.warn("[USB Printer] Error al conectar WebUSB:", error);
     
-    // Check if disallowed by permissions policy (iframe) or user cancel
     const isPolicyRestricted = error.name === 'SecurityError' || 
       (error.message && error.message.toLowerCase().includes('permissions policy'));
 
     if (isPolicyRestricted) {
       currentDiagnostic = {
-        connected: true,
-        deviceName: "Impresora USB (Driver de Sistema 50x60)",
-        connectionType: 'system',
+        connected: false,
+        deviceName: "Acceso USB restringido en vista previa",
+        connectionType: 'none',
+        lastError: "Abra la aplicación en una pestaña nueva para otorgar permiso al puerto USB de DeTong DP27.",
         isIframeRestricted: true
       };
-      return currentDiagnostic;
+      throw new Error("El navegador bloquea el acceso USB dentro del marco de vista previa. Haga clic en 'Abrir en Nueva Pestaña' para conectar directamente con DeTong DP27.");
     }
 
     currentDiagnostic.lastError = error.message;
@@ -118,23 +197,8 @@ export async function connectWebUsbPrinter(): Promise<UsbPrinterDiagnostic> {
 export async function connectSerialPrinter(): Promise<UsbPrinterDiagnostic> {
   const nav = navigator as any;
 
-  if (typeof window !== 'undefined' && window.self !== window.top) {
-    currentDiagnostic = {
-      connected: true,
-      deviceName: "Impresora USB (Driver de Sistema 50x60)",
-      connectionType: 'system',
-      isIframeRestricted: true
-    };
-    return currentDiagnostic;
-  }
-
   if (!nav.serial) {
-    currentDiagnostic = {
-      connected: true,
-      deviceName: "Impresora USB (Driver de Sistema 50x60)",
-      connectionType: 'system'
-    };
-    return currentDiagnostic;
+    throw new Error("Su navegador no soporta WebSerial. Utilice Google Chrome o Microsoft Edge.");
   }
 
   try {
@@ -154,18 +218,19 @@ export async function connectSerialPrinter(): Promise<UsbPrinterDiagnostic> {
 
     return currentDiagnostic;
   } catch (error: any) {
-    console.warn("[USB Serial] WebSerial no disponible en este contexto:", error);
+    console.warn("[USB Serial] WebSerial no disponible:", error);
     const isPolicyRestricted = error.name === 'SecurityError' || 
       (error.message && error.message.toLowerCase().includes('permissions policy'));
 
     if (isPolicyRestricted) {
       currentDiagnostic = {
-        connected: true,
-        deviceName: "Impresora USB (Driver de Sistema 50x60)",
-        connectionType: 'system',
+        connected: false,
+        deviceName: "Acceso USB/Serie restringido en vista previa",
+        connectionType: 'none',
+        lastError: "Abra la aplicación en una pestaña nueva para otorgar permiso al puerto USB físico.",
         isIframeRestricted: true
       };
-      return currentDiagnostic;
+      throw new Error("El navegador bloquea el acceso Serie/USB dentro del marco de vista previa. Haga clic en 'Abrir en Nueva Pestaña' para conectar.");
     }
 
     currentDiagnostic.lastError = error.message;
@@ -247,21 +312,21 @@ function sanitizeText(text: string): string {
     .replace(/[^\x20-\x7E\n\r\t]/g, ' ');
 }
 
-// Format line to strictly 28 columns (ideal for 50mm paper)
-function format28Columns(left: string, right: string): string {
+// Format line to strictly 30 columns (ideal for 54mm paper)
+function format30Columns(left: string, right: string): string {
   const cleanLeft = sanitizeText(left);
   const cleanRight = sanitizeText(right);
-  const availableSpace = 28 - cleanRight.length;
+  const availableSpace = 30 - cleanRight.length;
 
   if (cleanLeft.length >= availableSpace) {
     return cleanLeft.slice(0, Math.max(0, availableSpace - 1)) + " " + cleanRight + "\n";
   }
 
-  const spaces = " ".repeat(Math.max(1, 28 - cleanLeft.length - cleanRight.length));
+  const spaces = " ".repeat(Math.max(1, 30 - cleanLeft.length - cleanRight.length));
   return cleanLeft + spaces + cleanRight + "\n";
 }
 
-// Build ESC/POS bytes for 50mm x 60mm ticket
+// Build ESC/POS bytes for 54mm ticket
 export function build50x60TicketBytes(order: {
   folio?: string;
   customerName?: string;
@@ -277,14 +342,14 @@ export function build50x60TicketBytes(order: {
 
   let itemsBody = "";
   if (order.items && Array.isArray(order.items) && order.items.length > 0) {
-    order.items.slice(0, 6).forEach(item => {
+    order.items.slice(0, 10).forEach(item => {
       const extraStr = item.hasExtraCheese ? '+Q' : '';
-      const leftCol = `${item.quantity} ${item.name.slice(0, 14)}${extraStr}`;
+      const leftCol = `${item.quantity} ${item.name.slice(0, 16)}${extraStr}`;
       const rightCol = `$${((item.price || 0) * (item.quantity || 1)).toFixed(0)}`;
-      itemsBody += format28Columns(leftCol, rightCol);
+      itemsBody += format30Columns(leftCol, rightCol);
     });
-    if (order.items.length > 6) {
-      itemsBody += `...y ${order.items.length - 6} mas\n`;
+    if (order.items.length > 10) {
+      itemsBody += `...y ${order.items.length - 10} mas\n`;
     }
   } else {
     itemsBody = "Consumo General\n";
@@ -301,7 +366,7 @@ export function build50x60TicketBytes(order: {
 
   const commands =
     ESC + '\x40' +                      // Init
-    ESC + '\x33\x12' +                  // Compact line spacing (18 dots) for 60mm height limit
+    ESC + '\x33\x12' +                  // Compact line spacing (18 dots)
     ESC + '\x61\x01' +                  // Center
     ESC + '\x45\x01' +                  // Bold ON
     "LAS CAZUELAS DEL CASTOR\n" +
@@ -309,21 +374,21 @@ export function build50x60TicketBytes(order: {
     headerTitle +
     `Folio:#${order.folio || '0'} | ${typeLabel}\n` +
     `Hora:${dateStr}\n` +
-    "----------------------------\n" +   // 28 dashes (50mm width)
+    "------------------------------\n" +   // 30 dashes (54mm width)
     ESC + '\x61\x00' +                  // Left
     itemsBody +
-    "----------------------------\n" +
+    "------------------------------\n" +
     ESC + '\x45\x01' +
-    format28Columns(totalLabel, `$${(order.total || 0).toFixed(2)}`) +
+    format30Columns(totalLabel, `$${(order.total || 0).toFixed(2)}`) +
     ESC + '\x45\x00' +
     ESC + '\x61\x01' +
     footerText +
-    "\n\n\n";                           // 3 line feeds for tear
+    "\n\n";                            // 2 line feeds (~1cm bottom tolerance)
 
   return new TextEncoder().encode(commands);
 }
 
-// Send 50x60mm Test Ticket over USB Cable
+// Send 54mm Test Ticket over USB Cable
 export async function printUsbTestTicket(): Promise<void> {
   if (currentDiagnostic.connectionType === 'webusb' || currentDiagnostic.connectionType === 'webserial') {
     const ESC = '\x1B';
@@ -334,28 +399,28 @@ export async function printUsbTestTicket(): Promise<void> {
       ESC + '\x45\x01' +                  // Bold ON
       "LAS CAZUELAS DEL CASTOR\n" +
       ESC + '\x45\x00' +
-      "PRUEBA USB 50X60\n" +
+      "PRUEBA USB 54MM\n" +
       `Fecha: ${new Date().toLocaleDateString('es-MX')}\n` +
-      "----------------------------\n" +   // 28 dashes
+      "------------------------------\n" +   // 30 dashes
       ESC + '\x61\x00' +                  // Left
-      format28Columns("Canal:", "Cable USB") +
-      format28Columns("Formato:", "50x60 mm") +
-      format28Columns("Estado:", "Conectado OK") +
-      "----------------------------\n" +
+      format30Columns("Canal:", "Cable USB") +
+      format30Columns("Ancho:", "54 mm") +
+      format30Columns("Estado:", "Conectado OK") +
+      "------------------------------\n" +
       ESC + '\x45\x01' +
-      format28Columns("TOTAL:", "$0.00") +
+      format30Columns("TOTAL:", "$0.00") +
       ESC + '\x45\x00' +
       ESC + '\x61\x01' +
       "Gracias por su compra!\n" +
       "Vuelva pronto\n" +
-      "\n\n\n";
+      "\n\n";
 
     const bytes = new TextEncoder().encode(commands);
     await sendUsbRawData(bytes);
     return;
   }
 
-  // System print fallback for 50x60mm
+  // System print fallback for 54mm
   print50x60ViaSystem({
     folio: "0001",
     tableNumber: "Mesa 1",
@@ -368,7 +433,7 @@ export async function printUsbTestTicket(): Promise<void> {
   });
 }
 
-// System print helper for 50x60mm receipt
+// System print helper for 54mm receipt
 export function print50x60ViaSystem(ticketData: {
   folio?: string;
   customerName?: string;
@@ -379,58 +444,51 @@ export function print50x60ViaSystem(ticketData: {
   paymentMethod?: string;
   isPreAccount?: boolean;
 }): void {
-  // Ensure the dedicated 50x60 print container exists in document
-  let printEl = document.getElementById('print-ticket-50x60');
+  // Ensure the single active print container exists in document
+  let printEl = document.getElementById('print-ticket-active');
   if (!printEl) {
     printEl = document.createElement('div');
-    printEl.id = 'print-ticket-50x60';
-    printEl.className = 'print-only';
+    printEl.id = 'print-ticket-active';
     document.body.appendChild(printEl);
   }
 
   const itemsList = ticketData.items && ticketData.items.length > 0 
-    ? ticketData.items.slice(0, 5).map(it => `
-        <div style="display: flex; justify-content: space-between; font-size: 9px; margin: 1.5px 0;">
-          <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 30mm;">${it.quantity} ${it.name}</span>
+    ? ticketData.items.map(it => `
+        <div style="display: flex; justify-content: space-between; font-size: 9.5px; margin: 2px 0;">
+          <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 34mm;">${it.quantity} ${it.name}</span>
           <span style="font-weight: bold;">$${((it.price || 0) * (it.quantity || 1)).toFixed(0)}</span>
         </div>
       `).join('')
-    : '<div style="text-align: center; font-size: 9px;">Consumo General</div>';
+    : '<div style="text-align: center; font-size: 9.5px;">Consumo General</div>';
 
   const preAccountHeader = ticketData.isPreAccount 
-    ? '<div style="font-weight: 800; font-size: 8.5px; margin-top: 1px; text-transform: uppercase;">PRE-CUENTA / PENDIENTE</div>'
+    ? '<div style="font-weight: 800; font-size: 9px; margin-top: 1px; text-transform: uppercase;">PRE-CUENTA / PENDIENTE</div>'
     : '';
 
   const totalLabel = ticketData.isPreAccount ? 'TOTAL A PAGAR:' : 'TOTAL:';
   const footerNote = ticketData.isPreAccount
     ? 'Cuenta pendiente de cobro<br/>Favor de liquidar en caja'
-    : '¡Gracias por su compra! Vuelva pronto';
+    : '¡Gracias por su compra!<br/>Vuelva pronto';
 
   printEl.innerHTML = `
     <div style="text-align: center; margin-bottom: 2px;">
       <img src="/logo_las_cazuelas_del_castor.jpg" alt="Logo Las Cazuelas del Castor" style="width: 20mm; height: 20mm; border-radius: 50%; object-fit: cover; margin: 0 auto 2px auto; display: block; filter: grayscale(100%) contrast(150%); -webkit-filter: grayscale(100%) contrast(150%);" />
-      <div style="font-weight: bold; font-size: 10px; line-height: 1.15;">LAS CAZUELAS DEL CASTOR</div>
+      <div style="font-weight: bold; font-size: 10.5px; line-height: 1.15;">LAS CAZUELAS DEL CASTOR</div>
       ${preAccountHeader}
     </div>
-    <div style="text-align: center; font-size: 8.5px;">Folio:#${ticketData.folio || '0001'} | ${ticketData.tableNumber || 'Mesa'}</div>
-    <div style="text-align: center; font-size: 8.5px;">${new Date().toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}</div>
-    <div style="border-top: 1px dashed #000; margin: 3px 0;"></div>
+    <div style="text-align: center; font-size: 9px;">Folio:#${ticketData.folio || '0001'} | ${ticketData.tableNumber || 'Mesa'}</div>
+    <div style="text-align: center; font-size: 9px;">${new Date().toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}</div>
+    <div style="border-top: 1px dashed #000; margin: 4px 0;"></div>
     <div>${itemsList}</div>
-    <div style="border-top: 1px dashed #000; margin: 3px 0;"></div>
-    <div style="display: flex; justify-content: space-between; font-weight: bold; font-size: 11px;">
+    <div style="border-top: 1px dashed #000; margin: 4px 0;"></div>
+    <div style="display: flex; justify-content: space-between; font-weight: bold; font-size: 11.5px;">
       <span>${totalLabel}</span>
       <span>$${(ticketData.total || 0).toFixed(2)}</span>
     </div>
-    <div style="text-align: center; font-size: 8.5px; margin-top: 3px; font-style: italic; font-weight: bold;">${footerNote}</div>
+    <div style="text-align: center; font-size: 9px; margin-top: 5px; font-style: italic; font-weight: bold;">${footerNote}</div>
   `;
-
-  // Add printing class to body to scope CSS
-  document.body.classList.add('printing-50x60');
 
   setTimeout(() => {
     window.print();
-    setTimeout(() => {
-      document.body.classList.remove('printing-50x60');
-    }, 1500);
   }, 100);
 }

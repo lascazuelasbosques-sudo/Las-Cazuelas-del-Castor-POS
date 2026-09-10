@@ -598,15 +598,15 @@ export const Navbar = ({
           <span className="hidden lg:inline">Instalar / Offline</span>
         </Button>
 
-        {/* USB Cable Printer Button (50x60) */}
+        {/* USB Cable Printer Button (54mm Direct) */}
         <Button 
           variant="outline" 
           className="justify-center lg:justify-start gap-2.5 w-full border-amber-300/80 bg-amber-50 text-amber-900 hover:bg-amber-100 px-0 lg:px-3 h-[36px] rounded-xl text-xs font-bold transition-all shadow-sm"
-          title="Impresora por Cable USB (50x60mm)"
+          title="Impresora Directa por Cable USB (54mm Sin Spooler)"
           onClick={() => setIsUsbModalOpen(true)}
         >
           <Usb size={16} className="text-amber-700 shrink-0" />
-          <span className="hidden lg:inline">Impresora USB (50x60)</span>
+          <span className="hidden lg:inline">Impresora USB (54mm Directa)</span>
         </Button>
 
         <Button 

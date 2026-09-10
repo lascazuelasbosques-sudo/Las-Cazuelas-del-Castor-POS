@@ -32,35 +32,42 @@
 }
 
 .print-only {
-  display: none;
+  display: none !important;
 }
 
 @media print {
   @page {
+    size: 54mm auto;
     margin: 0;
   }
   
-  body.printing-50x60 {
+  html, body {
     margin: 0 !important;
     padding: 0 !important;
+    width: 54mm !important;
+    background: #fff !important;
   }
 
-  body > * { display: none !important; }
-  .print-only, .print-only *, .print-modal, .print-modal * {
-    display: block !important;
-  }
-  .no-print, .no-print * {
+  body > * {
     display: none !important;
   }
 
-  #print-ticket-50x60 {
+  #print-ticket-active,
+  #print-ticket-active * {
     display: block !important;
-    width: 50mm !important;
-    max-width: 50mm !important;
-    margin: 0 auto !important;
-    padding: 1.5mm !important;
-    font-size: 9px !important;
-    line-height: 1.2 !important;
+    visibility: visible !important;
+  }
+
+  #print-ticket-active {
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 54mm !important;
+    max-width: 54mm !important;
+    margin: 0 !important;
+    padding: 2mm 2mm 10mm 2mm !important; /* 10mm (1cm) bottom tolerance with next ticket */
+    font-size: 9.5px !important;
+    line-height: 1.25 !important;
     font-family: 'Courier New', Courier, monospace !important;
     color: #000 !important;
     background: #fff !important;

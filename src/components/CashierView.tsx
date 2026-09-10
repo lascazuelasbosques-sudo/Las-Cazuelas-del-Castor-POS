@@ -10,7 +10,7 @@ import { db, auth } from "../firebase";
 import { collection, onSnapshot, query, where, orderBy, doc, updateDoc, addDoc, deleteDoc, writeBatch, getDocs, getDocsFromServer, arrayUnion } from "firebase/firestore";
 import { handleFirestoreError, OperationType } from "../lib/firestoreErrorHandler";
 import { isDrinkItem } from "../lib/drinkUtils";
-import { getUsbPrinterDiagnostic, sendUsbRawData, build50x60TicketBytes, print50x60ViaSystem } from "../lib/usbPrinter";
+import { getUsbPrinterDiagnostic, autoConnectUsbPrinter, sendUsbRawData, build50x60TicketBytes, print50x60ViaSystem } from "../lib/usbPrinter";
 import { sendMovementNotification } from "../lib/emailService";
 import toast from "react-hot-toast";
 import { 
@@ -876,6 +876,9 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
   const CARD_FEE_PERCENTAGE = 0.04; // 4% fee for card payments as requested
 
   useEffect(() => {
+    // Attempt auto-reconnect to previously paired USB hardware printer
+    autoConnectUsbPrinter().catch(err => console.warn("Auto-connect USB printer:", err));
+
     const unsubOrders = onOfflineSnapshot("orders", collection(db, "orders"), (orderData) => {
       const activeOrders = (orderData || [])
         .filter(order => order && ['pending', 'preparing', 'ready', 'served'].includes(order.status || 'pending'))
@@ -1861,7 +1864,13 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
         ? g.orders.flatMap(o => o.items || []) 
         : ((g as any).items || []);
 
-      const usbDiag = getUsbPrinterDiagnostic();
+      let usbDiag = getUsbPrinterDiagnostic();
+
+      // If not connected, try auto-connecting to previously paired USB device
+      if (!usbDiag.connected || (usbDiag.connectionType !== 'webusb' && usbDiag.connectionType !== 'webserial')) {
+        usbDiag = await autoConnectUsbPrinter();
+      }
+
       if (usbDiag.connected && (usbDiag.connectionType === 'webusb' || usbDiag.connectionType === 'webserial')) {
         const bytes = build50x60TicketBytes({
           folio: g.folios?.[0] || '1',
@@ -1874,7 +1883,7 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
           isPreAccount: ticketInfo.isPreAccount
         });
         await sendUsbRawData(bytes);
-        toast.success(ticketInfo.isPreAccount ? "¡Pre-cuenta impresa por USB!" : "¡Ticket de venta impreso por USB!");
+        toast.success(ticketInfo.isPreAccount ? "¡Pre-cuenta enviada directo a USB (Sin Spooler)!" : "¡Ticket enviado directo a USB (Sin Spooler)!");
       } else {
         print50x60ViaSystem({
           folio: g.folios?.[0] || '1',
@@ -5466,123 +5475,35 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
                 </div>
               </div>
 
-              {/* Specialized System Print Portals for Pre-Account */}
-              {createPortal(
-                <div id="print-ticket" className="print-only" style={{ fontFamily: 'monospace', fontSize: '13px', lineHeight: '1.3', padding: '15px', width: '300px', margin: '0 auto' }}>
-                  <div style={{ textAlign: 'center', marginBottom: '12px' }}>
-                    <img 
-                      src="/logo_las_cazuelas_del_castor.jpg" 
-                      alt="Logo Las Cazuelas del Castor" 
-                      style={{ width: '20mm', height: '20mm', borderRadius: '50%', objectFit: 'cover', margin: '0 auto 6px auto', display: 'block', filter: 'grayscale(100%) contrast(150%)', WebkitFilter: 'grayscale(100%) contrast(150%)' }} 
-                    />
-                    <p style={{ fontWeight: 'bold', fontSize: '15px', margin: '3px 0' }}>LAS CAZUELAS DEL CASTOR</p>
-                    <p style={{ fontWeight: 'bold', fontSize: '12.5px', margin: '2px 0' }}>PRE-CUENTA / RECIBO DE CONSUMO</p>
-                    <p style={{ margin: '2px 0', fontSize: '11px', color: '#555' }}>(COBRO PENDIENTE)</p>
-                    <p style={{ margin: '2px 0', fontSize: '12px' }}>{new Date().toLocaleString()}</p>
-                  </div>
-                  <div style={{ borderTop: '1px dashed #000', borderBottom: '1px dashed #000', padding: '8px 0', margin: '8px 0', fontSize: '12.5px' }}>
-                    <p style={{ margin: '2px 0' }}>Mesa: {preAccountData.group.displayTitle}</p>
-                    <p style={{ margin: '2px 0' }}>Folios: {preAccountData.group.folios.join(", ")}</p>
-                    <p style={{ margin: '2px 0' }}>Mesero: {preAccountData.group.waiterNames[0] || 'Atendido'}</p>
-                  </div>
-                  <div style={{ borderBottom: '1px dashed #000', paddingBottom: '8px', marginBottom: '8px', fontSize: '12.5px' }}>
-                    {preAccountData.group.orders.flatMap(order => 
-                      order.items.map((item, idx) => (
-                        <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', margin: '3px 0' }}>
-                          <span>{item.quantity}x {item.name}</span>
-                          <span style={{ fontWeight: 'bold' }}>{formatCurrency(item.price * item.quantity)}</span>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                  <div style={{ fontWeight: 'bold', fontSize: '15px', paddingTop: '4px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span>TOTAL A PAGAR:</span>
-                      <span>{formatCurrency(preAccountData.total)}</span>
-                    </div>
-                  </div>
-                  <div style={{ textAlign: 'center', marginTop: '14px', fontSize: '11px', color: '#333' }}>
-                    <p style={{ fontWeight: 'bold', marginBottom: '2px' }}>* CUENTA PENDIENTE DE PAGO *</p>
-                    <p style={{ margin: '2px 0' }}>Favor de liquidar en caja o con su mesero</p>
-                    <p style={{ fontStyle: 'italic', marginTop: '6px' }}>¡Gracias por su visita! Vuelva pronto</p>
-                  </div>
-                </div>,
-                document.body
-              )}
-
-              {createPortal(
-                <div id="print-ticket-50x60" className="print-only">
-                  <div style={{ textAlign: 'center', marginBottom: '2px' }}>
-                    <img 
-                      src="/logo_las_cazuelas_del_castor.jpg" 
-                      alt="Logo Las Cazuelas del Castor" 
-                      style={{ width: '20mm', height: '20mm', borderRadius: '50%', objectFit: 'cover', margin: '0 auto 2px auto', display: 'block', filter: 'grayscale(100%) contrast(150%)', WebkitFilter: 'grayscale(100%) contrast(150%)' }} 
-                    />
-                    <div style={{ fontWeight: 'bold', fontSize: '10px', lineHeight: '1.15' }}>LAS CAZUELAS DEL CASTOR</div>
-                    <div style={{ fontWeight: '800', fontSize: '8.5px', marginTop: '1px' }}>PRE-CUENTA / PENDIENTE</div>
-                  </div>
-                  <div style={{ textAlign: 'center', fontSize: '8.5px' }}>Folio:#{preAccountData.group.folios[0] || '1'} | {preAccountData.group.displayTitle}</div>
-                  <div style={{ textAlign: 'center', fontSize: '8.5px' }}>{new Date().toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}</div>
-                  <div style={{ borderTop: '1px dashed #000', margin: '3px 0' }} />
-                  <div>
-                    {preAccountData.group.orders.flatMap(o => o.items || []).slice(0, 5).map((item, idx) => (
-                      <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '9px', margin: '1.5px 0' }}>
-                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '30mm' }}>{item.quantity} {item.name}</span>
-                        <span style={{ fontWeight: 'bold' }}>${(item.price * item.quantity).toFixed(0)}</span>
-                      </div>
-                    ))}
-                  </div>
-                  <div style={{ borderTop: '1px dashed #000', margin: '3px 0' }} />
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold', fontSize: '11px' }}>
-                    <span>TOTAL A PAGAR:</span>
-                    <span>{formatCurrency(preAccountData.total)}</span>
-                  </div>
-                  <div style={{ textAlign: 'center', fontSize: '8.5px', marginTop: '3px', fontStyle: 'italic', fontWeight: 'bold' }}>
-                    Cuenta pendiente de cobro<br />Favor de liquidar en caja
-                  </div>
-                </div>,
-                document.body
-              )}
-
               {/* Action Buttons */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
                 <Button 
                   variant="outline" 
-                  className="flex items-center justify-center gap-2 h-14 rounded-xl border-stone-200 hover:bg-stone-50 text-stone-800 font-bold cursor-pointer"
+                  className="flex items-center justify-center gap-2 h-12 rounded-xl border-stone-200 hover:bg-stone-50 text-stone-800 font-bold cursor-pointer"
                   onClick={() => handlePrintPreAccount(preAccountData.group, 'usb')}
                 >
-                  <Usb size={18} className="text-amber-700" />
+                  <Printer size={18} className="text-amber-700" />
                   <div className="text-left">
-                    <p className="text-[10px] font-black uppercase">Impresora Cable USB</p>
-                    <p className="text-[9px] text-stone-400 font-normal">Formato 50x60 mm</p>
+                    <p className="text-[10px] font-black uppercase">Reimprimir Recibo</p>
+                    <p className="text-[9px] text-stone-400 font-normal">Ticket 54mm</p>
                   </div>
                 </Button>
 
                 <Button 
                   variant="outline" 
-                  className="flex items-center justify-center gap-2 h-14 rounded-xl border-stone-200 hover:bg-stone-50 text-stone-800 font-bold cursor-pointer"
-                  onClick={() => handlePrintPreAccount(preAccountData.group, 'standard')}
-                >
-                  <Printer size={18} className="text-stone-600" />
-                  <div className="text-left">
-                    <p className="text-[10px] font-black uppercase">Ticket Estándar</p>
-                    <p className="text-[9px] text-stone-400 font-normal">Imprimir en Papel</p>
-                  </div>
-                </Button>
-
-                <Button 
-                  variant="outline" 
-                  className="flex items-center justify-center gap-2 h-12 rounded-xl border-stone-200 hover:bg-stone-50 text-stone-700 font-bold sm:col-span-2 cursor-pointer"
+                  className="flex items-center justify-center gap-2 h-12 rounded-xl border-stone-200 hover:bg-stone-50 text-stone-700 font-bold cursor-pointer"
                   onClick={() => generatePreAccountPDF(true)}
                 >
                   <DownloadCloud size={16} className="text-amber-700" />
-                  <span className="text-[11px] font-black uppercase">Descargar Recibo en PDF</span>
+                  <div className="text-left">
+                    <p className="text-[10px] font-black uppercase">Descargar PDF</p>
+                    <p className="text-[9px] text-stone-400 font-normal">Guardar en Archivo</p>
+                  </div>
                 </Button>
               </div>
             </CardContent>
             <CardFooter className="p-5 pt-0 flex flex-col gap-2">
               <Button 
-                variant="primary" 
                 className="w-full h-12 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-black text-xs uppercase tracking-wider shadow-md shadow-amber-600/20 flex items-center justify-center gap-2 cursor-pointer"
                 onClick={() => {
                   handleMarkPreAccountDelivered(preAccountData.group);
@@ -5664,87 +5585,6 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
                 </div>
               </div>
 
-              {createPortal(
-                <div id="print-ticket" className="print-only" style={{ fontFamily: 'monospace', fontSize: '13px', lineHeight: '1.3', padding: '15px', width: '300px', margin: '0 auto' }}>
-                  <div style={{ textAlign: 'center', marginBottom: '12px' }}>
-                    <img 
-                      src="/logo_las_cazuelas_del_castor.jpg" 
-                      alt="Logo Las Cazuelas del Castor" 
-                      style={{ width: '20mm', height: '20mm', borderRadius: '50%', objectFit: 'cover', margin: '0 auto 6px auto', display: 'block', filter: 'grayscale(100%) contrast(150%)', WebkitFilter: 'grayscale(100%) contrast(150%)' }} 
-                    />
-                    <p style={{ fontWeight: 'bold', fontSize: '15px', margin: '3px 0' }}>LAS CAZUELAS DEL CASTOR</p>
-                    <p style={{ margin: '2px 0', fontSize: '12px' }}>Ticket de Venta</p>
-                    <p style={{ margin: '2px 0', fontSize: '12px' }}>{new Date().toLocaleString()}</p>
-                  </div>
-                  <div style={{ borderTop: '1px dashed #000', borderBottom: '1px dashed #000', padding: '8px 0', margin: '8px 0', fontSize: '12.5px' }}>
-                    <p style={{ margin: '2px 0' }}>Mesa: {lastPaymentData.group.displayTitle}</p>
-                    <p style={{ margin: '2px 0' }}>Folios: {lastPaymentData.group.folios.join(", ")}</p>
-                    <p style={{ margin: '2px 0' }}>Mesero: {lastPaymentData.group.waiterNames[0] || 'Atendido'}</p>
-                  </div>
-                  <div style={{ borderBottom: '1px dashed #000', paddingBottom: '8px', marginBottom: '8px', fontSize: '12.5px' }}>
-                    {lastPaymentData.group.orders.map(order => 
-                      order.items.map((item, idx) => (
-                        <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', margin: '3px 0' }}>
-                          <span>{item.quantity}x {item.name}</span>
-                          <span style={{ fontWeight: 'bold' }}>{formatCurrency(item.price * item.quantity)}</span>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                  {lastPaymentData.group.orders.some(o => o.movementLogs && o.movementLogs.length > 0) && (
-                    <div style={{ borderBottom: '1px dashed #000', paddingBottom: '8px', marginBottom: '8px', fontSize: '9px', color: '#333' }}>
-                      <p style={{ fontWeight: 'bold', margin: '2px 0', fontSize: '10px' }}>Historial de Comanda:</p>
-                      {lastPaymentData.group.orders.flatMap(o => o.movementLogs || []).sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()).map((log, idx) => (
-                        <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', margin: '2px 0' }}>
-                          <span>{log.action} ({log.userName} - {log.userRole})</span>
-                          <span>{new Date(log.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  <div style={{ fontWeight: 'bold', fontSize: '15px', paddingTop: '4px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span>Total:</span>
-                      <span>{formatCurrency(lastPaymentData.total)}</span>
-                    </div>
-                  </div>
-                  <p style={{ textAlign: 'center', marginTop: '15px', fontStyle: 'italic', fontSize: '12px' }}>¡Gracias por su compra! Vuelva pronto</p>
-                </div>,
-                document.body
-              )}
-
-              {/* Specialized 50mm x 60mm Thermal Ticket Portal */}
-              {createPortal(
-                <div id="print-ticket-50x60" className="print-only">
-                  <div style={{ textAlign: 'center', marginBottom: '2px' }}>
-                    <img 
-                      src="/logo_las_cazuelas_del_castor.jpg" 
-                      alt="Logo Las Cazuelas del Castor" 
-                      style={{ width: '20mm', height: '20mm', borderRadius: '50%', objectFit: 'cover', margin: '0 auto 2px auto', display: 'block', filter: 'grayscale(100%) contrast(150%)', WebkitFilter: 'grayscale(100%) contrast(150%)' }} 
-                    />
-                    <div style={{ fontWeight: 'bold', fontSize: '10px', lineHeight: '1.15' }}>LAS CAZUELAS DEL CASTOR</div>
-                  </div>
-                  <div style={{ textAlign: 'center', fontSize: '8.5px' }}>Folio:#{lastPaymentData.group.folios[0] || '1'} | {lastPaymentData.group.displayTitle}</div>
-                  <div style={{ textAlign: 'center', fontSize: '8.5px' }}>{new Date().toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}</div>
-                  <div style={{ borderTop: '1px dashed #000', margin: '3px 0' }} />
-                  <div>
-                    {lastPaymentData.group.orders.flatMap(o => o.items || []).slice(0, 5).map((item, idx) => (
-                      <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '9px', margin: '1.5px 0' }}>
-                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '30mm' }}>{item.quantity} {item.name}</span>
-                        <span style={{ fontWeight: 'bold' }}>${(item.price * item.quantity).toFixed(0)}</span>
-                      </div>
-                    ))}
-                  </div>
-                  <div style={{ borderTop: '1px dashed #000', margin: '3px 0' }} />
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold', fontSize: '11px' }}>
-                    <span>TOTAL:</span>
-                    <span>{formatCurrency(lastPaymentData.total)}</span>
-                  </div>
-                  <div style={{ textAlign: 'center', fontSize: '8.5px', marginTop: '3px', fontStyle: 'italic', fontWeight: 'bold' }}>¡Gracias por su compra! Vuelva pronto</div>
-                </div>,
-                document.body
-              )}
-
               <div className="grid grid-cols-2 gap-3">
                 <Button 
                   variant="outline" 
@@ -5763,52 +5603,23 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
                   <span className="text-[10px] font-black uppercase">Enviar Mail</span>
                 </Button>
 
-                {/* USB Cable 50x60mm Print Button */}
+                {/* Print Ticket 54mm Button */}
                 <Button 
                   variant="outline" 
                   className="flex-col gap-2 h-20 rounded-2xl border-amber-300 bg-amber-50/90 hover:bg-amber-100 text-amber-950 md:col-span-2 shadow-xs"
-                  onClick={async () => {
-                    const toastId = toast.loading("Enviando ticket a impresora USB 50x60mm...");
-                    try {
-                      const g = lastPaymentData?.group as any;
-                      const allItems = g?.orders 
-                        ? g.orders.flatMap((o: any) => o.items || []) 
-                        : (g?.items || []);
-
-                      const usbDiag = getUsbPrinterDiagnostic();
-                      if (usbDiag.connected) {
-                        const bytes = build50x60TicketBytes({
-                          folio: g?.folios?.[0] || '1',
-                          customerName: g?.customerName || g?.displayTitle || 'General',
-                          tableNumber: g?.displayTitle || '',
-                          orderType: g?.isTakeaway ? 'takeout' : 'dine_in',
-                          items: allItems,
-                          total: lastPaymentData?.total || 0,
-                          paymentMethod: lastPaymentData?.method || 'cash'
-                        });
-                        await sendUsbRawData(bytes);
-                        toast.dismiss(toastId);
-                        toast.success("¡Ticket 50x60mm enviado por cable USB!");
-                      } else {
-                        toast.dismiss(toastId);
-                        print50x60ViaSystem({
-                          folio: g?.folios?.[0] || '1',
-                          tableNumber: g?.displayTitle || '',
-                          orderType: g?.isTakeaway ? 'takeout' : 'dine_in',
-                          items: allItems,
-                          total: lastPaymentData?.total || 0,
-                          paymentMethod: lastPaymentData?.method || 'cash'
-                        });
-                        toast.success("¡Abriendo impresión 50x60mm para impresora USB!");
-                      }
-                    } catch (err: any) {
-                      toast.dismiss(toastId);
-                      toast.error(err.message || "Error al imprimir por USB.");
+                  onClick={() => {
+                    if (lastPaymentData) {
+                      triggerAutoPrintTicket({
+                        group: lastPaymentData.group,
+                        method: lastPaymentData.method,
+                        total: lastPaymentData.total,
+                        isPreAccount: false
+                      });
                     }
                   }}
                 >
-                  <Usb size={20} className="text-amber-700" />
-                  <span className="text-[10px] font-black uppercase">Imprimir en Impresora Cable USB (50x60 mm)</span>
+                  <Printer size={20} className="text-amber-800" />
+                  <span className="text-[10px] font-black uppercase">Reimprimir Ticket (54mm)</span>
                 </Button>
 
                 <Button 

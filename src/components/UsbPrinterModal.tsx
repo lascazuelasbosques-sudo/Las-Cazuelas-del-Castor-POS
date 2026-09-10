@@ -110,8 +110,8 @@ export const UsbPrinterModal: React.FC<UsbPrinterModalProps> = ({ isOpen, onClos
               <Usb size={24} />
             </div>
             <div>
-              <h2 className="text-lg font-black tracking-tight">Impresora por Cable USB</h2>
-              <p className="text-[10px] text-stone-400 uppercase tracking-widest font-mono">Formato Recibo: 50mm x 60mm</p>
+              <h2 className="text-lg font-black tracking-tight">Impresora Directa Cable USB</h2>
+              <p className="text-[10px] text-stone-400 uppercase tracking-widest font-mono">Ancho de Recibo: 54mm (Sin Spooler)</p>
             </div>
           </div>
           <button 
@@ -126,20 +126,19 @@ export const UsbPrinterModal: React.FC<UsbPrinterModalProps> = ({ isOpen, onClos
           
           {/* Notice for iframe / browser permissions */}
           {isIframe && (
-            <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 text-xs text-blue-950 flex items-start gap-3">
-              <ShieldCheck size={20} className="text-blue-600 shrink-0 mt-0.5" />
+            <div className="bg-amber-50 border border-amber-300 rounded-2xl p-4 text-xs text-amber-950 flex items-start gap-3">
+              <ShieldCheck size={20} className="text-amber-700 shrink-0 mt-0.5" />
               <div className="space-y-1.5 flex-1">
-                <p className="font-bold">Modo Cable USB (Driver 50x60) Activo</p>
-                <p className="text-[11px] text-blue-800 leading-relaxed">
-                  Para imprimir por cable USB en este visor, el sistema utiliza el controlador/spooler de 50x60mm. 
-                  Si desea acceso directo al chip WebUSB sin restricciones del navegador, abra el sistema en una pestaña nueva.
+                <p className="font-bold">Acceso Directo al Puerto USB Físico</p>
+                <p className="text-[11px] text-amber-900 leading-relaxed">
+                  Para enviar comandos directamente al puerto USB de la impresora (sin pasar por el cuadro de diálogo/spooler del sistema operativo), abra la aplicación en una pestaña nueva del navegador donde Chrome otorga permiso total a los puertos USB.
                 </p>
                 <button
                   onClick={handleOpenInNewTab}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-[11px] font-bold transition-all cursor-pointer mt-1"
+                  className="inline-flex items-center gap-1.5 px-3 py-2 bg-amber-800 hover:bg-amber-900 text-white rounded-xl text-[11px] font-bold transition-all cursor-pointer mt-1 shadow-sm"
                 >
-                  <ExternalLink size={12} />
-                  Abrir en Pestaña Nueva
+                  <ExternalLink size={14} />
+                  Abrir en Pestaña Nueva (Recomendado para USB Directo)
                 </button>
               </div>
             </div>
@@ -147,30 +146,32 @@ export const UsbPrinterModal: React.FC<UsbPrinterModalProps> = ({ isOpen, onClos
 
           {/* Status Badge */}
           <div className={`p-4 rounded-2xl border flex items-center justify-between ${
-            diag.connected || isIframe
+            diag.connected && (diag.connectionType === 'webusb' || diag.connectionType === 'webserial')
               ? 'bg-emerald-50 border-emerald-200 text-emerald-900' 
               : 'bg-stone-50 border-stone-200 text-stone-700'
           }`}>
             <div className="flex items-center gap-3">
-              {diag.connected || isIframe ? (
+              {diag.connected && (diag.connectionType === 'webusb' || diag.connectionType === 'webserial') ? (
                 <CheckCircle2 size={24} className="text-emerald-600 shrink-0" />
               ) : (
                 <Printer size={24} className="text-stone-400 shrink-0" />
               )}
               <div>
-                <p className="text-xs font-bold uppercase tracking-wider">Estado de Conexión</p>
+                <p className="text-xs font-bold uppercase tracking-wider">Estado de Conexión USB</p>
                 <p className="text-sm font-black mt-0.5">
-                  {diag.deviceName !== 'No conectada' ? diag.deviceName : (isIframe ? 'Impresora Cable USB (Driver 50x60)' : 'No conectada')}
+                  {diag.deviceName !== 'No conectada' ? diag.deviceName : 'No conectada al puerto USB'}
                 </p>
                 <p className="text-[10px] text-stone-500 font-mono mt-0.5">
-                  Formato activo: 50x60mm (28 columnas térmicas)
+                  Formato: 54 mm (30 columnas térmicas ESC/POS)
                 </p>
               </div>
             </div>
             <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${
-              diag.connected || isIframe ? 'bg-emerald-200 text-emerald-800' : 'bg-stone-200 text-stone-600'
+              diag.connected && (diag.connectionType === 'webusb' || diag.connectionType === 'webserial')
+                ? 'bg-emerald-200 text-emerald-800' 
+                : 'bg-stone-200 text-stone-600'
             }`}>
-              {diag.connected || isIframe ? 'Listo para Imprimir' : 'Sin Conexión'}
+              {diag.connected && (diag.connectionType === 'webusb' || diag.connectionType === 'webserial') ? 'USB Directo Conectado' : 'Sin Conectar'}
             </span>
           </div>
 
@@ -179,17 +180,17 @@ export const UsbPrinterModal: React.FC<UsbPrinterModalProps> = ({ isOpen, onClos
             <div className="flex items-center justify-between mb-2">
               <span className="text-xs font-black uppercase tracking-wider text-amber-950 flex items-center gap-1.5">
                 <Sliders size={14} className="text-amber-600" />
-                Configuración del Formato 50X60
+                Especificaciones Formato 54mm
               </span>
               <span className="bg-amber-200/80 text-amber-900 text-[10px] font-bold px-2 py-0.5 rounded-md font-mono">
-                50mm × 60mm
+                54mm Horizontal
               </span>
             </div>
             <div className="grid grid-cols-2 gap-2 text-[11px] text-amber-900/90 font-medium">
-              <div>• Ancho de papel: <strong>50 mm (28 col)</strong></div>
-              <div>• Alto máximo: <strong>60 mm</strong></div>
-              <div>• Interlineado: <strong>Compacto (18 dots)</strong></div>
-              <div>• Tipografía: <strong>Monospace 8pt</strong></div>
+              <div>• Ancho de papel: <strong>54 mm (30 col)</strong></div>
+              <div>• Alto vertical: <strong>Ajustado al contenido</strong></div>
+              <div>• Tolerancia final: <strong>1 cm (10 mm)</strong></div>
+              <div>• Modo de transmisión: <strong>ESC/POS Raw (Directo)</strong></div>
             </div>
           </div>
 
@@ -239,7 +240,7 @@ export const UsbPrinterModal: React.FC<UsbPrinterModalProps> = ({ isOpen, onClos
 
           {/* Connection Actions */}
           <div className="space-y-3">
-            {!isIframe && !diag.connected && (
+            {(!diag.connected || diag.connectionType === 'none' || diag.connectionType === 'system') && (
               <div className="space-y-2">
                 <button
                   onClick={handleConnectWebUsb}
@@ -254,7 +255,7 @@ export const UsbPrinterModal: React.FC<UsbPrinterModalProps> = ({ isOpen, onClos
                   ) : (
                     <>
                       <Usb size={16} className="text-mex-gold" />
-                      Conectar por Cable USB Directo (WebUSB)
+                      Conectar por Cable USB Directo (WebUSB - Sin Spooler)
                     </>
                   )}
                 </button>
@@ -267,6 +268,16 @@ export const UsbPrinterModal: React.FC<UsbPrinterModalProps> = ({ isOpen, onClos
                   Conectar por Puerto Serie / COM (USB Serial)
                 </button>
               </div>
+            )}
+
+            {/* Disconnect button if connected */}
+            {diag.connected && (diag.connectionType === 'webusb' || diag.connectionType === 'webserial') && (
+              <button
+                onClick={handleDisconnect}
+                className="w-full py-2 px-4 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 font-bold text-xs uppercase tracking-wider rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer"
+              >
+                Desconectar Impresora USB
+              </button>
             )}
 
             {/* Test Button */}
