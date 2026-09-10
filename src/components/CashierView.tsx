@@ -10,7 +10,7 @@ import { db, auth } from "../firebase";
 import { collection, onSnapshot, query, where, orderBy, doc, updateDoc, addDoc, deleteDoc, writeBatch, getDocs, getDocsFromServer, arrayUnion } from "firebase/firestore";
 import { handleFirestoreError, OperationType } from "../lib/firestoreErrorHandler";
 import { isDrinkItem } from "../lib/drinkUtils";
-import { getUsbPrinterDiagnostic, autoConnectUsbPrinter, sendUsbRawData, build50x60TicketBytes, print50x60ViaSystem } from "../lib/usbPrinter";
+import { getUsbPrinterDiagnostic, autoConnectUsbPrinter, sendUsbRawData, build50x60TicketBytes, print50x60ViaSystem, build54mmSalesReportBytes, print54mmSalesReportViaSystem } from "../lib/usbPrinter";
 import { sendMovementNotification } from "../lib/emailService";
 import toast from "react-hot-toast";
 import { 
@@ -1909,6 +1909,36 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
         paymentMethod: ticketInfo.method || 'cash',
         isPreAccount: ticketInfo.isPreAccount
       });
+    }
+  };
+
+  const triggerPrintSalesReport = async (report: {
+    periodLabel: string;
+    totalSales: number;
+    totalExpenses: number;
+    totalTransactions: number;
+    averageTicket?: number;
+    totalCash?: number;
+    totalCard?: number;
+    totalTransfer?: number;
+  }) => {
+    try {
+      let usbDiag = getUsbPrinterDiagnostic();
+      if (!usbDiag.connected || (usbDiag.connectionType !== 'webusb' && usbDiag.connectionType !== 'webserial')) {
+        usbDiag = await autoConnectUsbPrinter();
+      }
+
+      if (usbDiag.connected && (usbDiag.connectionType === 'webusb' || usbDiag.connectionType === 'webserial')) {
+        const bytes = build54mmSalesReportBytes(report);
+        await sendUsbRawData(bytes);
+        toast.success("¡Reporte de ventas impreso en ticket USB!");
+      } else {
+        print54mmSalesReportViaSystem(report);
+        toast.success("¡Imprimiendo reporte de ventas en ticket!");
+      }
+    } catch (err: any) {
+      console.error("Error al imprimir reporte de ventas en ticket:", err);
+      print54mmSalesReportViaSystem(report);
     }
   };
 
@@ -4247,6 +4277,7 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
                           <th className="py-3 px-2 text-right">Gastos/Egresos</th>
                           <th className="py-3 px-2 text-right">Flujo Neto</th>
                           <th className="py-3 px-2 text-center">Transacciones</th>
+                          <th className="py-3 px-2 text-right">Acciones</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-stone-100">
@@ -4266,6 +4297,27 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
                             </td>
                             <td className="py-3.5 px-2 text-center font-bold text-stone-550">
                               {wk.count}
+                            </td>
+                            <td className="py-3.5 px-2 text-right">
+                              <Button
+                                id={`print-week-${wk.period}`}
+                                variant="outline"
+                                type="button"
+                                size="sm"
+                                className="h-8 gap-1.5 text-[10px] font-black uppercase cursor-pointer py-1 px-2 border-stone-200"
+                                onClick={() => {
+                                  triggerPrintSalesReport({
+                                    periodLabel: wk.period,
+                                    totalSales: wk.sales,
+                                    totalExpenses: wk.expenses,
+                                    totalTransactions: wk.count,
+                                    averageTicket: wk.count > 0 ? (wk.sales / wk.count) : 0,
+                                  });
+                                }}
+                              >
+                                <Printer size={12} className="text-mex-brown" />
+                                TICKET
+                              </Button>
                             </td>
                           </tr>
                         ))}
@@ -4297,6 +4349,7 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
                           <th className="py-3 px-2 text-right">Gastos/Egresos</th>
                           <th className="py-3 px-2 text-right">Flujo Neto</th>
                           <th className="py-3 px-2 text-center">Transacciones</th>
+                          <th className="py-3 px-2 text-right">Acciones</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-stone-100">
@@ -4316,6 +4369,27 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
                             </td>
                             <td className="py-3.5 px-2 text-center font-bold text-stone-550">
                               {mn.count}
+                            </td>
+                            <td className="py-3.5 px-2 text-right">
+                              <Button
+                                id={`print-month-${mn.period}`}
+                                variant="outline"
+                                type="button"
+                                size="sm"
+                                className="h-8 gap-1.5 text-[10px] font-black uppercase cursor-pointer py-1 px-2 border-stone-200"
+                                onClick={() => {
+                                  triggerPrintSalesReport({
+                                    periodLabel: `Mes: ${mn.period}`,
+                                    totalSales: mn.sales,
+                                    totalExpenses: mn.expenses,
+                                    totalTransactions: mn.count,
+                                    averageTicket: mn.count > 0 ? (mn.sales / mn.count) : 0,
+                                  });
+                                }}
+                              >
+                                <Printer size={12} className="text-mex-brown" />
+                                TICKET
+                              </Button>
                             </td>
                           </tr>
                         ))}
@@ -7208,6 +7282,27 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
               </div>
               
               <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  id="btn-print-report-ticket-54mm"
+                  variant="primary"
+                  className="bg-stone-850 hover:bg-stone-900 text-white font-bold text-xs px-4 py-2.5 rounded-xl flex items-center gap-2 shadow-sm"
+                  onClick={() => {
+                    triggerPrintSalesReport({
+                      periodLabel: printReportData.periodLabel,
+                      totalSales: printReportData.totalSales || 0,
+                      totalExpenses: printReportData.totalExpenses || 0,
+                      totalTransactions: printReportData.totalTransactions || 0,
+                      averageTicket: printReportData.averageTicket,
+                      totalCash: printReportData.totalCashInDrawer,
+                      totalCard: printReportData.totalCard,
+                      totalTransfer: printReportData.totalTransfer,
+                    });
+                  }}
+                >
+                  <Printer size={15} className="text-mex-brown" />
+                  Imprimir Ticket (54mm)
+                </Button>
+
                 <Button
                   variant="primary"
                   className="bg-mex-green hover:bg-mex-green/90 text-white font-bold text-xs px-4 py-2.5 rounded-xl flex items-center gap-2 shadow-sm"

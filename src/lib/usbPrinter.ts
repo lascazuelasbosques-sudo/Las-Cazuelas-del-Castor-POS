@@ -264,36 +264,120 @@ export async function disconnectUsbPrinter(): Promise<void> {
   };
 }
 
-// Send raw ESC/POS bytes over USB cable or route to system driver
+// Send raw ESC/POS bytes over USB cable with auto-recovery and system fallback
 export async function sendUsbRawData(data: Uint8Array): Promise<void> {
+  // 1. Try sending via active WebUSB
   if (connectedUsbDevice) {
-    await connectedUsbDevice.transferOut(usbEndpointNumber, data);
-    return;
+    try {
+      await connectedUsbDevice.transferOut(usbEndpointNumber, data);
+      console.log("[USB Printer] Datos enviados exitosamente por WebUSB.");
+      return;
+    } catch (usbErr) {
+      console.warn("[USB Printer] Falló transferencia WebUSB. Intentando autorecupereación...", usbErr);
+      try {
+        const autoRes = await autoConnectUsbPrinter();
+        if (autoRes.connected && connectedUsbDevice) {
+          await connectedUsbDevice.transferOut(usbEndpointNumber, data);
+          console.log("[USB Printer] Transferencia exitosa tras autorecuperación WebUSB.");
+          return;
+        }
+      } catch (retryErr) {
+        console.warn("[USB Printer] Falló reintento de autorecuperación WebUSB:", retryErr);
+      }
+    }
   }
 
+  // 2. Try sending via active WebSerial
   if (connectedSerialPort && connectedSerialPort.writable) {
-    const writer = connectedSerialPort.writable.getWriter();
-    await writer.write(data);
-    writer.releaseLock();
-    return;
+    try {
+      const writer = connectedSerialPort.writable.getWriter();
+      await writer.write(data);
+      writer.releaseLock();
+      console.log("[USB Printer] Datos enviados exitosamente por Puerto Serie.");
+      return;
+    } catch (serialErr) {
+      console.warn("[USB Printer] Falló envío por Puerto Serie. Intentando autorecupereación...", serialErr);
+      try {
+        const autoRes = await autoConnectUsbPrinter();
+        if (autoRes.connected && connectedSerialPort && connectedSerialPort.writable) {
+          const writer = connectedSerialPort.writable.getWriter();
+          await writer.write(data);
+          writer.releaseLock();
+          console.log("[USB Printer] Transferencia exitosa tras autorecuperación Serie.");
+          return;
+        }
+      } catch (retryErr) {
+        console.warn("[USB Printer] Falló reintento de autorecuperación Serie:", retryErr);
+      }
+    }
   }
 
-  // If connected via system driver (e.g. inside iframe), trigger system 50x60 print
-  if (currentDiagnostic.connectionType === 'system') {
-    print50x60ViaSystem({
-      folio: "0001",
-      tableNumber: "Mesa 1",
-      items: [
-        { name: "Cazuela Pastor", quantity: 1, price: 95 },
-        { name: "Queso Extra", quantity: 1, price: 15 },
-        { name: "Refresco", quantity: 1, price: 30 }
-      ],
-      total: 140
-    });
-    return;
+  // 3. Fallback to System Driver Print if direct USB transfer unavailable or failed
+  console.log("[USB Printer] Usando canal de Impresión del Sistema (Driver / CUPS)...");
+  print50x60ViaSystem({
+    folio: "0001",
+    tableNumber: "Mesa 1",
+    items: [
+      { name: "Cazuela Pastor", quantity: 1, price: 95 },
+      { name: "Queso Extra", quantity: 1, price: 15 },
+      { name: "Refresco", quantity: 1, price: 30 }
+    ],
+    total: 140
+  });
+}
+
+// Test printer communication by sending a ping command
+export async function testPrinterCommunication(): Promise<{ success: boolean; message: string; connectionType: string }> {
+  let diag = getUsbPrinterDiagnostic();
+  if (!diag.connected || diag.connectionType === 'none') {
+    diag = await autoConnectUsbPrinter();
   }
 
-  throw new Error("No hay impresora USB conectada por cable. Conéctela o use Impresión del Sistema.");
+  const testBytes = build50x60TicketBytes({
+    folio: "TEST",
+    tableNumber: "TEST COMUNICACIÓN",
+    items: [{ name: "Test de Respuesta USB OK", quantity: 1, price: 0 }],
+    total: 0
+  });
+
+  try {
+    await sendUsbRawData(testBytes);
+    return {
+      success: true,
+      message: "¡Test de comunicación exitoso! La impresora respondió correctamente.",
+      connectionType: currentDiagnostic.connectionType
+    };
+  } catch (err: any) {
+    return {
+      success: false,
+      message: `Error de comunicación: ${err.message || "Sin respuesta del puerto de impresión."}`,
+      connectionType: currentDiagnostic.connectionType
+    };
+  }
+}
+
+// Reconnect printer service by resetting interfaces and re-detecting ports
+export async function reconnectPrinterService(): Promise<UsbPrinterDiagnostic> {
+  console.log("[USB Printer] Reiniciando servicio de impresora USB...");
+  await disconnectUsbPrinter();
+  
+  try {
+    const autoRes = await autoConnectUsbPrinter();
+    if (autoRes.connected) {
+      console.log("[USB Printer] Servicio reconectado exitosamente:", autoRes);
+      return autoRes;
+    }
+  } catch (e) {
+    console.warn("[USB Printer] Re-conexión directa no encontró puerto previo:", e);
+  }
+
+  currentDiagnostic = {
+    connected: true,
+    deviceName: "Impresora por Driver de Sistema (CUPS / Spooler)",
+    connectionType: 'system',
+    isIframeRestricted: typeof window !== 'undefined' && window.self !== window.top
+  };
+  return currentDiagnostic;
 }
 
 // Text sanitizer for 50mm receipts
@@ -486,6 +570,120 @@ export function print50x60ViaSystem(ticketData: {
       <span>$${(ticketData.total || 0).toFixed(2)}</span>
     </div>
     <div style="text-align: center; font-size: 9px; margin-top: 5px; font-style: italic; font-weight: bold;">${footerNote}</div>
+  `;
+
+  setTimeout(() => {
+    window.print();
+  }, 100);
+}
+
+// Build ESC/POS bytes for 54mm Sales Report ticket (Daily / Weekly / Monthly)
+export function build54mmSalesReportBytes(report: {
+  periodLabel: string;
+  totalSales: number;
+  totalExpenses: number;
+  totalTransactions: number;
+  averageTicket?: number;
+  totalCash?: number;
+  totalCard?: number;
+  totalTransfer?: number;
+}): Uint8Array {
+  const ESC = '\x1B';
+  const timeStr = new Date().toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
+  const dateStr = new Date().toLocaleDateString('es-MX', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  const net = (report.totalSales || 0) - (report.totalExpenses || 0);
+
+  let body = "";
+  body += format30Columns("Ventas Totales:", `$${(report.totalSales || 0).toFixed(2)}`);
+  body += format30Columns("Gastos/Egresos:", `-$${(report.totalExpenses || 0).toFixed(2)}`);
+  body += "------------------------------\n";
+  body += format30Columns("FLUJO NETO:", `$${net.toFixed(2)}`);
+  body += format30Columns("Transacciones:", `${report.totalTransactions || 0}`);
+  if (report.averageTicket !== undefined) {
+    body += format30Columns("Ticket Promed:", `$${report.averageTicket.toFixed(2)}`);
+  }
+
+  if (report.totalCash !== undefined || report.totalCard !== undefined || report.totalTransfer !== undefined) {
+    body += "------------------------------\n";
+    body += "METODOS DE PAGO:\n";
+    if (report.totalCash !== undefined) body += format30Columns("  Efectivo:", `$${report.totalCash.toFixed(2)}`);
+    if (report.totalCard !== undefined) body += format30Columns("  Tarjeta:", `$${report.totalCard.toFixed(2)}`);
+    if (report.totalTransfer !== undefined) body += format30Columns("  Transfer:", `$${report.totalTransfer.toFixed(2)}`);
+  }
+
+  const commands =
+    ESC + '\x40' +                      // Init
+    ESC + '\x33\x12' +                  // Compact line spacing
+    ESC + '\x61\x01' +                  // Center
+    ESC + '\x45\x01' +                  // Bold ON
+    "LAS CAZUELAS DEL CASTOR\n" +
+    ESC + '\x45\x00' +
+    "REPORTE GENERAL DE VENTAS\n" +
+    `${report.periodLabel}\n` +
+    `Emision: ${dateStr} ${timeStr}\n` +
+    "------------------------------\n" +
+    ESC + '\x61\x00' +                  // Left
+    body +
+    "------------------------------\n" +
+    ESC + '\x61\x01' +                  // Center
+    "Fin de Reporte de Ventas\n" +
+    "\n\n";                            // 2 line feeds (~1cm bottom tolerance)
+
+  return new TextEncoder().encode(commands);
+}
+
+// Print 54mm Sales Report via System Driver
+export function print54mmSalesReportViaSystem(report: {
+  periodLabel: string;
+  totalSales: number;
+  totalExpenses: number;
+  totalTransactions: number;
+  averageTicket?: number;
+  totalCash?: number;
+  totalCard?: number;
+  totalTransfer?: number;
+}): void {
+  let printEl = document.getElementById('print-ticket-active');
+  if (!printEl) {
+    printEl = document.createElement('div');
+    printEl.id = 'print-ticket-active';
+    document.body.appendChild(printEl);
+  }
+
+  const net = (report.totalSales || 0) - (report.totalExpenses || 0);
+  const timeStr = new Date().toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
+  const dateStr = new Date().toLocaleDateString('es-MX', { day: '2-digit', month: '2-digit', year: 'numeric' });
+
+  let breakdownHtml = "";
+  if (report.totalCash !== undefined || report.totalCard !== undefined || report.totalTransfer !== undefined) {
+    breakdownHtml = `
+      <div style="border-top: 1px dashed #000; margin: 4px 0;"></div>
+      <div style="font-weight: bold; font-size: 9px; margin-bottom: 2px;">MÉTODOS DE PAGO:</div>
+      ${report.totalCash !== undefined ? `<div style="display:flex; justify-content:space-between; font-size:9px;"><span>Efectivo:</span><b>$${report.totalCash.toFixed(2)}</b></div>` : ''}
+      ${report.totalCard !== undefined ? `<div style="display:flex; justify-content:space-between; font-size:9px;"><span>Tarjeta:</span><b>$${report.totalCard.toFixed(2)}</b></div>` : ''}
+      ${report.totalTransfer !== undefined ? `<div style="display:flex; justify-content:space-between; font-size:9px;"><span>Transfer:</span><b>$${report.totalTransfer.toFixed(2)}</b></div>` : ''}
+    `;
+  }
+
+  printEl.innerHTML = `
+    <div style="text-align: center; margin-bottom: 2px;">
+      <img src="/logo_las_cazuelas_del_castor.jpg" alt="Logo" style="width: 20mm; height: 20mm; border-radius: 50%; object-fit: cover; margin: 0 auto 2px auto; display: block; filter: grayscale(100%) contrast(150%);" />
+      <div style="font-weight: bold; font-size: 10.5px; line-height: 1.15;">LAS CAZUELAS DEL CASTOR</div>
+      <div style="font-weight: bold; font-size: 9.5px; margin-top: 2px;">REPORTE GENERAL DE VENTAS</div>
+      <div style="font-size: 9px; font-weight: bold; color: #333;">${report.periodLabel}</div>
+      <div style="font-size: 8.5px; color: #666;">Emisión: ${dateStr} ${timeStr}</div>
+    </div>
+    <div style="border-top: 1px dashed #000; margin: 4px 0;"></div>
+    <div style="font-size: 9.5px;">
+      <div style="display: flex; justify-content: space-between;"><span>Ventas Totales:</span><b>$${(report.totalSales || 0).toFixed(2)}</b></div>
+      <div style="display: flex; justify-content: space-between;"><span>Gastos / Egresos:</span><b>-$${(report.totalExpenses || 0).toFixed(2)}</b></div>
+      <div style="display: flex; justify-content: space-between; font-weight: bold; border-top: 1px solid #000; margin-top: 2px; padding-top: 2px;"><span>FLUJO NETO:</span><b>$${net.toFixed(2)}</b></div>
+      <div style="display: flex; justify-content: space-between; margin-top: 3px;"><span>Transacciones:</span><b>${report.totalTransactions || 0}</b></div>
+      ${report.averageTicket !== undefined ? `<div style="display: flex; justify-content: space-between;"><span>Ticket Promed:</span><b>$${report.averageTicket.toFixed(2)}</b></div>` : ''}
+    </div>
+    ${breakdownHtml}
+    <div style="border-top: 1px dashed #000; margin: 4px 0;"></div>
+    <div style="text-align: center; font-size: 8.5px; font-weight: bold;">Fin de Reporte de Ventas</div>
   `;
 
   setTimeout(() => {

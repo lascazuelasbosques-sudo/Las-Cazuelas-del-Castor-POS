@@ -7,6 +7,8 @@ import {
   getUsbPrinterDiagnostic, 
   printUsbTestTicket,
   print50x60ViaSystem,
+  testPrinterCommunication,
+  reconnectPrinterService,
   UsbPrinterDiagnostic 
 } from '../lib/usbPrinter';
 import toast from 'react-hot-toast';
@@ -26,6 +28,8 @@ export const UsbPrinterModal: React.FC<UsbPrinterModalProps> = ({ isOpen, onClos
   });
   const [testing, setTesting] = useState(false);
 
+  const [reconnecting, setReconnecting] = useState(false);
+
   useEffect(() => {
     if (isOpen) {
       setDiag(getUsbPrinterDiagnostic());
@@ -33,6 +37,36 @@ export const UsbPrinterModal: React.FC<UsbPrinterModalProps> = ({ isOpen, onClos
   }, [isOpen]);
 
   if (!isOpen) return null;
+
+  const handleReconnectService = async () => {
+    try {
+      setReconnecting(true);
+      const res = await reconnectPrinterService();
+      setDiag(res);
+      toast.success("¡Servicio de impresión reconectado!");
+    } catch (err: any) {
+      toast.error("Error al reconectar el servicio.");
+    } finally {
+      setReconnecting(false);
+    }
+  };
+
+  const handleTestCommunication = async () => {
+    try {
+      setTesting(true);
+      const res = await testPrinterCommunication();
+      setDiag(getUsbPrinterDiagnostic());
+      if (res.success) {
+        toast.success(res.message);
+      } else {
+        toast.error(res.message);
+      }
+    } catch (err: any) {
+      toast.error("Error al probar comunicación con la impresora.");
+    } finally {
+      setTesting(false);
+    }
+  };
 
   const isIframe = typeof window !== 'undefined' && window.self !== window.top;
 
@@ -238,8 +272,28 @@ export const UsbPrinterModal: React.FC<UsbPrinterModalProps> = ({ isOpen, onClos
             </div>
           </div>
 
-          {/* Connection Actions */}
+          {/* Connection Actions & Service Recovery */}
           <div className="space-y-3">
+            
+            {/* Quick Reconnect Button */}
+            <button
+              onClick={handleReconnectService}
+              disabled={reconnecting}
+              className="w-full py-3 px-4 bg-amber-500 hover:bg-amber-600 text-stone-950 font-black text-xs uppercase tracking-wider rounded-2xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+            >
+              {reconnecting ? (
+                <>
+                  <RefreshCw size={16} className="animate-spin" />
+                  Reconectando Servicio de Impresión...
+                </>
+              ) : (
+                <>
+                  <RefreshCw size={16} />
+                  Reconectar Servicio de Impresión (Resetear Puerto)
+                </>
+              )}
+            </button>
+
             {(!diag.connected || diag.connectionType === 'none' || diag.connectionType === 'system') && (
               <div className="space-y-2">
                 <button
@@ -280,27 +334,27 @@ export const UsbPrinterModal: React.FC<UsbPrinterModalProps> = ({ isOpen, onClos
               </button>
             )}
 
-            {/* Test Button */}
-            <div className="pt-2 border-t border-stone-200">
+            {/* Test Communication Button */}
+            <div className="pt-2 border-t border-stone-200 space-y-1.5">
               <button
-                onClick={handleSendTestTicket}
+                onClick={handleTestCommunication}
                 disabled={testing}
                 className="w-full py-3.5 px-4 bg-mex-green hover:bg-mex-green/90 text-white font-black text-xs uppercase tracking-wider rounded-2xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
               >
                 {testing ? (
                   <>
                     <RefreshCw size={16} className="animate-spin" />
-                    Enviando prueba 50x60mm...
+                    Probando comunicación con impresora...
                   </>
                 ) : (
                   <>
-                    <Printer size={16} />
-                    Mandar Prueba de Ticket 50X60
+                    <Zap size={16} className="text-mex-gold" />
+                    Test de Comunicación (Probar Impresora)
                   </>
                 )}
               </button>
-              <p className="text-[10px] text-stone-400 text-center mt-1.5">
-                Envía el ticket de prueba en formato 50x60 mm directamente a su impresora USB
+              <p className="text-[10px] text-stone-400 text-center">
+                Envía un paquete de respuesta directa para verificar si la impresora está en línea
               </p>
             </div>
           </div>

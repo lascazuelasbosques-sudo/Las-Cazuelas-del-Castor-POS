@@ -45,7 +45,15 @@
     margin: 0 !important;
     padding: 0 !important;
     width: 54mm !important;
+    height: auto !important;
+    overflow: visible !important;
     background: #fff !important;
+    page-break-before: avoid !important;
+    page-break-after: avoid !important;
+    page-break-inside: avoid !important;
+    break-before: avoid !important;
+    break-after: avoid !important;
+    break-inside: avoid !important;
   }
 
   body > * {
@@ -56,22 +64,35 @@
   #print-ticket-active * {
     display: block !important;
     visibility: visible !important;
+    page-break-before: avoid !important;
+    page-break-after: avoid !important;
+    page-break-inside: avoid !important;
+    break-before: avoid !important;
+    break-after: avoid !important;
+    break-inside: avoid !important;
   }
 
   #print-ticket-active {
-    position: absolute !important;
+    position: relative !important;
     top: 0 !important;
     left: 0 !important;
     width: 54mm !important;
     max-width: 54mm !important;
+    height: auto !important;
     margin: 0 !important;
-    padding: 2mm 2mm 10mm 2mm !important; /* 10mm (1cm) bottom tolerance with next ticket */
+    padding: 2mm 2mm 8mm 2mm !important; /* 8mm bottom margin tolerance */
     font-size: 9.5px !important;
     line-height: 1.25 !important;
     font-family: 'Courier New', Courier, monospace !important;
     color: #000 !important;
     background: #fff !important;
     box-sizing: border-box !important;
+    page-break-before: avoid !important;
+    page-break-after: avoid !important;
+    page-break-inside: avoid !important;
+    break-before: avoid !important;
+    break-after: avoid !important;
+    break-inside: avoid !important;
   }
 }
 
