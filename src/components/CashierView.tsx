@@ -1179,15 +1179,17 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
 
       setLastPaymentData({ group: selectedGroup, method: paymentMethod, total: finalTotal });
       setShowPaymentModal(false);
-      setShowSuccessModal(true);
 
       // Auto print ticket immediately upon payment confirmation
-      triggerAutoPrintTicket({
+      await triggerAutoPrintTicket({
         group: selectedGroup,
         method: paymentMethod,
         total: finalTotal,
         isPreAccount: false
       });
+
+      // Show compact sales summary modal after printing
+      setShowSuccessModal(true);
 
       setSelectedGroup(null);
       setPaymentMethod('cash');
@@ -1284,7 +1286,9 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
         folios: [selectedCreditOrder.folio || '0']
       };
 
-      triggerAutoPrintTicket({
+      setLastPaymentData({ group: creditGroup, method: creditPaymentMethod, total: totalPaid });
+
+      await triggerAutoPrintTicket({
         group: creditGroup,
         method: creditPaymentMethod,
         total: totalPaid,
@@ -1292,6 +1296,7 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
       });
 
       setShowCreditPaymentModal(false);
+      setShowSuccessModal(true);
       setSelectedCreditOrder(null);
       setCreditCashReceived('');
       setCreditTransferReceipt(null);
@@ -5549,138 +5554,88 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
                 </div>
               </div>
 
-              {/* Action Buttons */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
-                <Button 
-                  variant="outline" 
-                  className="flex items-center justify-center gap-2 h-12 rounded-xl border-stone-200 hover:bg-stone-50 text-stone-800 font-bold cursor-pointer"
-                  onClick={() => handlePrintPreAccount(preAccountData.group, 'usb')}
-                >
-                  <Printer size={18} className="text-amber-700" />
-                  <div className="text-left">
-                    <p className="text-[10px] font-black uppercase">Reimprimir Recibo</p>
-                    <p className="text-[9px] text-stone-400 font-normal">Ticket 54mm</p>
-                  </div>
-                </Button>
-
-                <Button 
-                  variant="outline" 
-                  className="flex items-center justify-center gap-2 h-12 rounded-xl border-stone-200 hover:bg-stone-50 text-stone-700 font-bold cursor-pointer"
-                  onClick={() => generatePreAccountPDF(true)}
-                >
-                  <DownloadCloud size={16} className="text-amber-700" />
-                  <div className="text-left">
-                    <p className="text-[10px] font-black uppercase">Descargar PDF</p>
-                    <p className="text-[9px] text-stone-400 font-normal">Guardar en Archivo</p>
-                  </div>
-                </Button>
-              </div>
             </CardContent>
-            <CardFooter className="p-5 pt-0 flex flex-col gap-2">
+            <CardFooter className="p-5 pt-2 flex flex-col items-center justify-center">
               <Button 
-                className="w-full h-12 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-black text-xs uppercase tracking-wider shadow-md shadow-amber-600/20 flex items-center justify-center gap-2 cursor-pointer"
-                onClick={() => {
-                  handleMarkPreAccountDelivered(preAccountData.group);
+                className="w-full h-14 rounded-2xl bg-amber-600 hover:bg-amber-700 text-white font-black text-sm sm:text-base uppercase tracking-wider shadow-lg shadow-amber-600/30 flex items-center justify-center gap-3 cursor-pointer transition-all active:scale-[0.98]"
+                onClick={async () => {
+                  await handlePrintPreAccount(preAccountData.group, 'usb');
+                  await handleMarkPreAccountDelivered(preAccountData.group);
                   setPreAccountData(null);
                 }}
               >
-                <CheckCircle2 size={16} />
-                <span>Dejar Cobro Pendiente (Entregar al Cliente)</span>
+                <Printer size={22} className="shrink-0" />
+                <span>Imprimir Recibo</span>
               </Button>
             </CardFooter>
           </Card>
         </div>
       )}
 
-      {/* Success Modal */}
+      {/* Success Modal - Resumen de Venta Compacto */}
       {showSuccessModal && lastPaymentData && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[200] p-4 backdrop-blur-sm">
-          <Card className="w-full max-w-sm rounded-[2rem] shadow-2xl animate-in zoom-in-95 duration-200">
-            <CardHeader className="bg-mex-green text-white rounded-t-[2rem] p-6 text-center">
-              <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-4">
-                <CheckCircle2 size={32} />
+          <Card className="w-full max-w-sm rounded-[2rem] shadow-2xl animate-in zoom-in-95 duration-200 overflow-hidden bg-white border-0">
+            <CardHeader className="bg-mex-green text-white p-5 text-center relative">
+              <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-2 shadow-inner">
+                <CheckCircle2 size={28} className="text-white" />
               </div>
-              <h3 className="text-2xl font-serif">¡Venta Exitosa!</h3>
-              <p className="text-white/80 text-sm mt-1">El pago ha sido registrado</p>
+              <h3 className="text-xl font-bold tracking-tight">¡Venta Exitosa!</h3>
+              <p className="text-white/80 text-xs mt-0.5">El pago ha sido registrado</p>
             </CardHeader>
-            <CardContent className="p-6">
-              <div id="ticket-content" className="bg-white border-2 border-dashed border-stone-200 p-6 rounded-xl font-mono text-xs sm:text-sm space-y-4 shadow-sm mb-6">
-                <div className="text-center space-y-1.5">
-                  <img 
-                    src="/logo_las_cazuelas_del_castor.jpg" 
-                    alt="Logo Las Cazuelas del Castor" 
-                    style={{ width: '20mm', height: '20mm', filter: 'grayscale(100%) contrast(140%)', WebkitFilter: 'grayscale(100%) contrast(140%)' }}
-                    className="rounded-full object-cover mx-auto mb-2 border border-stone-300 shadow-xs" 
-                  />
-                  <p className="font-black text-sm sm:text-base tracking-tight text-black">LAS CAZUELAS DEL CASTOR</p>
-                  <p className="text-xs text-stone-600">Ticket de Venta</p>
-                  <p className="text-xs text-stone-600">{new Date().toLocaleString()}</p>
+
+            <CardContent className="p-5 space-y-3.5">
+              {/* Resumen de Venta Principal */}
+              <div className="bg-stone-50 border border-stone-200/80 rounded-2xl p-3.5 text-center space-y-1.5">
+                <span className="text-[10px] font-black uppercase text-stone-400 tracking-wider">Total Cobrado</span>
+                <div className="text-3xl font-black text-stone-900 tracking-tight">
+                  {formatCurrency(lastPaymentData.total)}
                 </div>
-                <div className="border-t border-stone-200 pt-2.5 space-y-1">
-                  <p>Mesa: <span className="font-semibold">{lastPaymentData.group.displayTitle}</span></p>
-                  <p>Folios: <span className="font-semibold">{lastPaymentData.group.folios.join(", ")}</span></p>
-                  <p>Mesero: <span className="font-semibold">{lastPaymentData.group.waiterNames[0] || 'Atendido'}</span></p>
-                  {lastPaymentData.method === 'credit' && (
-                    <>
-                      <p className="font-bold text-red-700">MÉTODO: CRÉDITO</p>
-                      {lastPaymentData.group.orders.find(o => o.clientName)?.clientName && (
-                        <p className="font-bold text-red-700">CLIENTE: {lastPaymentData.group.orders.find(o => o.clientName)?.clientName}</p>
-                      )}
-                    </>
-                  )}
+
+                <div className="flex items-center justify-center gap-1.5 pt-1 flex-wrap">
+                  <span className="px-2.5 py-0.5 bg-emerald-100 text-emerald-800 text-[10px] font-black rounded-full uppercase">
+                    {lastPaymentData.method === 'cash' ? '💵 Efectivo' :
+                     lastPaymentData.method === 'card' ? '💳 Tarjeta' :
+                     lastPaymentData.method === 'transfer' ? '📱 Transferencia' : '📜 Crédito'}
+                  </span>
+                  <span className="px-2.5 py-0.5 bg-stone-200 text-stone-700 text-[10px] font-black rounded-full">
+                    {lastPaymentData.group.displayTitle}
+                  </span>
                 </div>
-                <div className="border-t border-stone-200 pt-2.5 space-y-1.5">
-                  {lastPaymentData.group.orders.map(order => 
-                    order.items.map((item, idx) => (
-                      <div key={idx} className="flex justify-between">
-                        <span>{item.quantity}x {item.name}</span>
-                        <span className="font-semibold">{formatCurrency(item.price * item.quantity)}</span>
-                      </div>
-                    ))
-                  )}
+              </div>
+
+              {/* Información Breve del Pedido */}
+              <div className="space-y-1.5 text-xs text-stone-600 bg-white p-3 rounded-xl border border-stone-150">
+                <div className="flex justify-between items-center pb-1 border-b border-stone-100">
+                  <span className="text-stone-400 font-semibold">Folio:</span>
+                  <span className="font-mono font-bold text-stone-800">{lastPaymentData.group.folios.join(", ")}</span>
                 </div>
-                {lastPaymentData.group.orders.some(o => o.movementLogs && o.movementLogs.length > 0) && (
-                  <div className="border-t border-stone-250 pt-2 space-y-1 text-[9px] text-stone-600 font-mono leading-tight">
-                    <p className="font-bold uppercase tracking-wider text-[8px] text-stone-500">Historial de Comanda:</p>
-                    {lastPaymentData.group.orders.flatMap(o => o.movementLogs || []).sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()).map((log, idx) => (
-                      <div key={idx} className="flex justify-between gap-2 border-b border-stone-100 pb-0.5 last:border-0">
-                        <span>{log.action} ({log.userName} - {log.userRole})</span>
-                        <span className="shrink-0">{new Date(log.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                <div className="flex justify-between items-center pb-1 border-b border-stone-100">
+                  <span className="text-stone-400 font-semibold">Atendió:</span>
+                  <span className="font-bold text-stone-800">{lastPaymentData.group.waiterNames[0] || 'Personal'}</span>
+                </div>
+
+                {/* Resumen Compacto de Productos */}
+                <div className="pt-1">
+                  <p className="text-[10px] font-black uppercase text-stone-400 mb-1">Resumen de Comanda ({lastPaymentData.group.orders.flatMap(o => o.items || []).reduce((acc, i) => acc + i.quantity, 0)} items):</p>
+                  <div className="max-h-24 overflow-y-auto custom-scrollbar space-y-1 pr-1">
+                    {lastPaymentData.group.orders.flatMap(o => o.items || []).map((item, idx) => (
+                      <div key={idx} className="flex justify-between text-[11px]">
+                        <span className="text-stone-700 font-medium truncate max-w-[180px]">
+                          {item.quantity}x {item.name}
+                        </span>
+                        <span className="font-bold text-stone-900">{formatCurrency(item.price * item.quantity)}</span>
                       </div>
                     ))}
                   </div>
-                )}
-                <div className="border-t border-stone-200 pt-3 space-y-2 font-bold text-sm">
-                  <div className="flex justify-between text-base">
-                    <span>Total</span>
-                    <span>{formatCurrency(lastPaymentData.total)}</span>
-                  </div>
-                  <p className="text-center pt-3 italic font-normal text-xs text-stone-600">¡Gracias por su compra! Vuelva pronto</p>
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              {/* Botones de Acción Rápida Compactos */}
+              <div className="grid grid-cols-3 gap-2 pt-0.5">
                 <Button 
                   variant="outline" 
-                  className="flex-col gap-2 h-20 rounded-2xl border-stone-100 hover:bg-stone-50"
-                  onClick={() => generateTicketPDF(true)}
-                >
-                  <Package size={20} className="text-mex-gold" />
-                  <span className="text-[10px] font-black uppercase">Guardar PDF</span>
-                </Button>
-                <Button 
-                  variant="outline" 
-                  className="flex-col gap-2 h-20 rounded-2xl border-stone-100 hover:bg-stone-50"
-                  onClick={handleSendEmail}
-                >
-                  <Receipt size={20} className="text-blue-500" />
-                  <span className="text-[10px] font-black uppercase">Enviar Mail</span>
-                </Button>
-
-                {/* Print Ticket 54mm Button */}
-                <Button 
-                  variant="outline" 
-                  className="flex-col gap-2 h-20 rounded-2xl border-amber-300 bg-amber-50/90 hover:bg-amber-100 text-amber-950 md:col-span-2 shadow-xs"
+                  className="flex flex-col items-center justify-center gap-1 h-12 rounded-xl border-stone-200 text-stone-700 hover:bg-stone-50 cursor-pointer"
                   onClick={() => {
                     if (lastPaymentData) {
                       triggerAutoPrintTicket({
@@ -5691,28 +5646,69 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
                       });
                     }
                   }}
+                  title="Volver a imprimir ticket"
                 >
-                  <Printer size={20} className="text-amber-800" />
-                  <span className="text-[10px] font-black uppercase">Reimprimir Ticket (54mm)</span>
+                  <Printer size={16} className="text-amber-700" />
+                  <span className="text-[9px] font-black uppercase">Reimprimir</span>
                 </Button>
 
                 <Button 
                   variant="outline" 
-                  className="flex-col gap-2 h-20 rounded-2xl border-stone-100 hover:bg-stone-50 md:col-span-2"
-                  onClick={handlePrint}
+                  className="flex flex-col items-center justify-center gap-1 h-12 rounded-xl border-stone-200 text-stone-700 hover:bg-stone-50 cursor-pointer"
+                  onClick={() => generateTicketPDF(true)}
+                  title="Guardar archivo PDF"
                 >
-                  <History size={20} className="text-stone-400" />
-                  <span className="text-[10px] font-black uppercase">Imprimir Ticket Estándar (PDF/Papel)</span>
+                  <Package size={16} className="text-mex-gold" />
+                  <span className="text-[9px] font-black uppercase">PDF</span>
+                </Button>
+
+                <Button 
+                  variant="outline" 
+                  className="flex flex-col items-center justify-center gap-1 h-12 rounded-xl border-stone-200 text-stone-700 hover:bg-stone-50 cursor-pointer"
+                  onClick={handleSendEmail}
+                  title="Enviar por correo electrónico"
+                >
+                  <Receipt size={16} className="text-blue-500" />
+                  <span className="text-[9px] font-black uppercase">Email</span>
                 </Button>
               </div>
+
+              {/* Contenedor invisible fuera de pantalla exclusivamente para renderizado PDF si se solicita */}
+              <div className="fixed -left-[9999px] -top-[9999px] opacity-0 pointer-events-none">
+                <div id="ticket-content" className="bg-white p-6 rounded-xl font-mono text-xs w-[300px]">
+                  <div className="text-center space-y-1 mb-3">
+                    <p className="font-black text-sm">LAS CAZUELAS DEL CASTOR</p>
+                    <p className="text-xs">Ticket de Venta</p>
+                    <p className="text-xs">{new Date().toLocaleString()}</p>
+                  </div>
+                  <div className="border-t border-b border-stone-200 py-2 space-y-1 mb-3">
+                    <p>Mesa: {lastPaymentData.group.displayTitle}</p>
+                    <p>Folios: {lastPaymentData.group.folios.join(", ")}</p>
+                    <p>Mesero: {lastPaymentData.group.waiterNames[0] || 'Atendido'}</p>
+                  </div>
+                  <div className="space-y-1 mb-3">
+                    {lastPaymentData.group.orders.flatMap(o => o.items || []).map((item, idx) => (
+                      <div key={idx} className="flex justify-between">
+                        <span>{item.quantity}x {item.name}</span>
+                        <span>{formatCurrency(item.price * item.quantity)}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="border-t border-stone-200 pt-2 font-bold flex justify-between">
+                    <span>Total</span>
+                    <span>{formatCurrency(lastPaymentData.total)}</span>
+                  </div>
+                </div>
+              </div>
             </CardContent>
-            <CardFooter className="p-6 pt-0">
+
+            <CardFooter className="p-5 pt-0">
               <Button 
                 variant="primary" 
-                className="w-full h-12 rounded-xl bg-mex-green hover:bg-mex-green/90 font-black tracking-widest text-xs uppercase"
+                className="w-full h-12 rounded-xl bg-mex-green hover:bg-mex-green/90 font-black tracking-widest text-xs uppercase cursor-pointer"
                 onClick={() => setShowSuccessModal(false)}
               >
-                Cerrar
+                Cerrar / Finalizar
               </Button>
             </CardFooter>
           </Card>
