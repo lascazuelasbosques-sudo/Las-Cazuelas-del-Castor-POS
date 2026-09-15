@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Utensils, ClipboardList, Package, CreditCard, Settings, LogOut, Menu, ChefHat, MessageSquare, Bell, Maximize2, Minimize2, Radio, Smartphone, Download, Printer, Usb } from "lucide-react";
+import { Utensils, ClipboardList, Package, CreditCard, Settings, LogOut, Menu, ChefHat, MessageSquare, Bell, Maximize2, Minimize2, Radio, Smartphone, Download, Printer, Usb, HelpCircle } from "lucide-react";
 import { Button } from "./Button";
 import { cn, getRoleLabel } from "@/src/lib/utils";
 import { auth, db } from "../firebase";
@@ -9,6 +9,7 @@ import { useBranding } from "../lib/useBranding";
 import { PWAInstallBanner } from "./PWAInstallBanner";
 import { OfflineInstallerModal } from "./OfflineInstallerModal";
 import { UsbPrinterModal } from "./UsbPrinterModal";
+import { HelpManualModal } from "./HelpManualModal";
 import { reconnectPrinterService } from "../lib/usbPrinter";
 import { WeatherClockWidget } from "./WeatherClockWidget";
 import { FullScreenLockControl } from "./FullScreenLockControl";
@@ -52,6 +53,7 @@ export const Navbar = ({
   const [pendingOps, setPendingOps] = useState(getPendingOperationsCount());
   const [isInstallerOpen, setIsInstallerOpen] = useState(false);
   const [isUsbModalOpen, setIsUsbModalOpen] = useState(false);
+  const [isHelpOpen, setIsHelpOpen] = useState(false);
   
   const { branding } = useBranding();
 
@@ -449,6 +451,15 @@ export const Navbar = ({
           </button>
 
           <button
+            onClick={() => setIsHelpOpen(true)}
+            className="flex flex-col items-center gap-1 p-2 rounded-xl text-mex-gold hover:bg-stone-100 shrink-0"
+            title="Manual de Operación y Ayuda v2.0"
+          >
+            <HelpCircle size={21} className="text-mex-gold" />
+            <span className="text-[9px] font-extrabold whitespace-nowrap">Ayuda</span>
+          </button>
+
+          <button
             onClick={() => setIsInstallerOpen(true)}
             className="flex flex-col items-center gap-1 p-2 rounded-xl text-amber-600 hover:bg-amber-50 shrink-0"
             title="Instalar App / Preparar Offline"
@@ -597,6 +608,17 @@ export const Navbar = ({
           </Button>
         </div>
 
+        {/* Help & Manual Button */}
+        <Button 
+          variant="outline" 
+          className="justify-center lg:justify-start gap-2.5 w-full border-mex-gold/40 bg-mex-gold/10 text-stone-900 hover:bg-mex-gold/20 px-0 lg:px-3 h-[36px] rounded-xl text-xs font-bold transition-all shadow-sm"
+          title="Manual de Operación & Ayuda (Versión 2.0)"
+          onClick={() => setIsHelpOpen(true)}
+        >
+          <HelpCircle size={16} className="text-mex-gold shrink-0" />
+          <span className="hidden lg:inline">Ayuda & Manual v2.0</span>
+        </Button>
+
         <Button 
           variant="ghost" 
           className="justify-center lg:justify-start gap-2.5 w-full text-stone-500 hover:text-red-600 hover:bg-red-50 px-0 lg:px-3 h-[36px] text-xs font-semibold"
@@ -607,6 +629,12 @@ export const Navbar = ({
           <span className="hidden lg:inline">Cerrar Sesión</span>
         </Button>
       </div>
+
+      {/* Manual de Operación y Ayuda Modal */}
+      <HelpManualModal
+        isOpen={isHelpOpen}
+        onClose={() => setIsHelpOpen(false)}
+      />
 
       {/* Offline PWA Installer Modal */}
       <OfflineInstallerModal

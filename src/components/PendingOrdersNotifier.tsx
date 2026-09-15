@@ -3,7 +3,7 @@ import { collection, query, where, onSnapshot, orderBy } from "firebase/firestor
 import { onOfflineSnapshot } from "../lib/offlineService";
 import { db } from "../firebase";
 import { Order, Category, Product } from "../types";
-import { Bell, BellOff, Volume2, VolumeX, AlertTriangle, Clock, ChevronDown, ChevronUp, Eye, CheckCircle2, Mic } from "lucide-react";
+import { Bell, BellOff, Volume2, VolumeX, AlertTriangle, Clock, ChevronDown, ChevronUp, Eye, CheckCircle2 } from "lucide-react";
 import { formatCurrency } from "@/src/lib/utils";
 import toast from "react-hot-toast";
 import { useDraggable } from "../lib/useDraggable";
