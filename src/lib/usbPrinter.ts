@@ -312,18 +312,8 @@ export async function sendUsbRawData(data: Uint8Array): Promise<void> {
     }
   }
 
-  // 3. Fallback to System Driver Print if direct USB transfer unavailable or failed
-  console.log("[USB Printer] Usando canal de Impresión del Sistema (Driver / CUPS)...");
-  print50x60ViaSystem({
-    folio: "0001",
-    tableNumber: "Mesa 1",
-    items: [
-      { name: "Cazuela Pastor", quantity: 1, price: 95 },
-      { name: "Queso Extra", quantity: 1, price: 15 },
-      { name: "Refresco", quantity: 1, price: 30 }
-    ],
-    total: 140
-  });
+  // 3. If direct USB or serial transfer is unavailable or failed, throw error to trigger caller fallback
+  throw new Error("Impresora USB no conectada por cable directo. Se usará el driver del sistema.");
 }
 
 // Test printer communication by sending a ping command
