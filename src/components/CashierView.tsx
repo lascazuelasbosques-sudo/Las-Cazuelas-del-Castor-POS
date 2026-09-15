@@ -421,15 +421,31 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
     setAdminPinInput('');
   };
 
+// Helper to safely parse any timestamp (Firestore Timestamp, ISO String, Epoch number, or Date)
+const safeParseDate = (timestamp: any): Date => {
+  if (!timestamp) return new Date();
+  if (timestamp instanceof Date) return timestamp;
+  if (typeof timestamp === 'number') return new Date(timestamp);
+  if (typeof timestamp === 'object' && typeof timestamp.seconds === 'number') {
+    return new Date(timestamp.seconds * 1000);
+  }
+  if (typeof timestamp === 'string') {
+    const d = new Date(timestamp);
+    if (!isNaN(d.getTime())) return d;
+  }
+  return new Date();
+};
+
   // Group log data by Day, Week, and Month for reporting
   const aggregatedHistory = React.useMemo(() => {
-    const dailyMap: Record<string, { sales: number; expenses: number; count: number }> = {};
-    const weeklyMap: Record<string, { sales: number; expenses: number; count: number; label: string }> = {};
-    const monthlyMap: Record<string, { sales: number; expenses: number; count: number; label: string }> = {};
+    type PeriodStats = { sales: number; expenses: number; count: number; cash: number; card: number; transfer: number; label?: string };
+    const dailyMap: Record<string, PeriodStats> = {};
+    const weeklyMap: Record<string, PeriodStats> = {};
+    const monthlyMap: Record<string, PeriodStats> = {};
 
     cashLogs.forEach(log => {
       if (log.cancelled) return;
-      const date = log.timestamp ? new Date(log.timestamp) : new Date();
+      const date = safeParseDate(log.timestamp);
       
       // Calculate Day key (YYYY-MM-DD local format)
       const year = date.getFullYear();
@@ -456,14 +472,14 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
       const monthLabel = date.toLocaleDateString('es-MX', { year: 'numeric', month: 'long' });
 
       // Daily grouping
-      if (!dailyMap[dayKey]) dailyMap[dayKey] = { sales: 0, expenses: 0, count: 0 };
+      if (!dailyMap[dayKey]) dailyMap[dayKey] = { sales: 0, expenses: 0, count: 0, cash: 0, card: 0, transfer: 0 };
       // Weekly grouping
-      if (!weeklyMap[weekKey]) weeklyMap[weekKey] = { sales: 0, expenses: 0, count: 0, label: weekLabel };
+      if (!weeklyMap[weekKey]) weeklyMap[weekKey] = { sales: 0, expenses: 0, count: 0, cash: 0, card: 0, transfer: 0, label: weekLabel };
       // Monthly grouping
-      if (!monthlyMap[monthKey]) monthlyMap[monthKey] = { sales: 0, expenses: 0, count: 0, label: monthLabel };
+      if (!monthlyMap[monthKey]) monthlyMap[monthKey] = { sales: 0, expenses: 0, count: 0, cash: 0, card: 0, transfer: 0, label: monthLabel };
 
       if (log.type === 'income') {
-        const isOpeningCheck = log.reason.toLowerCase().includes('apertura');
+        const isOpeningCheck = (log.reason || '').toLowerCase().includes('apertura');
         if (!isOpeningCheck) {
           dailyMap[dayKey].sales += log.amount;
           weeklyMap[weekKey].sales += log.amount;
@@ -472,6 +488,25 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
           dailyMap[dayKey].count += 1;
           weeklyMap[weekKey].count += 1;
           monthlyMap[monthKey].count += 1;
+
+          const method = log.paymentMethod || (
+            (log.reason || '').toLowerCase().includes('tarjeta') ? 'card' :
+            (log.reason || '').toLowerCase().includes('transfer') ? 'transfer' : 'cash'
+          );
+
+          if (method === 'card') {
+            dailyMap[dayKey].card += log.amount;
+            weeklyMap[weekKey].card += log.amount;
+            monthlyMap[monthKey].card += log.amount;
+          } else if (method === 'transfer') {
+            dailyMap[dayKey].transfer += log.amount;
+            weeklyMap[weekKey].transfer += log.amount;
+            monthlyMap[monthKey].transfer += log.amount;
+          } else {
+            dailyMap[dayKey].cash += log.amount;
+            weeklyMap[weekKey].cash += log.amount;
+            monthlyMap[monthKey].cash += log.amount;
+          }
         }
       } else if (log.type === 'expense') {
         dailyMap[dayKey].expenses += log.amount;
@@ -485,23 +520,32 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
       sales: stats.sales,
       expenses: stats.expenses,
       net: stats.sales - stats.expenses,
-      count: stats.count
+      count: stats.count,
+      cash: stats.cash,
+      card: stats.card,
+      transfer: stats.transfer,
     })).sort((a,b) => b.period.localeCompare(a.period));
 
     const weekly = Object.entries(weeklyMap).map(([week, stats]) => ({
-      period: stats.label,
+      period: stats.label || week,
       sales: stats.sales,
       expenses: stats.expenses,
       net: stats.sales - stats.expenses,
-      count: stats.count
+      count: stats.count,
+      cash: stats.cash,
+      card: stats.card,
+      transfer: stats.transfer,
     })).sort((a,b) => b.period.localeCompare(a.period));
 
     const monthly = Object.entries(monthlyMap).map(([month, stats]) => ({
-      period: stats.label,
+      period: stats.label || month,
       sales: stats.sales,
       expenses: stats.expenses,
       net: stats.sales - stats.expenses,
-      count: stats.count
+      count: stats.count,
+      cash: stats.cash,
+      card: stats.card,
+      transfer: stats.transfer,
     })).sort((a,b) => b.period.localeCompare(a.period));
 
     return { daily, weekly, monthly };
@@ -4219,26 +4263,30 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
                                 size="sm"
                                 className="h-8 gap-1.5 text-[10px] font-black uppercase cursor-pointer py-1 px-2 border-stone-200"
                                 onClick={() => {
-                                  // Gather exact reports for just this specific day
+                                  // Gather exact reports for just this specific day using safeParseDate
                                   const dayLogs = cashLogs.filter(log => {
                                     if (!log.timestamp || log.cancelled) return false;
-                                    const dStr = new Date(log.timestamp).toLocaleDateString('es-MX', { year: 'numeric', month: '2-digit', day: '2-digit' });
+                                    const logDate = safeParseDate(log.timestamp);
+                                    const dStr = logDate.toLocaleDateString('es-MX', { year: 'numeric', month: '2-digit', day: '2-digit' });
                                     const comparisonStr = new Date(day.period + 'T12:00:00').toLocaleDateString('es-MX', { year: 'numeric', month: '2-digit', day: '2-digit' });
                                     return comparisonStr === dStr;
                                   });
                                   
-                                  const dayTotalSales = dayLogs.filter(l => l.type === 'income').reduce((acc, l) => acc + l.amount, 0);
-                                  const dayTotalExpenses = dayLogs.filter(l => l.type === 'expense').reduce((acc, l) => acc + l.amount, 0);
+                                  const dayTotalSales = day.sales || dayLogs.filter(l => l.type === 'income').reduce((acc, l) => acc + l.amount, 0);
+                                  const dayTotalExpenses = day.expenses || dayLogs.filter(l => l.type === 'expense').reduce((acc, l) => acc + l.amount, 0);
                                   
                                   setPrintReportData({
                                     totalSales: dayTotalSales,
                                     totalExpenses: dayTotalExpenses,
-                                    totalTransactions: dayLogs.length,
-                                    averageTicket: dayLogs.length > 0 ? (dayTotalSales / dayLogs.length) : 0,
+                                    totalCashInDrawer: day.cash || dayLogs.filter(l => l.type === 'income' && (l.paymentMethod === 'cash' || !l.paymentMethod)).reduce((sc, l) => sc + l.amount, 0),
+                                    totalCard: day.card || dayLogs.filter(l => l.type === 'income' && l.paymentMethod === 'card').reduce((sc, l) => sc + l.amount, 0),
+                                    totalTransfer: day.transfer || dayLogs.filter(l => l.type === 'income' && l.paymentMethod === 'transfer').reduce((sc, l) => sc + l.amount, 0),
+                                    totalTransactions: day.count || dayLogs.length,
+                                    averageTicket: (day.count || dayLogs.length) > 0 ? (dayTotalSales / (day.count || dayLogs.length)) : 0,
                                     paymentMethodPieData: [
-                                      { name: 'Efectivo', value: dayLogs.filter(l => l.type === 'income' && l.paymentMethod === 'cash').reduce((sc, l) => sc + l.amount, 0) },
-                                      { name: 'Tarjeta', value: dayLogs.filter(l => l.type === 'income' && l.paymentMethod === 'card').reduce((sc, l) => sc + l.amount, 0) },
-                                      { name: 'Transferencia', value: dayLogs.filter(l => l.type === 'income' && l.paymentMethod === 'transfer').reduce((sc, l) => sc + l.amount, 0) },
+                                      { name: 'Efectivo', value: day.cash },
+                                      { name: 'Tarjeta', value: day.card },
+                                      { name: 'Transferencia', value: day.transfer },
                                     ],
                                     topProducts: [],
                                     period: 'today',
@@ -4317,6 +4365,9 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
                                     totalExpenses: wk.expenses,
                                     totalTransactions: wk.count,
                                     averageTicket: wk.count > 0 ? (wk.sales / wk.count) : 0,
+                                    totalCash: wk.cash,
+                                    totalCard: wk.card,
+                                    totalTransfer: wk.transfer,
                                   });
                                 }}
                               >
@@ -4389,6 +4440,9 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
                                     totalExpenses: mn.expenses,
                                     totalTransactions: mn.count,
                                     averageTicket: mn.count > 0 ? (mn.sales / mn.count) : 0,
+                                    totalCash: mn.cash,
+                                    totalCard: mn.card,
+                                    totalTransfer: mn.transfer,
                                   });
                                 }}
                               >

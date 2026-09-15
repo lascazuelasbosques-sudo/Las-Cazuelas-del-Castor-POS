@@ -31,6 +31,21 @@ import { auth } from "../firebase";
 
 const SUPER_ADMIN_EMAIL = "lascazuelasbosques@gmail.com";
 
+// Helper to safely parse any timestamp format (Firestore Timestamp, ISO string, epoch number, Date)
+const safeParseDate = (timestamp: any): Date => {
+  if (!timestamp) return new Date();
+  if (timestamp instanceof Date) return timestamp;
+  if (typeof timestamp === 'number') return new Date(timestamp);
+  if (typeof timestamp === 'object' && typeof timestamp.seconds === 'number') {
+    return new Date(timestamp.seconds * 1000);
+  }
+  if (typeof timestamp === 'string') {
+    const d = new Date(timestamp);
+    if (!isNaN(d.getTime())) return d;
+  }
+  return new Date();
+};
+
 export const AdminView = () => {
   const [loading, setLoading] = useState(false);
   const [users, setUsers] = useState<User[]>([]);
@@ -64,21 +79,21 @@ export const AdminView = () => {
 
     // Day stats
     const salesToday = validLogs
-      .filter(log => log.type === 'income' && new Date(log.timestamp).toDateString() === todayStr)
+      .filter(log => log.type === 'income' && safeParseDate(log.timestamp).toDateString() === todayStr)
       .reduce((acc, l) => acc + l.amount, 0);
 
     const salesYesterday = validLogs
-      .filter(log => log.type === 'income' && new Date(log.timestamp).toDateString() === yesterdayStr)
+      .filter(log => log.type === 'income' && safeParseDate(log.timestamp).toDateString() === yesterdayStr)
       .reduce((acc, l) => acc + l.amount, 0);
 
     // Week stats
     const salesThisWeek = validLogs
-      .filter(log => log.type === 'income' && new Date(log.timestamp) >= startOfWeek)
+      .filter(log => log.type === 'income' && safeParseDate(log.timestamp) >= startOfWeek)
       .reduce((acc, l) => acc + l.amount, 0);
 
     // Month stats
     const salesThisMonth = validLogs
-      .filter(log => log.type === 'income' && new Date(log.timestamp) >= startOfMonth)
+      .filter(log => log.type === 'income' && safeParseDate(log.timestamp) >= startOfMonth)
       .reduce((acc, l) => acc + l.amount, 0);
 
     // Transaction & average ticket
@@ -121,7 +136,7 @@ export const AdminView = () => {
     }
 
     validLogs.filter(log => log.type === 'income').forEach(log => {
-      const logDate = new Date(log.timestamp);
+      const logDate = safeParseDate(log.timestamp);
       const dateKey = logDate.toDateString();
       if (dailyTrendMap[dateKey] !== undefined) {
         dailyTrendMap[dateKey] += log.amount;
@@ -146,7 +161,7 @@ export const AdminView = () => {
     ];
 
     validLogs.filter(log => log.type === 'income').forEach(log => {
-      const logDate = new Date(log.timestamp);
+      const logDate = safeParseDate(log.timestamp);
       const diffTime = Math.abs(now.getTime() - logDate.getTime());
       const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
       
@@ -182,9 +197,9 @@ export const AdminView = () => {
       })).sort((a, b) => b.cantidad - a.cantidad);
     };
 
-    const logsToday = validLogs.filter(log => new Date(log.timestamp).toDateString() === todayStr);
-    const logsThisWeek = validLogs.filter(log => new Date(log.timestamp) >= startOfWeek);
-    const logsThisMonth = validLogs.filter(log => new Date(log.timestamp) >= startOfMonth);
+    const logsToday = validLogs.filter(log => safeParseDate(log.timestamp).toDateString() === todayStr);
+    const logsThisWeek = validLogs.filter(log => safeParseDate(log.timestamp) >= startOfWeek);
+    const logsThisMonth = validLogs.filter(log => safeParseDate(log.timestamp) >= startOfMonth);
 
     const topSellingToday = getTopSellingForLogs(logsToday);
     const topSellingWeek = getTopSellingForLogs(logsThisWeek);
