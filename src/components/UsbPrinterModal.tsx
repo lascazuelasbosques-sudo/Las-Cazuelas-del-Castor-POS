@@ -1,13 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Usb, Printer, CheckCircle2, AlertTriangle, RefreshCw, X, Zap, Sliders, ExternalLink, ShieldCheck } from 'lucide-react';
+import { Usb, Printer, CheckCircle2, AlertTriangle, RefreshCw, X, ExternalLink, PrinterCheck, Zap } from 'lucide-react';
 import { 
   connectWebUsbPrinter, 
-  connectSerialPrinter, 
   disconnectUsbPrinter, 
   getUsbPrinterDiagnostic, 
   printUsbTestTicket,
-  print50x60ViaSystem,
-  testPrinterCommunication,
+  autoConnectUsbPrinter,
   reconnectPrinterService,
   UsbPrinterDiagnostic 
 } from '../lib/usbPrinter';
@@ -19,348 +17,229 @@ interface UsbPrinterModalProps {
 }
 
 export const UsbPrinterModal: React.FC<UsbPrinterModalProps> = ({ isOpen, onClose }) => {
-  const [connecting, setConnecting] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [reconnecting, setReconnecting] = useState(false);
   const [diag, setDiag] = useState<UsbPrinterDiagnostic>({
     connected: false,
     deviceName: 'No conectada',
     connectionType: 'none',
     isIframeRestricted: typeof window !== 'undefined' && window.self !== window.top
   });
-  const [testing, setTesting] = useState(false);
 
-  const [reconnecting, setReconnecting] = useState(false);
+  const isIframe = typeof window !== 'undefined' && window.self !== window.top;
 
+  // Realizar test previo y actualización de diagnóstico al abrir
   useEffect(() => {
     if (isOpen) {
-      setDiag(getUsbPrinterDiagnostic());
+      runInitialCheck();
     }
   }, [isOpen]);
 
-  if (!isOpen) return null;
-
-  const handleReconnectService = async () => {
+  const runInitialCheck = async () => {
+    setTesting(true);
     try {
-      setReconnecting(true);
+      let current = getUsbPrinterDiagnostic();
+      if (!current.connected || current.connectionType === 'none') {
+        current = await autoConnectUsbPrinter();
+      }
+      setDiag(current);
+    } catch (e) {
+      setDiag(getUsbPrinterDiagnostic());
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  const handleReconnect = async () => {
+    setReconnecting(true);
+    try {
       const res = await reconnectPrinterService();
       setDiag(res);
-      toast.success("¡Servicio de impresión reconectado!");
+      toast.success(
+        res.connectionType === 'webusb' || res.connectionType === 'webserial'
+          ? "¡Impresora USB reconectada correctamente!"
+          : "¡Servicio de impresión reconectado (Driver de sistema)!"
+      );
     } catch (err: any) {
-      toast.error("Error al reconectar el servicio.");
+      toast.error("Error al reconectar puerto de impresión");
     } finally {
       setReconnecting(false);
     }
   };
 
-  const handleTestCommunication = async () => {
+  const handlePrintTest = async () => {
+    setTesting(true);
     try {
-      setTesting(true);
-      const res = await testPrinterCommunication();
-      setDiag(getUsbPrinterDiagnostic());
-      if (res.success) {
-        toast.success(res.message);
-      } else {
-        toast.error(res.message);
-      }
+      await printUsbTestTicket();
+      toast.success("¡Prueba de impresión enviada exitosamente!");
     } catch (err: any) {
-      toast.error("Error al probar comunicación con la impresora.");
+      console.error(err);
+      toast.error(err.message || "Error al enviar prueba de impresión");
     } finally {
       setTesting(false);
     }
   };
 
-  const isIframe = typeof window !== 'undefined' && window.self !== window.top;
-
-  const handleConnectWebUsb = async () => {
+  const handleConnectDirectUsb = async () => {
+    setConnecting(true);
     try {
-      setConnecting(true);
       const res = await connectWebUsbPrinter();
       setDiag(res);
-      if (res.connectionType === 'system') {
-        toast.success("Modo Driver Cable USB (50x60) listo para imprimir.");
-      } else {
-        toast.success(`¡Conectado por cable USB a ${res.deviceName}!`);
-      }
-    } catch (error: any) {
-      console.warn(error);
-      const current = getUsbPrinterDiagnostic();
-      setDiag(current);
-      toast.success("Configurado en Modo Driver USB (50x60 mm).");
-    } finally {
-      setConnecting(false);
-    }
-  };
-
-  const handleConnectSerial = async () => {
-    try {
-      setConnecting(true);
-      const res = await connectSerialPrinter();
-      setDiag(res);
-      toast.success(`¡Puerto USB-Serie conectado!`);
-    } catch (error: any) {
-      console.warn(error);
-      const current = getUsbPrinterDiagnostic();
-      setDiag(current);
-      toast.success("Configurado en Modo Driver USB (50x60 mm).");
-    } finally {
-      setConnecting(false);
-    }
-  };
-
-  const handleDisconnect = async () => {
-    try {
-      await disconnectUsbPrinter();
+      toast.success(`¡Conectada a ${res.deviceName}!`);
+    } catch (err: any) {
       setDiag(getUsbPrinterDiagnostic());
-      toast.success('Impresora USB desconectada');
-    } catch (error: any) {
-      toast.error('Error al desconectar');
-    }
-  };
-
-  const handleSendTestTicket = async () => {
-    try {
-      setTesting(true);
-      await printUsbTestTicket();
-      toast.success('¡Ticket de prueba 50x60mm generado con éxito!');
-    } catch (error: any) {
-      console.error(error);
-      toast.error(error.message || 'Error al mandar prueba.');
+      toast.success("Modo Driver de Impresión activado");
     } finally {
-      setTesting(false);
+      setConnecting(false);
     }
   };
 
-  const handleOpenInNewTab = () => {
-    window.open(window.location.href, '_blank');
-  };
+  const [connecting, setConnecting] = useState(false);
+
+  if (!isOpen) return null;
+
+  const isDirectUsb = diag.connected && (diag.connectionType === 'webusb' || diag.connectionType === 'webserial');
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-900/60 backdrop-blur-xs p-4">
-      <div className="bg-white rounded-3xl shadow-2xl max-w-lg w-full overflow-hidden border border-stone-200">
+      <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full overflow-hidden border border-stone-200">
         
-        {/* Header */}
-        <div className="p-6 bg-stone-900 text-white flex items-center justify-between">
+        {/* Encabezado limpio */}
+        <div className="p-5 bg-stone-900 text-white flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="p-2.5 rounded-xl bg-mex-gold/20 text-mex-gold">
-              <Usb size={24} />
+              <Printer size={22} />
             </div>
             <div>
-              <h2 className="text-lg font-black tracking-tight">Impresora Directa Cable USB</h2>
-              <p className="text-[10px] text-stone-400 uppercase tracking-widest font-mono">Ancho de Recibo: 54mm (Sin Spooler)</p>
+              <h2 className="text-base font-black tracking-tight">Impresora USB</h2>
+              <p className="text-[10px] text-stone-400 font-mono">Formato 54mm (Ticket Térmico)</p>
             </div>
           </div>
           <button 
             onClick={onClose}
             className="text-stone-400 hover:text-white p-2 rounded-xl transition-colors cursor-pointer bg-transparent border-none"
           >
-            <X size={20} />
+            <X size={18} />
           </button>
         </div>
 
-        <div className="p-6 space-y-5 max-h-[80vh] overflow-y-auto">
+        <div className="p-6 space-y-5">
           
-          {/* Notice for iframe / browser permissions */}
+          {/* Alerta si está en Iframe */}
           {isIframe && (
-            <div className="bg-amber-50 border border-amber-300 rounded-2xl p-4 text-xs text-amber-950 flex items-start gap-3">
-              <ShieldCheck size={20} className="text-amber-700 shrink-0 mt-0.5" />
-              <div className="space-y-1.5 flex-1">
-                <p className="font-bold">Acceso Directo al Puerto USB Físico</p>
-                <p className="text-[11px] text-amber-900 leading-relaxed">
-                  Para enviar comandos directamente al puerto USB de la impresora (sin pasar por el cuadro de diálogo/spooler del sistema operativo), abra la aplicación en una pestaña nueva del navegador donde Chrome otorga permiso total a los puertos USB.
-                </p>
+            <div className="bg-amber-50 border border-amber-200 rounded-2xl p-3 text-xs text-amber-950 flex items-start gap-2.5">
+              <AlertTriangle size={18} className="text-amber-700 shrink-0 mt-0.5" />
+              <div className="flex-1 space-y-1">
+                <p className="font-bold text-[11px]">Modo Pestaña Directa Recomendado</p>
                 <button
-                  onClick={handleOpenInNewTab}
-                  className="inline-flex items-center gap-1.5 px-3 py-2 bg-amber-800 hover:bg-amber-900 text-white rounded-xl text-[11px] font-bold transition-all cursor-pointer mt-1 shadow-sm"
+                  onClick={() => window.open(window.location.href, '_blank')}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-700 hover:bg-amber-800 text-white rounded-xl text-[10px] font-bold transition-all cursor-pointer shadow-xs"
                 >
-                  <ExternalLink size={14} />
-                  Abrir en Pestaña Nueva (Recomendado para USB Directo)
+                  <ExternalLink size={12} />
+                  Abrir en Pestaña Nueva para USB Directo
                 </button>
               </div>
             </div>
           )}
 
-          {/* Status Badge */}
-          <div className={`p-4 rounded-2xl border flex items-center justify-between ${
-            diag.connected && (diag.connectionType === 'webusb' || diag.connectionType === 'webserial')
-              ? 'bg-emerald-50 border-emerald-200 text-emerald-900' 
-              : 'bg-stone-50 border-stone-200 text-stone-700'
+          {/* Tarjeta de Estado Simple con Test Previo */}
+          <div className={`p-4 rounded-2xl border flex items-center justify-between transition-all ${
+            isDirectUsb 
+              ? 'bg-emerald-50 border-emerald-200 text-emerald-950'
+              : diag.connected 
+                ? 'bg-blue-50 border-blue-200 text-blue-950'
+                : 'bg-amber-50 border-amber-200 text-amber-950'
           }`}>
             <div className="flex items-center gap-3">
-              {diag.connected && (diag.connectionType === 'webusb' || diag.connectionType === 'webserial') ? (
-                <CheckCircle2 size={24} className="text-emerald-600 shrink-0" />
+              {testing ? (
+                <RefreshCw size={24} className="animate-spin text-stone-500 shrink-0" />
+              ) : isDirectUsb || diag.connected ? (
+                <CheckCircle2 size={26} className="text-emerald-600 shrink-0" />
               ) : (
-                <Printer size={24} className="text-stone-400 shrink-0" />
+                <AlertTriangle size={26} className="text-amber-600 shrink-0" />
               )}
               <div>
-                <p className="text-xs font-bold uppercase tracking-wider">Estado de Conexión USB</p>
+                <p className="text-[10px] font-black uppercase tracking-wider text-stone-500">
+                  {testing ? 'Verificando impresora...' : 'Estado de Impresora'}
+                </p>
                 <p className="text-sm font-black mt-0.5">
-                  {diag.deviceName !== 'No conectada' ? diag.deviceName : 'No conectada al puerto USB'}
+                  {testing 
+                    ? 'Ejecutando test previo...' 
+                    : isDirectUsb 
+                      ? `Conectada (${diag.deviceName || 'USB Directo'})`
+                      : diag.connected 
+                        ? 'Lista (Driver del Sistema)'
+                        : 'No Conectada'}
                 </p>
-                <p className="text-[10px] text-stone-500 font-mono mt-0.5">
-                  Formato: 54 mm (30 columnas térmicas ESC/POS)
-                </p>
               </div>
             </div>
-            <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${
-              diag.connected && (diag.connectionType === 'webusb' || diag.connectionType === 'webserial')
-                ? 'bg-emerald-200 text-emerald-800' 
-                : 'bg-stone-200 text-stone-600'
-            }`}>
-              {diag.connected && (diag.connectionType === 'webusb' || diag.connectionType === 'webserial') ? 'USB Directo Conectado' : 'Sin Conectar'}
-            </span>
-          </div>
-
-          {/* Ticket Format Specifications */}
-          <div className="bg-amber-50/70 border border-amber-200 rounded-2xl p-4">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-black uppercase tracking-wider text-amber-950 flex items-center gap-1.5">
-                <Sliders size={14} className="text-amber-600" />
-                Especificaciones Formato 54mm
-              </span>
-              <span className="bg-amber-200/80 text-amber-900 text-[10px] font-bold px-2 py-0.5 rounded-md font-mono">
-                54mm Horizontal
-              </span>
-            </div>
-            <div className="grid grid-cols-2 gap-2 text-[11px] text-amber-900/90 font-medium">
-              <div>• Ancho de papel: <strong>54 mm (30 col)</strong></div>
-              <div>• Alto vertical: <strong>Ajustado al contenido</strong></div>
-              <div>• Tolerancia final: <strong>1 cm (10 mm)</strong></div>
-              <div>• Modo de transmisión: <strong>ESC/POS Raw (Directo)</strong></div>
-            </div>
-          </div>
-
-          {/* Live Preview of 50x60mm Ticket */}
-          <div className="border border-dashed border-stone-300 rounded-2xl p-4 bg-stone-100 flex flex-col items-center">
-            <span className="text-[10px] font-bold text-stone-500 uppercase tracking-wider mb-2">
-              Vista Previa a Escala del Recibo (50x60 mm)
-            </span>
-            <div 
-              className="bg-white border border-stone-300 shadow-md p-2.5 rounded-xs font-mono text-[9px] leading-tight text-black"
-              style={{ width: '188px', boxSizing: 'border-box' }}
-            >
-              <div className="text-center mb-1.5">
-                <img 
-                  src="/logo_las_cazuelas_del_castor.jpg" 
-                  alt="Logo" 
-                  style={{ width: '20mm', height: '20mm', filter: 'grayscale(100%) contrast(150%)', WebkitFilter: 'grayscale(100%) contrast(150%)' }}
-                  className="rounded-full object-cover mx-auto mb-1 border border-stone-300" 
-                />
-                <div className="font-bold text-[10px] leading-tight">LAS CAZUELAS DEL CASTOR</div>
-              </div>
-              <div className="text-center text-[8px] text-stone-600">Folio:#0001 | Mesa 1</div>
-              <div className="text-center text-[8px] text-stone-600">Hora: 14:30</div>
-              <div className="border-t border-dashed border-black my-1.5"></div>
-              <div className="space-y-1 text-[8.5px]">
-                <div className="flex justify-between">
-                  <span>1 Cazuela Pastor</span>
-                  <span className="font-bold">$95</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>1 Queso Extra</span>
-                  <span className="font-bold">$15</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>1 Refresco</span>
-                  <span className="font-bold">$30</span>
-                </div>
-              </div>
-              <div className="border-t border-dashed border-black my-1.5"></div>
-              <div className="flex justify-between font-bold text-[11px]">
-                <span>TOTAL:</span>
-                <span>$140.00</span>
-              </div>
-              <div className="text-center text-[8.5px] italic font-bold mt-2">¡Gracias por su compra! Vuelva pronto</div>
-            </div>
-          </div>
-
-          {/* Connection Actions & Service Recovery */}
-          <div className="space-y-3">
             
-            {/* Quick Reconnect Button */}
+            <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${
+              isDirectUsb
+                ? 'bg-emerald-200 text-emerald-800'
+                : diag.connected
+                  ? 'bg-blue-200 text-blue-800'
+                  : 'bg-amber-200 text-amber-800'
+            }`}>
+              {isDirectUsb ? 'Conectada' : diag.connected ? 'Driver Listo' : 'Sin Conexión'}
+            </span>
+          </div>
+
+          {/* Botones Principales de Acción */}
+          <div className="space-y-3 pt-1">
+            
+            {/* 1. Botón Reconectar */}
             <button
-              onClick={handleReconnectService}
-              disabled={reconnecting}
-              className="w-full py-3 px-4 bg-amber-500 hover:bg-amber-600 text-stone-950 font-black text-xs uppercase tracking-wider rounded-2xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+              onClick={handleReconnect}
+              disabled={reconnecting || testing}
+              className="w-full h-12 px-4 bg-amber-500 hover:bg-amber-600 text-stone-950 font-black text-xs uppercase tracking-wider rounded-2xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
             >
               {reconnecting ? (
                 <>
                   <RefreshCw size={16} className="animate-spin" />
-                  Reconectando Servicio de Impresión...
+                  Reconectando...
                 </>
               ) : (
                 <>
                   <RefreshCw size={16} />
-                  Reconectar Servicio de Impresión (Resetear Puerto)
+                  Reconectar Impresora
                 </>
               )}
             </button>
 
-            {(!diag.connected || diag.connectionType === 'none' || diag.connectionType === 'system') && (
-              <div className="space-y-2">
-                <button
-                  onClick={handleConnectWebUsb}
-                  disabled={connecting}
-                  className="w-full py-3.5 px-4 bg-stone-900 hover:bg-stone-800 text-white font-black text-xs uppercase tracking-wider rounded-2xl shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
-                >
-                  {connecting ? (
-                    <>
-                      <RefreshCw size={16} className="animate-spin" />
-                      Detectando cable USB...
-                    </>
-                  ) : (
-                    <>
-                      <Usb size={16} className="text-mex-gold" />
-                      Conectar por Cable USB Directo (WebUSB - Sin Spooler)
-                    </>
-                  )}
-                </button>
+            {/* 2. Botón Prueba de Impresión */}
+            <button
+              onClick={handlePrintTest}
+              disabled={testing || reconnecting}
+              className="w-full h-12 px-4 bg-mex-green hover:bg-mex-green/90 text-white font-black text-xs uppercase tracking-wider rounded-2xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+            >
+              {testing ? (
+                <>
+                  <RefreshCw size={16} className="animate-spin" />
+                  Imprimiendo Prueba...
+                </>
+              ) : (
+                <>
+                  <PrinterCheck size={18} />
+                  Prueba de Impresión (Ticket 54mm)
+                </>
+              )}
+            </button>
 
-                <button
-                  onClick={handleConnectSerial}
-                  disabled={connecting}
-                  className="w-full py-2.5 px-4 bg-stone-100 hover:bg-stone-200 text-stone-700 border border-stone-300 font-bold text-xs uppercase tracking-wider rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer"
-                >
-                  Conectar por Puerto Serie / COM (USB Serial)
-                </button>
-              </div>
-            )}
-
-            {/* Disconnect button if connected */}
-            {diag.connected && (diag.connectionType === 'webusb' || diag.connectionType === 'webserial') && (
-              <button
-                onClick={handleDisconnect}
-                className="w-full py-2 px-4 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 font-bold text-xs uppercase tracking-wider rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer"
-              >
-                Desconectar Impresora USB
-              </button>
-            )}
-
-            {/* Test Communication Button */}
-            <div className="pt-2 border-t border-stone-200 space-y-1.5">
-              <button
-                onClick={handleTestCommunication}
-                disabled={testing}
-                className="w-full py-3.5 px-4 bg-mex-green hover:bg-mex-green/90 text-white font-black text-xs uppercase tracking-wider rounded-2xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
-              >
-                {testing ? (
-                  <>
-                    <RefreshCw size={16} className="animate-spin" />
-                    Probando comunicación con impresora...
-                  </>
-                ) : (
-                  <>
-                    <Zap size={16} className="text-mex-gold" />
-                    Test de Comunicación (Probar Impresora)
-                  </>
-                )}
-              </button>
-              <p className="text-[10px] text-stone-400 text-center">
-                Envía un paquete de respuesta directa para verificar si la impresora está en línea
-              </p>
-            </div>
+            {/* 3. Selección Manual de Impresora USB Directa (Si se desea cambiar de cable/puerto) */}
+            <button
+              onClick={handleConnectDirectUsb}
+              disabled={connecting || testing}
+              className="w-full py-2.5 px-4 bg-stone-100 hover:bg-stone-200 text-stone-700 border border-stone-300 font-bold text-xs uppercase tracking-wider rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+            >
+              <Usb size={15} className="text-mex-gold" />
+              Seleccionar Puerto USB Físico
+            </button>
           </div>
 
         </div>
 
+        {/* Pie de modal */}
         <div className="p-4 bg-stone-50 border-t border-stone-200 flex justify-end">
           <button
             onClick={onClose}

@@ -408,6 +408,8 @@ export function build50x60TicketBytes(order: {
   orderType?: string;
   items?: Array<{ name: string; quantity: number; price: number; fillings?: string[]; hasExtraCheese?: boolean }>;
   total?: number;
+  subtotal?: number;
+  cardFee?: number;
   paymentMethod?: string;
   createdAt?: any;
   isPreAccount?: boolean;
@@ -415,11 +417,14 @@ export function build50x60TicketBytes(order: {
   const ESC = '\x1B';
 
   let itemsBody = "";
+  let itemsSum = 0;
   if (order.items && Array.isArray(order.items) && order.items.length > 0) {
     order.items.slice(0, 10).forEach(item => {
       const extraStr = item.hasExtraCheese ? '+Q' : '';
+      const lineTotal = (item.price || 0) * (item.quantity || 1);
+      itemsSum += lineTotal;
       const leftCol = `${item.quantity} ${item.name.slice(0, 16)}${extraStr}`;
-      const rightCol = `$${((item.price || 0) * (item.quantity || 1)).toFixed(0)}`;
+      const rightCol = `$${lineTotal.toFixed(0)}`;
       itemsBody += format30Columns(leftCol, rightCol);
     });
     if (order.items.length > 10) {
@@ -427,16 +432,38 @@ export function build50x60TicketBytes(order: {
     }
   } else {
     itemsBody = "Consumo General\n";
+    itemsSum = order.total || 0;
   }
+
+  const subtotalVal = order.subtotal !== undefined ? order.subtotal : itemsSum;
+  const calculatedCardFee = order.cardFee !== undefined 
+    ? order.cardFee 
+    : Math.round(subtotalVal * 0.04);
+  const cardTotalVal = subtotalVal + calculatedCardFee;
 
   const dateStr = new Date().toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
   const typeLabel = order.orderType === 'takeout' ? 'Llevar' : (order.tableNumber || 'Mesa');
 
   const headerTitle = order.isPreAccount ? "PRE-CUENTA / PENDIENTE\n" : "";
-  const totalLabel = order.isPreAccount ? "TOTAL A PAGAR:" : "TOTAL:";
   const footerText = order.isPreAccount 
     ? "CUENTA PENDIENTE DE COBRO\nFavor liquidar en caja\n" 
     : "Gracias por su compra!\nVuelva pronto\n";
+
+  let totalsBlock = "";
+  if (order.isPreAccount) {
+    totalsBlock += format30Columns("Subtotal (Efectivo):", `$${subtotalVal.toFixed(2)}`);
+    totalsBlock += format30Columns("Comision Tarjeta (4%):", `+$${calculatedCardFee.toFixed(2)}`);
+    totalsBlock += format30Columns("TOTAL C/TARJETA:", `$${cardTotalVal.toFixed(2)}`);
+    totalsBlock += "------------------------------\n";
+    totalsBlock += ESC + '\x45\x01' + format30Columns("TOTAL A PAGAR:", `$${(order.total || subtotalVal).toFixed(2)}`) + ESC + '\x45\x00';
+  } else if (order.paymentMethod === 'card' || (order.cardFee && order.cardFee > 0)) {
+    totalsBlock += format30Columns("Subtotal:", `$${subtotalVal.toFixed(2)}`);
+    totalsBlock += format30Columns("Comision Tarjeta (4%):", `+$${calculatedCardFee.toFixed(2)}`);
+    totalsBlock += "------------------------------\n";
+    totalsBlock += ESC + '\x45\x01' + format30Columns("TOTAL TARJETA:", `$${(order.total || cardTotalVal).toFixed(2)}`) + ESC + '\x45\x00';
+  } else {
+    totalsBlock += ESC + '\x45\x01' + format30Columns("TOTAL:", `$${(order.total || subtotalVal).toFixed(2)}`) + ESC + '\x45\x00';
+  }
 
   const commands =
     ESC + '\x40' +                      // Init
@@ -452,9 +479,7 @@ export function build50x60TicketBytes(order: {
     ESC + '\x61\x00' +                  // Left
     itemsBody +
     "------------------------------\n" +
-    ESC + '\x45\x01' +
-    format30Columns(totalLabel, `$${(order.total || 0).toFixed(2)}`) +
-    ESC + '\x45\x00' +
+    totalsBlock +
     ESC + '\x61\x01' +
     footerText +
     "\n\n";                            // 2 line feeds (~1cm bottom tolerance)
@@ -515,6 +540,8 @@ export function print50x60ViaSystem(ticketData: {
   orderType?: string;
   items?: Array<{ name: string; quantity: number; price: number; fillings?: string[]; hasExtraCheese?: boolean }>;
   total?: number;
+  subtotal?: number;
+  cardFee?: number;
   paymentMethod?: string;
   isPreAccount?: boolean;
 }): void {
@@ -526,23 +553,79 @@ export function print50x60ViaSystem(ticketData: {
     document.body.appendChild(printEl);
   }
 
+  let itemsSum = 0;
   const itemsList = ticketData.items && ticketData.items.length > 0 
-    ? ticketData.items.map(it => `
-        <div style="display: flex; justify-content: space-between; font-size: 9.5px; margin: 2px 0;">
-          <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 34mm;">${it.quantity} ${it.name}</span>
-          <span style="font-weight: bold;">$${((it.price || 0) * (it.quantity || 1)).toFixed(0)}</span>
-        </div>
-      `).join('')
+    ? ticketData.items.map(it => {
+        const lineTotal = (it.price || 0) * (it.quantity || 1);
+        itemsSum += lineTotal;
+        return `
+          <div style="display: flex; justify-content: space-between; font-size: 9.5px; margin: 2px 0;">
+            <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 34mm;">${it.quantity} ${it.name}</span>
+            <span style="font-weight: bold;">$${lineTotal.toFixed(0)}</span>
+          </div>
+        `;
+      }).join('')
     : '<div style="text-align: center; font-size: 9.5px;">Consumo General</div>';
+
+  if (!itemsSum) itemsSum = ticketData.total || 0;
+
+  const subtotalVal = ticketData.subtotal !== undefined ? ticketData.subtotal : itemsSum;
+  const calculatedCardFee = ticketData.cardFee !== undefined 
+    ? ticketData.cardFee 
+    : Math.round(subtotalVal * 0.04);
+  const cardTotalVal = subtotalVal + calculatedCardFee;
 
   const preAccountHeader = ticketData.isPreAccount 
     ? '<div style="font-weight: 800; font-size: 9px; margin-top: 1px; text-transform: uppercase;">PRE-CUENTA / PENDIENTE</div>'
     : '';
 
-  const totalLabel = ticketData.isPreAccount ? 'TOTAL A PAGAR:' : 'TOTAL:';
   const footerNote = ticketData.isPreAccount
     ? 'Cuenta pendiente de cobro<br/>Favor de liquidar en caja'
     : '¡Gracias por su compra!<br/>Vuelva pronto';
+
+  let totalsHtml = "";
+  if (ticketData.isPreAccount) {
+    totalsHtml = `
+      <div style="display: flex; justify-content: space-between; font-size: 9.5px; margin-bottom: 2px;">
+        <span>Subtotal (Efectivo):</span>
+        <span>$${subtotalVal.toFixed(2)}</span>
+      </div>
+      <div style="display: flex; justify-content: space-between; font-size: 9.5px; color: #b45309; margin-bottom: 2px;">
+        <span>Comisión Tarjeta (4%):</span>
+        <span>+$${calculatedCardFee.toFixed(2)}</span>
+      </div>
+      <div style="display: flex; justify-content: space-between; font-size: 10px; font-weight: bold; color: #92400e; margin-bottom: 3px; border-bottom: 1px dashed #000; padding-bottom: 3px;">
+        <span>TOTAL CON TARJETA:</span>
+        <span>$${cardTotalVal.toFixed(2)}</span>
+      </div>
+      <div style="display: flex; justify-content: space-between; font-weight: bold; font-size: 11.5px; margin-top: 3px;">
+        <span>TOTAL A PAGAR:</span>
+        <span>$${(ticketData.total || subtotalVal).toFixed(2)}</span>
+      </div>
+    `;
+  } else if (ticketData.paymentMethod === 'card' || (ticketData.cardFee && ticketData.cardFee > 0)) {
+    totalsHtml = `
+      <div style="display: flex; justify-content: space-between; font-size: 9.5px; margin-bottom: 2px;">
+        <span>Subtotal:</span>
+        <span>$${subtotalVal.toFixed(2)}</span>
+      </div>
+      <div style="display: flex; justify-content: space-between; font-size: 9.5px; margin-bottom: 2px;">
+        <span>Comisión Tarjeta (4%):</span>
+        <span>+$${calculatedCardFee.toFixed(2)}</span>
+      </div>
+      <div style="display: flex; justify-content: space-between; font-weight: bold; font-size: 11.5px; border-top: 1px dashed #000; padding-top: 3px;">
+        <span>TOTAL TARJETA:</span>
+        <span>$${(ticketData.total || cardTotalVal).toFixed(2)}</span>
+      </div>
+    `;
+  } else {
+    totalsHtml = `
+      <div style="display: flex; justify-content: space-between; font-weight: bold; font-size: 11.5px;">
+        <span>TOTAL:</span>
+        <span>$${(ticketData.total || subtotalVal).toFixed(2)}</span>
+      </div>
+    `;
+  }
 
   printEl.innerHTML = `
     <div style="text-align: center; margin-bottom: 2px;">
@@ -555,10 +638,7 @@ export function print50x60ViaSystem(ticketData: {
     <div style="border-top: 1px dashed #000; margin: 4px 0;"></div>
     <div>${itemsList}</div>
     <div style="border-top: 1px dashed #000; margin: 4px 0;"></div>
-    <div style="display: flex; justify-content: space-between; font-weight: bold; font-size: 11.5px;">
-      <span>${totalLabel}</span>
-      <span>$${(ticketData.total || 0).toFixed(2)}</span>
-    </div>
+    ${totalsHtml}
     <div style="text-align: center; font-size: 9px; margin-top: 5px; font-style: italic; font-weight: bold;">${footerNote}</div>
   `;
 

@@ -1228,6 +1228,8 @@ const safeParseDate = (timestamp: any): Date => {
       await triggerAutoPrintTicket({
         group: selectedGroup,
         method: paymentMethod,
+        subtotal: (selectedGroup?.total || 0) + disposableTotal,
+        cardFee: cardFee,
         total: finalTotal,
         isPreAccount: false
       });
@@ -1905,6 +1907,8 @@ const safeParseDate = (timestamp: any): Date => {
     group: GroupedOrder;
     method?: 'cash' | 'card' | 'transfer' | 'credit';
     total: number;
+    subtotal?: number;
+    cardFee?: number;
     isPreAccount?: boolean;
   }) => {
     try {
@@ -1912,6 +1916,11 @@ const safeParseDate = (timestamp: any): Date => {
       const allItems = g.orders 
         ? g.orders.flatMap(o => o.items || []) 
         : ((g as any).items || []);
+
+      const subtotalVal = ticketInfo.subtotal !== undefined ? ticketInfo.subtotal : (g.total || ticketInfo.total);
+      const feeVal = ticketInfo.cardFee !== undefined 
+        ? ticketInfo.cardFee 
+        : customRound(subtotalVal * CARD_FEE_PERCENTAGE);
 
       let usbDiag = getUsbPrinterDiagnostic();
 
@@ -1927,6 +1936,8 @@ const safeParseDate = (timestamp: any): Date => {
           tableNumber: g.displayTitle || '',
           orderType: g.isTakeaway ? 'takeout' : 'dine_in',
           items: allItems,
+          subtotal: subtotalVal,
+          cardFee: feeVal,
           total: ticketInfo.total,
           paymentMethod: ticketInfo.method || 'cash',
           isPreAccount: ticketInfo.isPreAccount
@@ -1939,6 +1950,8 @@ const safeParseDate = (timestamp: any): Date => {
           tableNumber: g.displayTitle || '',
           orderType: g.isTakeaway ? 'takeout' : 'dine_in',
           items: allItems,
+          subtotal: subtotalVal,
+          cardFee: feeVal,
           total: ticketInfo.total,
           paymentMethod: ticketInfo.method || 'cash',
           isPreAccount: ticketInfo.isPreAccount
@@ -1949,11 +1962,15 @@ const safeParseDate = (timestamp: any): Date => {
       console.error("Error en impresión automática:", err);
       const g = ticketInfo.group;
       const allItems = g.orders ? g.orders.flatMap(o => o.items || []) : ((g as any).items || []);
+      const subtotalVal = ticketInfo.subtotal !== undefined ? ticketInfo.subtotal : (g.total || ticketInfo.total);
+      const feeVal = ticketInfo.cardFee !== undefined ? ticketInfo.cardFee : customRound(subtotalVal * CARD_FEE_PERCENTAGE);
       print50x60ViaSystem({
         folio: g.folios?.[0] || '1',
         tableNumber: g.displayTitle || '',
         orderType: g.isTakeaway ? 'takeout' : 'dine_in',
         items: allItems,
+        subtotal: subtotalVal,
+        cardFee: feeVal,
         total: ticketInfo.total,
         paymentMethod: ticketInfo.method || 'cash',
         isPreAccount: ticketInfo.isPreAccount
@@ -2017,6 +2034,8 @@ const safeParseDate = (timestamp: any): Date => {
 
     await triggerAutoPrintTicket({
       group,
+      subtotal: group.total,
+      cardFee: customRound(group.total * CARD_FEE_PERCENTAGE),
       total: group.total,
       isPreAccount: true
     });
@@ -5595,12 +5614,24 @@ const safeParseDate = (timestamp: any): Date => {
                   )}
                 </div>
 
-                <div className="border-t border-stone-200 pt-2 space-y-1.5 font-bold text-sm">
-                  <div className="flex justify-between text-base">
+                <div className="border-t border-stone-200 pt-2 space-y-1 font-bold text-xs">
+                  <div className="flex justify-between text-stone-600 font-normal text-[11px]">
+                    <span>Subtotal (Efectivo/Transf):</span>
+                    <span>{formatCurrency(preAccountData.total)}</span>
+                  </div>
+                  <div className="flex justify-between text-amber-800 font-medium text-[11px]">
+                    <span>Comisión Tarjeta (+4%):</span>
+                    <span>+{formatCurrency(customRound(preAccountData.total * CARD_FEE_PERCENTAGE))}</span>
+                  </div>
+                  <div className="flex justify-between text-amber-900 font-bold text-xs pb-1 border-b border-stone-200">
+                    <span>TOTAL CON TARJETA:</span>
+                    <span>{formatCurrency(preAccountData.total + customRound(preAccountData.total * CARD_FEE_PERCENTAGE))}</span>
+                  </div>
+                  <div className="flex justify-between text-base pt-1">
                     <span>TOTAL A PAGAR:</span>
                     <span className="text-mex-brown font-black">{formatCurrency(preAccountData.total)}</span>
                   </div>
-                  <div className="text-center pt-2 text-[10px] text-stone-500 font-sans leading-tight">
+                  <div className="text-center pt-2 text-[10px] text-stone-500 font-sans leading-tight font-normal">
                     <p className="font-bold text-amber-800 uppercase">* CUENTA PENDIENTE DE PAGO *</p>
                     <p>Favor de pagar en caja o con su mesero.</p>
                     <p className="italic mt-1 text-stone-400">¡Gracias por su compra! Vuelva pronto</p>
@@ -5748,10 +5779,27 @@ const safeParseDate = (timestamp: any): Date => {
                       </div>
                     ))}
                   </div>
-                  <div className="border-t border-stone-200 pt-2 font-bold flex justify-between">
-                    <span>Total</span>
-                    <span>{formatCurrency(lastPaymentData.total)}</span>
-                  </div>
+                  {lastPaymentData.method === 'card' ? (
+                    <div className="border-t border-stone-200 pt-2 space-y-1">
+                      <div className="flex justify-between text-stone-600">
+                        <span>Subtotal</span>
+                        <span>{formatCurrency(lastPaymentData.group.total)}</span>
+                      </div>
+                      <div className="flex justify-between text-amber-800">
+                        <span>Comisión Tarjeta (4%)</span>
+                        <span>+{formatCurrency(customRound(lastPaymentData.group.total * CARD_FEE_PERCENTAGE))}</span>
+                      </div>
+                      <div className="flex justify-between font-bold pt-1 border-t border-stone-200">
+                        <span>Total Cobrado</span>
+                        <span>{formatCurrency(lastPaymentData.total)}</span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="border-t border-stone-200 pt-2 font-bold flex justify-between">
+                      <span>Total</span>
+                      <span>{formatCurrency(lastPaymentData.total)}</span>
+                    </div>
+                  )}
                 </div>
               </div>
             </CardContent>
