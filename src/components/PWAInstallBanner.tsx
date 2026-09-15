@@ -79,7 +79,7 @@ export function PWAInstallBanner({ onDismiss, compact = false }: PWAInstallBanne
           navigator.serviceWorker.controller.postMessage({
             type: 'SHOW_BACKGROUND_NOTIFICATION',
             title: '📻 Radio Las Cazuelas',
-            body: 'Las notificaciones en segundo plano y Walkie-Talkie están listas.'
+            body: 'Las notificaciones en segundo plano están activadas.'
           });
         }
       } else {

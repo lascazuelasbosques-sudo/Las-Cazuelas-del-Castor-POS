@@ -30,8 +30,6 @@ interface NavbarProps {
   onLogout: () => void;
   isFullscreen?: boolean;
   toggleFullscreen?: () => void;
-  isWalkieOpen: boolean;
-  setIsWalkieOpen: (open: boolean) => void;
 }
 
 export const Navbar = ({ 
@@ -41,9 +39,7 @@ export const Navbar = ({
   userName = 'Usuario', 
   onLogout,
   isFullscreen: propIsFullscreen,
-  toggleFullscreen: propToggleFullscreen,
-  isWalkieOpen,
-  setIsWalkieOpen
+  toggleFullscreen: propToggleFullscreen
 }: NavbarProps) => {
   const [pendingStations, setPendingStations] = useState<{plancha: boolean, cocina: boolean}>({ plancha: false, cocina: false });
   const [pendingFoodCount, setPendingFoodCount] = useState(0);
@@ -320,7 +316,7 @@ export const Navbar = ({
   return (
     <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-stone-200 px-2 py-1 flex justify-around items-center md:relative md:flex-col md:h-full md:w-20 lg:w-64 md:border-t-0 md:border-r md:justify-between md:px-2 lg:px-4 md:py-4 z-50 transition-all duration-300 md:overflow-y-auto custom-scrollbar select-none">
       {/* Desktop Logo Header */}
-      <div className="hidden md:flex flex-col items-center mb-4 px-1 lg:px-2 shrink-0">
+      <div className="hidden md:flex flex-col items-center mb-4 px-1 lg:px-2 shrink-0 w-full">
         <div className="w-10 h-10 lg:w-20 lg:h-20 mb-2 rounded-full overflow-hidden border-2 lg:border-3 border-mex-gold shadow-md transition-all duration-300 bg-white flex items-center justify-center shrink-0">
           {imageError ? (
             <ChefHat className="text-mex-brown h-5 w-5 lg:h-10 lg:w-10" />
@@ -334,9 +330,17 @@ export const Navbar = ({
             />
           )}
         </div>
-        <h1 className="hidden lg:block text-base font-serif font-bold text-mex-brown text-center leading-tight truncate max-w-[200px]">
+        <h1 className="hidden lg:block text-base font-serif font-bold text-mex-brown text-center leading-tight truncate max-w-[200px] mb-2">
           {branding.appName}
         </h1>
+
+        {/* Hora y Día Destacados abajo del logo */}
+        <div className="hidden lg:block w-full">
+          <WeatherClockWidget />
+        </div>
+        <div className="lg:hidden block">
+          <WeatherClockWidget compact />
+        </div>
       </div>
 
       {/* Unified flex scroll track for mobile, vertical auto-fitting track for desktop */}
@@ -445,18 +449,6 @@ export const Navbar = ({
           </button>
 
           <button
-            onClick={() => setIsWalkieOpen(!isWalkieOpen)}
-            className={cn(
-              "flex flex-col items-center gap-1 p-2 rounded-xl shrink-0 transition-all",
-              isWalkieOpen ? "text-orange-500 bg-orange-50" : "text-stone-600 hover:bg-stone-50"
-            )}
-            title="Walkie-Talkie Interno"
-          >
-            <Radio size={21} className={isWalkieOpen ? "animate-pulse text-orange-600" : "text-orange-500"} />
-            <span className="text-[9px] font-extrabold whitespace-nowrap">Walkie</span>
-          </button>
-
-          <button
             onClick={() => setIsInstallerOpen(true)}
             className="flex flex-col items-center gap-1 p-2 rounded-xl text-amber-600 hover:bg-amber-50 shrink-0"
             title="Instalar App / Preparar Offline"
@@ -487,14 +479,6 @@ export const Navbar = ({
 
       {/* Desktop Controls Panel (Vertical stack, scrollable if window height is low) */}
       <div className="hidden md:flex flex-col w-full gap-1.5 px-1 lg:px-2 pt-3 border-t border-stone-100 shrink-0">
-        {/* Weather & Clock Widget for Desktop */}
-        <div className="hidden lg:flex flex-col gap-1.5 mb-1">
-          <WeatherClockWidget />
-        </div>
-        <div className="lg:hidden flex flex-col items-center gap-1 mb-1">
-          <WeatherClockWidget compact />
-        </div>
-
         {/* User Profile Card */}
         <div className="p-1.5 lg:p-2 bg-stone-50 rounded-xl border border-stone-200/80 mb-1 flex items-center justify-between gap-1.5 w-full">
           <div className="flex items-center gap-1.5 min-w-0">
@@ -507,22 +491,6 @@ export const Navbar = ({
             </div>
           </div>
         </div>
-
-        {/* Walkie-Talkie Button */}
-        <Button 
-          variant={isWalkieOpen ? "primary" : "outline"}
-          className={cn(
-            "justify-center lg:justify-start gap-2.5 w-full px-0 lg:px-3 h-[36px] rounded-xl text-xs font-bold transition-all",
-            isWalkieOpen 
-              ? "bg-orange-500 hover:bg-orange-600 text-stone-950 border-orange-500" 
-              : "border-stone-200 bg-white text-stone-600 hover:bg-stone-50"
-          )}
-          title="Walkie-Talkie Interno"
-          onClick={() => setIsWalkieOpen(!isWalkieOpen)}
-        >
-          <Radio size={16} className={cn(isWalkieOpen ? "animate-pulse" : "text-orange-500")} />
-          <span className="hidden lg:inline">Walkie-Talkie</span>
-        </Button>
 
         {/* Fullscreen Button */}
         <Button 

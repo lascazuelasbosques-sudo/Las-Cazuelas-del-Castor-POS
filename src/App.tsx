@@ -9,7 +9,6 @@ import WhatsAppInternoView from './components/WhatsAppInternoView';
 import { CustomerPortal } from './components/CustomerPortal';
 import { Login } from './components/Login';
 import { PendingOrdersNotifier } from './components/PendingOrdersNotifier';
-import { WalkieTalkie } from './components/WalkieTalkie';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { auth } from './firebase';
 import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
@@ -28,7 +27,6 @@ import { useDraggable } from './lib/useDraggable';
 export default function App() {
   const dragExitPortal = useDraggable();
   const [activeTab, setActiveTab] = useState('orders');
-  const [isWalkieOpen, setIsWalkieOpen] = useState(false);
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
   const [posUser, setPosUser] = useState<POSUser | null>(null);
   const [userRole, setUserRole] = useState<string>('waiter');
@@ -516,8 +514,6 @@ export default function App() {
           onLogout={handleLogout}
           isFullscreen={isFull}
           toggleFullscreen={toggleFullscreen}
-          isWalkieOpen={isWalkieOpen}
-          setIsWalkieOpen={setIsWalkieOpen}
         />
       
       <main className="flex-1 overflow-hidden relative pb-16 md:pb-0 h-full w-full min-h-0">
@@ -529,8 +525,6 @@ export default function App() {
       </main>
 
       <PendingOrdersNotifier userRole={userRole} />
-
-      <WalkieTalkie posUser={posUser} isOpen={isWalkieOpen} setIsOpen={setIsWalkieOpen} />
 
       <Toaster position="top-right" />
       </div>
