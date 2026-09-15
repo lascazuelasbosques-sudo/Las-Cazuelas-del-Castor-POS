@@ -2068,11 +2068,46 @@ const safeParseDate = (timestamp: any): Date => {
     }
   };
 
-  const handleSendEmail = () => {
+  const handleSendEmail = async () => {
     if (!lastPaymentData) return;
-    const subject = encodeURIComponent(`Ticket de Venta - Las Cazuelas del Castor`);
-    const body = encodeURIComponent(`Gracias por su compra.\n\nTotal: ${formatCurrency(lastPaymentData.total)}\nFolios: ${lastPaymentData.group.folios.join(", ")}`);
-    window.location.href = `mailto:?subject=${subject}&body=${body}`;
+    
+    const defaultEmail = "lascazuelasbosques@gmail.com";
+    const userTarget = window.prompt("Ingrese el correo electrónico para enviar el recibo:", defaultEmail);
+    if (!userTarget || !userTarget.trim()) return;
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(userTarget.trim())) {
+      toast.error("Por favor ingrese una dirección de correo válida");
+      return;
+    }
+
+    const toastId = toast.loading("Enviando recibo por correo...");
+    try {
+      const itemsList = lastPaymentData.group.orders
+        .flatMap(o => o.items || [])
+        .map(i => `${i.quantity}x ${i.name} ($${((i.price || 0) * (i.quantity || 1)).toFixed(0)})`)
+        .join(", ");
+
+      const result = await sendMovementNotification({
+        id: `TICKET-${lastPaymentData.group.folios.join("-")}-${Date.now()}`,
+        type: "ticket",
+        amount: lastPaymentData.total,
+        reason: `Ticket de Venta (${lastPaymentData.group.displayTitle}, Folios: ${lastPaymentData.group.folios.join(", ")}) - Detalle: ${itemsList || "Consumo General"}`,
+        userName: lastPaymentData.group.waiterNames[0] || "Cajero",
+        paymentMethod: lastPaymentData.method,
+        timestamp: new Date().toISOString(),
+        targetEmail: userTarget.trim()
+      });
+
+      if (result.success || result.status === 'sent' || result.status === 'queued') {
+        toast.success(`📧 Recibo enviado a ${userTarget.trim()}`, { id: toastId });
+      } else {
+        toast.error(`Error: ${result.message}`, { id: toastId });
+      }
+    } catch (err: any) {
+      console.error("Error enviando recibo por correo:", err);
+      toast.error("No se pudo enviar el correo de recibo.", { id: toastId });
+    }
   };
 
   const handlePrint = () => {

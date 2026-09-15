@@ -93,11 +93,13 @@ async function startServer() {
 
       const id = logId || ("LOG-" + Date.now());
       const result = await sendMovementEmail(id, data);
+      const isOk = result.status === "sent" || result.status === "simulated" || result.status === "already_sent";
 
       res.json({
-        success: true,
+        success: isOk,
         logId: id,
-        details: result
+        details: result,
+        error: isOk ? undefined : (result.rawError || result.message || "Error al enviar el correo por servidor")
       });
     } catch (err: any) {
       console.error("Error sending movement email via API:", err);
@@ -195,11 +197,11 @@ async function sendMovementEmail(logId: string, data: any) {
     }
   }
 
-  const mailTo = "lascazuelasbosques@gmail.com";
+  const mailTo = data.targetEmail || data.email || data.recipientEmail || "lascazuelasbosques@gmail.com";
   
   // SMTP credentials
   const smtpHost = process.env.SMTP_HOST || "smtp.gmail.com";
-  const smtpPort = parseInt(process.env.SMTP_PORT || "587");
+  const smtpPort = parseInt(process.env.SMTP_PORT || "465");
   const smtpUser = process.env.SMTP_USER || "lascazuelasbosques@gmail.com";
   const passInput = process.env.SMTP_PASS || "voptetcuaoyyinul";
   const smtpPass = (passInput.length === 16 || !passInput.includes("@") ? passInput : "voptetcuaoyyinul").replace(/\s+/g, "");
@@ -224,6 +226,10 @@ async function sendMovementEmail(logId: string, data: any) {
   } else if (rawType === "closing") {
     typeDisplay = "Cierre de Caja";
     typeBadgeColor = "#0f172a"; // slate-900
+  } else if (rawType === "ticket" || rawType === "receipt") {
+    typeDisplay = "Ticket de Venta / Recibo";
+    typeBadgeColor = "#b45309"; // amber-700
+    isPositive = true;
   }
 
   const formattedAmount = formatCurrency(data.amount || 0);
@@ -426,13 +432,18 @@ async function sendMovementEmail(logId: string, data: any) {
     };
   }
 
-  // Initialize SMTP Transporter
+  // Initialize SMTP Transporter with secure fallback
   const transporter = nodemailer.createTransport({
-    service: "gmail",
+    host: smtpHost,
+    port: smtpPort,
+    secure: smtpPort === 465,
     auth: {
       user: smtpUser,
       pass: smtpPass,
     },
+    tls: {
+      rejectUnauthorized: false
+    }
   });
 
   const mailOptions = {
