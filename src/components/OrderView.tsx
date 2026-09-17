@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Search, Plus, Minus, ShoppingCart, Utensils as UtensilsIcon, History, X, Trash2, Loader2, CheckCircle2 } from "lucide-react";
+import { Search, Plus, Minus, ShoppingCart, Utensils as UtensilsIcon, History, X, Trash2, Loader2, CheckCircle2, User } from "lucide-react";
 import { Button } from "./Button";
 import { Card, CardContent, CardHeader, CardFooter } from "./Card";
 import { formatCurrency, cn, customRound } from "@/src/lib/utils";
@@ -75,6 +75,7 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
   const [selectedCategory, setSelectedCategory] = useState<string>('');
   const [cart, setCart] = useState<OrderItem[]>([]);
   const [tableNumber, setTableNumber] = useState('');
+  const [takeoutCustomerName, setTakeoutCustomerName] = useState('');
   const [subAccount, setSubAccount] = useState('');
   const [isTakeaway, setIsTakeaway] = useState(false);
   const [activeOrders, setActiveOrders] = useState<Order[]>([]);
@@ -112,8 +113,19 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
     );
   };
 
+  const isSencillaProduct = (product: Product): boolean => {
+    if (!product) return false;
+    if (product.isSencilla || (product as any).isSencillo) return true;
+    const nameLower = (product.name || '').toLowerCase();
+    const descLower = (product.description || '').toLowerCase();
+    return nameLower.includes('sencill') || descLower.includes('sencill');
+  };
+
   const isCustomizableProduct = (product: Product): boolean => {
     if (isProductPackage(product)) return false;
+    // Si la comida está marcada como sencilla (o su nombre/descripción es sencillo), NO abre la carta de ingredientes
+    if (isSencillaProduct(product)) return false;
+
     const nameLower = (product.name || '').toLowerCase();
     return (
       nameLower.includes('quesadilla') || 
@@ -492,6 +504,7 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
       const orderData: any = {
         tableNumber: isTakeaway ? 'Para Llevar' : tableNumber,
         subAccount: isTakeaway ? '' : subAccount.trim(),
+        clientName: isTakeaway ? takeoutCustomerName.trim() : '',
         items: cart,
         subtotal,
         total,
@@ -575,6 +588,7 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
       
       setCart([]);
       setTableNumber('');
+      setTakeoutCustomerName('');
       setNotes('');
       setIsTakeaway(false);
       setEditingOrderId(null);
@@ -612,6 +626,7 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
       // Clear state
       setCart([]);
       setTableNumber('');
+      setTakeoutCustomerName('');
       setNotes('');
       setIsTakeaway(false);
       setEditingOrderId(null);
@@ -626,6 +641,7 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
     // Cargamos los items existentes para poder agregar más
     setCart(order.items);
     setTableNumber(order.tableNumber === 'Para Llevar' ? '' : order.tableNumber);
+    setTakeoutCustomerName(order.clientName || '');
     setSubAccount(order.subAccount || '');
     setIsTakeaway(order.isTakeaway);
     setNotes(order.notes || '');
@@ -1193,7 +1209,21 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
               />
               Para Llevar
             </label>
-            {!isTakeaway && (
+            {isTakeaway ? (
+              <div className="flex flex-wrap items-center gap-2 bg-white px-3 py-1.5 rounded-xl border border-stone-200 shadow-sm">
+                <div className="flex items-center gap-1.5">
+                  <User size={14} className="text-mex-terracotta shrink-0" />
+                  <span className="text-[10px] font-bold text-stone-400 uppercase">A nombre de:</span>
+                  <input 
+                    type="text" 
+                    placeholder="Nombre del cliente" 
+                    value={takeoutCustomerName}
+                    onChange={(e) => setTakeoutCustomerName(e.target.value)}
+                    className="w-32 sm:w-44 text-xs focus:outline-none font-bold text-stone-800"
+                  />
+                </div>
+              </div>
+            ) : (
               <div className="flex flex-wrap items-center gap-2 bg-white px-3 py-2 rounded-xl border border-stone-200 shadow-sm">
                 <div className="flex items-center gap-1.5">
                   <span className="text-[10px] font-bold text-stone-400 uppercase">Mesa</span>
@@ -1237,8 +1267,12 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
                       )}
                     >
                       <div>
-                        <div className="flex items-center gap-1.5">
-                          <p className="font-bold text-stone-800">{order.isTakeaway ? 'PARA LLEVAR' : `MESA ${order.tableNumber}`}</p>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <p className="font-bold text-stone-800">
+                            {order.isTakeaway 
+                              ? (order.clientName ? `PARA LLEVAR - ${order.clientName.toUpperCase()}` : 'PARA LLEVAR') 
+                              : `MESA ${order.tableNumber}`}
+                          </p>
                           {order.subAccount && (
                             <span className="px-1.5 py-0.5 bg-blue-100/80 text-blue-800 text-[9px] font-black uppercase tracking-wider rounded border border-blue-200">
                               {order.subAccount}

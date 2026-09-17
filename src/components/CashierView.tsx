@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { motion } from "motion/react";
-import { CreditCard, DollarSign, Receipt, TrendingUp, TrendingDown, Clock, CheckCircle2, Trash2, Edit2, Plus, X, AlertTriangle, History, Package, UploadCloud, DownloadCloud, Eye, Image as LucideImage, Calculator, ClipboardCheck, User, BarChart3, PieChart as PieChartIcon, Utensils, ArrowUpRight, Sparkles, Calendar, Share2, RefreshCw, Printer, BookOpen, Loader2, ShieldAlert, Split, Users, Scissors, Layers, RotateCcw, Usb } from "lucide-react";
+import { CreditCard, DollarSign, Receipt, TrendingUp, TrendingDown, Clock, CheckCircle2, Trash2, Edit2, Plus, X, AlertTriangle, History, Package, UploadCloud, DownloadCloud, Eye, Image as LucideImage, Calculator, ClipboardCheck, User, BarChart3, PieChart as PieChartIcon, Utensils, ArrowUpRight, Sparkles, Calendar, Share2, RefreshCw, Printer, BookOpen, Loader2, ShieldAlert, Split, Users, Scissors, Layers, RotateCcw, Usb, Search } from "lucide-react";
 import { Button } from "./Button";
 import { Card, CardContent, CardHeader, CardFooter } from "./Card";
 import { formatCurrency, cn, customRound } from "@/src/lib/utils";
@@ -833,14 +833,21 @@ const safeParseDate = (timestamp: any): Date => {
 
 
 
+  const [pendingSearchQuery, setPendingSearchQuery] = useState('');
+
   const groupedOrders = orders.reduce((acc: GroupedOrder[], order) => {
     const key = order.isTakeaway ? order.id : order.tableNumber;
     let group = acc.find(g => g.id === key);
     
     if (!group) {
+      const clientName = order.clientName || '';
+      const displayTitle = order.isTakeaway 
+        ? (clientName ? `Para Llevar - ${clientName}` : 'Para Llevar') 
+        : `Mesa ${order.tableNumber}`;
+
       group = {
         id: key,
-        displayTitle: order.isTakeaway ? 'Para Llevar' : `Mesa ${order.tableNumber}`,
+        displayTitle,
         isTakeaway: order.isTakeaway,
         total: 0,
         orders: [],
@@ -850,6 +857,10 @@ const safeParseDate = (timestamp: any): Date => {
         isUnconfirmed: order.isTakeaway && order.whatsAppConfirmed === false
       };
       acc.push(group);
+    } else {
+      if (order.isTakeaway && order.clientName && (!group.displayTitle || group.displayTitle === 'Para Llevar')) {
+        group.displayTitle = `Para Llevar - ${order.clientName}`;
+      }
     }
     
     group.orders.push(order);
@@ -868,7 +879,7 @@ const safeParseDate = (timestamp: any): Date => {
     if (order.folio && !group.folios.includes(order.folio)) {
       group.folios.push(order.folio);
     }
-    if (!group.waiterNames.includes(order.waiterName)) {
+    if (order.waiterName && !group.waiterNames.includes(order.waiterName)) {
       group.waiterNames.push(order.waiterName);
     }
     if (order.isTakeaway && order.whatsAppConfirmed === false) {
@@ -877,6 +888,24 @@ const safeParseDate = (timestamp: any): Date => {
     
     return acc;
   }, []);
+
+  const filteredGroupedOrders = React.useMemo(() => {
+    if (!pendingSearchQuery.trim()) return groupedOrders;
+    const q = pendingSearchQuery.toLowerCase().trim();
+    return groupedOrders.filter(group => {
+      if (group.displayTitle.toLowerCase().includes(q)) return true;
+      if (group.folios.some(f => f.toLowerCase().includes(q))) return true;
+      if (group.waiterNames.some(w => w.toLowerCase().includes(q))) return true;
+      return group.orders.some(o => {
+        if (o.tableNumber && o.tableNumber.toLowerCase().includes(q)) return true;
+        if (o.clientName && o.clientName.toLowerCase().includes(q)) return true;
+        if (o.subAccount && o.subAccount.toLowerCase().includes(q)) return true;
+        if (o.notes && o.notes.toLowerCase().includes(q)) return true;
+        if (o.folio && o.folio.toLowerCase().includes(q)) return true;
+        return false;
+      });
+    });
+  }, [groupedOrders, pendingSearchQuery]);
 
 
 
@@ -3087,14 +3116,38 @@ const safeParseDate = (timestamp: any): Date => {
           
           <div className="flex-1 overflow-y-auto px-2 space-y-3 no-scrollbar pb-6">
             {activeSubTab === 'pending' ? (
-              groupedOrders.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-20 opacity-20">
-                  <CheckCircle2 size={64} className="mb-4" />
-                  <p className="text-xl font-serif uppercase tracking-tighter">Todo al día</p>
-                  <p className="text-xs mt-1">No hay pedidos pendientes de cobro</p>
+              <>
+                <div className="relative my-2 px-1">
+                  <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-stone-400" />
+                  <input 
+                    type="text" 
+                    placeholder="Buscar por cliente, mesa (#) o folio..." 
+                    value={pendingSearchQuery}
+                    onChange={(e) => setPendingSearchQuery(e.target.value)}
+                    className="w-full pl-10 pr-10 py-2.5 bg-white border border-stone-200 rounded-xl text-xs font-bold text-stone-800 focus:outline-none focus:ring-2 focus:ring-mex-green shadow-xs placeholder:text-stone-400 placeholder:font-normal"
+                  />
+                  {pendingSearchQuery && (
+                    <button 
+                      onClick={() => setPendingSearchQuery('')}
+                      className="absolute right-4 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600 p-1"
+                    >
+                      <X size={14} />
+                    </button>
+                  )}
                 </div>
-              ) : (
-                groupedOrders.map(group => (
+
+                {filteredGroupedOrders.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-16 opacity-30">
+                    <CheckCircle2 size={56} className="mb-2 text-stone-400" />
+                    <p className="text-lg font-serif font-bold uppercase tracking-tighter">
+                      {pendingSearchQuery ? 'Sin Resultados' : 'Todo al día'}
+                    </p>
+                    <p className="text-xs text-stone-500 mt-0.5">
+                      {pendingSearchQuery ? `No hay pedidos que coincidan con "${pendingSearchQuery}"` : 'No hay pedidos pendientes de cobro'}
+                    </p>
+                  </div>
+                ) : (
+                  filteredGroupedOrders.map(group => (
                   <Card key={group.id} className={cn("border-none shadow-md hover:shadow-xl transition-all group overflow-hidden", group.isUnconfirmed && "ring-2 ring-amber-400 bg-amber-50/10")}>
                     <div className="p-5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                       <div className="min-w-0 flex-1">
@@ -3271,7 +3324,8 @@ const safeParseDate = (timestamp: any): Date => {
                     )}
                   </Card>
                 ))
-              )
+              )}
+            </>
             ) : activeSubTab === 'credits' ? (
               <div className="space-y-3">
                 {creditOrders.length > 0 && (

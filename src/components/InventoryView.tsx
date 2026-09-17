@@ -577,6 +577,25 @@ export const InventoryView = ({ userRole = 'waiter' }: InventoryViewProps) => {
                     </div>
                     <span className="text-xs font-bold text-stone-600 uppercase tracking-tighter">Queso Extra</span>
                   </label>
+
+                  <label className="flex items-center gap-2 cursor-pointer group" title="Si está activa, no solicitará selección de ingredientes e irá directo a cocina">
+                    <div className={cn(
+                      "w-10 h-6 rounded-full relative transition-colors",
+                      editingProduct.isSencilla === true ? "bg-amber-600" : "bg-stone-200"
+                    )}>
+                      <input 
+                        type="checkbox" 
+                        checked={editingProduct.isSencilla === true}
+                        onChange={e => setEditingProduct({...editingProduct, isSencilla: e.target.checked})}
+                        className="sr-only"
+                      />
+                      <div className={cn(
+                        "absolute top-1 w-4 h-4 rounded-full bg-white transition-all shadow-sm",
+                        editingProduct.isSencilla === true ? "left-5" : "left-1"
+                      )} />
+                    </div>
+                    <span className="text-xs font-bold text-stone-600 uppercase tracking-tighter">Es Sencilla (Directo a Cocina)</span>
+                  </label>
                 </div>
 
                 <div className="space-y-2 sm:col-span-2 border-t border-stone-100 pt-4">

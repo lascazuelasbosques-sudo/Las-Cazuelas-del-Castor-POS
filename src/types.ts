@@ -29,6 +29,7 @@ export interface Product {
   imageUrl?: string;
   station?: 'plancha' | 'cocina' | 'comun';
   allowsExtraCheese?: boolean;
+  isSencilla?: boolean;
   printOrder?: number;
 }
 
