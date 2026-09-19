@@ -65,7 +65,8 @@ const sanitizeItemsForFirestore = (items: OrderItem[]): any[] => {
       quantity: Number(item.quantity || 1),
       status: item.status || 'pending',
       station: item.station || 'cocina',
-      hasExtraCheese: !!item.hasExtraCheese
+      hasExtraCheese: !!item.hasExtraCheese,
+      fillings: item.fillings || []
     };
     if (item.notes && item.notes.trim()) {
       cleaned.notes = item.notes.trim();

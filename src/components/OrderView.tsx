@@ -118,7 +118,12 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
     if (product.isSencilla || (product as any).isSencillo) return true;
     const nameLower = (product.name || '').toLowerCase();
     const descLower = (product.description || '').toLowerCase();
-    return nameLower.includes('sencill') || descLower.includes('sencill');
+    return (
+      nameLower.includes('sencill') || 
+      descLower.includes('sencill') || 
+      nameLower.includes('tradicional') || 
+      descLower.includes('tradicional')
+    );
   };
 
   const isCustomizableProduct = (product: Product): boolean => {

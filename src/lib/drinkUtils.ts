@@ -55,8 +55,8 @@ export function isDrinkItem(
     /\b(café|cafe|cafecito)\b/i,
     /\b(té|te)\s+(de\s+|helado|verde|negro|manzanilla|limon|limón|canela|hierbabuena|chai|frío|frio|caliente)\b/i,
     /\b(infusion|infusiones)\b/i,
-    /\b(agua\s+(fresca|natural|mineral|de\s+sabor|embotellada|purificada|ciel|bonafont|epura|simple))\b/i,
-    /\b(aguas\s+frescas|jarra\s+de\s+agua|garrafon|garrafón)\b/i,
+    /\b(agua\s+(fresca|natural|mineral|de\s+sabor|embotellada|purificada|ciel|bonafont|epura|simple|litro|medio|chica|grande|sabor|fruta|naranja|limon|limón|jamaica|horchata|avena|piña|melon|fresa|guayaba|sandia|tamarindo))\b/i,
+    /\b(aguas?|aguas\s+frescas|jarra\s+de\s+agua|garrafon|garrafón)\b/i,
     /\b(jugo|jugos)\s+(de\s+|natural|verde|naranja|zanahoria|toronja|antigripal|mixto)\b/i,
     /\b(jugo|jugos)\b/i
   ];
