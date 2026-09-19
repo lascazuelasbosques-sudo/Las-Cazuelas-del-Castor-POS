@@ -243,35 +243,6 @@ export const Login = ({ onLogin, onEnterPortal, onShutdown }: LoginProps) => {
                 </div>
               </button>
             </div>
-
-            {/* LINKS: COCINA / PERSONAL y ADMIN */}
-            <div className="pt-2 w-full flex flex-col items-center gap-4">
-              <div className="h-px w-16 bg-stone-200" />
-              <div className="flex flex-wrap justify-center items-center gap-5">
-                <button 
-                  onClick={() => {
-                    setAuthTab('offline');
-                    setUsername('cocina');
-                    setPassword('');
-                    setLoginMode('auth');
-                  }}
-                  className="flex items-center gap-1.5 text-xs font-black text-stone-600 hover:text-stone-900 uppercase tracking-widest transition-colors cursor-pointer bg-transparent border-none p-0"
-                >
-                  <ChefHat size={15} />
-                  Cocina / Personal
-                </button>
-                <button 
-                  onClick={() => {
-                    setAuthTab('online');
-                    setLoginMode('auth');
-                  }}
-                  className="flex items-center gap-1.5 text-xs font-black text-stone-600 hover:text-stone-900 uppercase tracking-widest transition-colors cursor-pointer bg-transparent border-none p-0"
-                >
-                  <Shield size={15} />
-                  Admin
-                </button>
-              </div>
-            </div>
           </motion.div>
         )}
 
@@ -523,9 +494,39 @@ export const Login = ({ onLogin, onEnterPortal, onShutdown }: LoginProps) => {
         </div>
       )}
 
-      <p className="text-[9px] text-stone-300 font-bold uppercase tracking-[0.3em] fixed bottom-6 text-center w-full">
-        v.4.0 • SISTEMA OFICIAL CAZUELAS
-      </p>
+      {/* DISCREET BOTTOM FOOTER LINKS */}
+      <footer className="fixed bottom-3 inset-x-0 z-20 flex flex-col items-center justify-center gap-1 pointer-events-auto select-none">
+        <div className="flex items-center gap-3 text-[11px] font-bold text-stone-400">
+          <button 
+            type="button"
+            onClick={() => {
+              setAuthTab('offline');
+              setUsername('cocina');
+              setPassword('');
+              setLoginMode('auth');
+            }}
+            className="hover:text-stone-700 transition-colors cursor-pointer bg-transparent border-none p-1 flex items-center gap-1.5"
+          >
+            <ChefHat size={13} className="text-stone-400" />
+            Cocina / Personal
+          </button>
+          <span className="text-stone-300">•</span>
+          <button 
+            type="button"
+            onClick={() => {
+              setAuthTab('online');
+              setLoginMode('auth');
+            }}
+            className="hover:text-stone-700 transition-colors cursor-pointer bg-transparent border-none p-1 flex items-center gap-1.5"
+          >
+            <Shield size={13} className="text-stone-400" />
+            Admin
+          </button>
+        </div>
+        <p className="text-[9px] text-stone-300 font-bold uppercase tracking-[0.25em] m-0">
+          v.4.0 • SISTEMA OFICIAL CAZUELAS
+        </p>
+      </footer>
 
       <OfflineInstallerModal 
         isOpen={showInstaller} 
