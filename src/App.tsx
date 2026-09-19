@@ -8,6 +8,7 @@ import { AdminView } from './components/AdminView';
 import WhatsAppInternoView from './components/WhatsAppInternoView';
 import { CustomerPortal } from './components/CustomerPortal';
 import { Login } from './components/Login';
+import { ShutdownScreen } from './components/ShutdownScreen';
 import { PendingOrdersNotifier } from './components/PendingOrdersNotifier';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { auth } from './firebase';
@@ -37,6 +38,19 @@ export default function App() {
 
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isSimulatedFullscreen, setIsSimulatedFullscreen] = useState(false);
+  const [isSystemShutdown, setIsSystemShutdown] = useState(false);
+
+  const handleShutdown = () => {
+    auth.signOut();
+    setPosUser(null);
+    localStorage.removeItem('posUser');
+    setIsSystemShutdown(true);
+    try {
+      const doc = document as any;
+      const exit = doc.exitFullscreen || doc.webkitExitFullscreen || doc.mozCancelFullScreen || doc.msExitFullscreen;
+      if (exit) exit.call(doc);
+    } catch (e) {}
+  };
 
   // Sync fullscreen change events & Lock status
   useEffect(() => {
@@ -391,6 +405,10 @@ export default function App() {
     };
   }, [posUser, userRole]);
 
+  if (isSystemShutdown) {
+    return <ShutdownScreen onReboot={() => setIsSystemShutdown(false)} />;
+  }
+
   if (loading) {
     return (
       <div className="h-screen flex items-center justify-center bg-mex-cream">
@@ -430,6 +448,7 @@ export default function App() {
     return (
       <>
         <Login 
+          onShutdown={handleShutdown}
           onLogin={(u) => {
             const userToSave = { ...u };
             if (userToSave.name) {
@@ -512,6 +531,7 @@ export default function App() {
           userRole={userRole} 
           userName={posUser?.name || firebaseUser?.displayName || firebaseUser?.email?.split('@')[0] || 'Usuario'} 
           onLogout={handleLogout}
+          onShutdown={handleShutdown}
           isFullscreen={isFull}
           toggleFullscreen={toggleFullscreen}
         />

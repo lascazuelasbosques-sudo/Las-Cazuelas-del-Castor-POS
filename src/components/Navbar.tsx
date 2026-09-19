@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Utensils, ClipboardList, Package, CreditCard, Settings, LogOut, Menu, ChefHat, MessageSquare, Bell, Maximize2, Minimize2, Radio, Smartphone, Download, Printer, Usb, HelpCircle } from "lucide-react";
+import { Utensils, ClipboardList, Package, CreditCard, Settings, LogOut, Menu, ChefHat, MessageSquare, Bell, Maximize2, Minimize2, Radio, Smartphone, Download, Printer, Usb, HelpCircle, Power } from "lucide-react";
 import { Button } from "./Button";
 import { cn, getRoleLabel } from "@/src/lib/utils";
 import { auth, db } from "../firebase";
@@ -29,6 +29,7 @@ interface NavbarProps {
   userRole?: string;
   userName?: string;
   onLogout: () => void;
+  onShutdown?: () => void;
   isFullscreen?: boolean;
   toggleFullscreen?: () => void;
 }
@@ -39,6 +40,7 @@ export const Navbar = ({
   userRole = 'waiter', 
   userName = 'Usuario', 
   onLogout,
+  onShutdown,
   isFullscreen: propIsFullscreen,
   toggleFullscreen: propToggleFullscreen
 }: NavbarProps) => {
@@ -54,6 +56,7 @@ export const Navbar = ({
   const [isInstallerOpen, setIsInstallerOpen] = useState(false);
   const [isUsbModalOpen, setIsUsbModalOpen] = useState(false);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
+  const [showShutdownConfirm, setShowShutdownConfirm] = useState(false);
   
   const { branding } = useBranding();
 
@@ -484,6 +487,17 @@ export const Navbar = ({
             <LogOut size={21} />
             <span className="text-[9px] font-extrabold whitespace-nowrap">Salir</span>
           </button>
+
+          {onShutdown && (
+            <button
+              onClick={() => setShowShutdownConfirm(true)}
+              className="flex flex-col items-center gap-1 p-2 rounded-xl text-red-600 hover:bg-red-100 bg-red-50 shrink-0 cursor-pointer border border-red-200"
+              title="Apagar Computadora"
+            >
+              <Power size={21} className="text-red-600" />
+              <span className="text-[9px] font-black text-red-700 whitespace-nowrap">Apagar</span>
+            </button>
+          )}
         </div>
 
       </div>
@@ -628,7 +642,53 @@ export const Navbar = ({
           <LogOut size={16} />
           <span className="hidden lg:inline">Cerrar Sesión</span>
         </Button>
+
+        {onShutdown && (
+          <Button 
+            className="justify-center lg:justify-start gap-2.5 w-full bg-red-600 hover:bg-red-700 text-white px-0 lg:px-3 h-[38px] text-xs font-black shadow-md shadow-red-900/20 rounded-xl cursor-pointer"
+            title="Cerrar Sesión y Apagar Computadora"
+            onClick={() => setShowShutdownConfirm(true)}
+          >
+            <Power size={16} className="shrink-0 text-white" />
+            <span className="hidden lg:inline">Apagar Computadora</span>
+          </Button>
+        )}
       </div>
+
+      {/* Modal de Confirmación de Apagado */}
+      {showShutdownConfirm && (
+        <div className="fixed inset-0 z-[99999] bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-stone-900 border-2 border-red-500/40 rounded-3xl p-6 max-w-sm w-full shadow-2xl text-center space-y-4">
+            <div className="w-16 h-16 rounded-2xl bg-red-950/90 border border-red-800 text-red-500 flex items-center justify-center mx-auto">
+              <Power size={32} />
+            </div>
+            <div>
+              <h3 className="text-lg font-black text-white">¿Cerrar Sesión y Apagar?</h3>
+              <p className="text-xs text-stone-400 mt-1.5 leading-relaxed">
+                Se resguardarán todos los datos y comandas locales para que puedas apagar la computadora con total seguridad.
+              </p>
+            </div>
+            <div className="grid grid-cols-2 gap-3 pt-2">
+              <Button
+                variant="outline"
+                onClick={() => setShowShutdownConfirm(false)}
+                className="w-full bg-stone-800 text-stone-300 border-stone-700 hover:bg-stone-700 py-2.5 rounded-xl font-bold text-xs"
+              >
+                Cancelar
+              </Button>
+              <Button
+                onClick={() => {
+                  setShowShutdownConfirm(false);
+                  onShutdown?.();
+                }}
+                className="w-full bg-red-600 hover:bg-red-700 text-white py-2.5 rounded-xl font-black text-xs shadow-lg shadow-red-900/40"
+              >
+                Sí, Apagar
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Manual de Operación y Ayuda Modal */}
       <HelpManualModal
