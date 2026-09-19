@@ -145,18 +145,6 @@ export interface ChatChannel {
   activeOrderId?: string;
 }
 
-
-export interface ChatChannel {
-  id: string; // usually client's phone or auto-id
-  clientName: string;
-  clientPhone: string;
-  lastMessage: string;
-  lastMessageAt: string;
-  unreadCount: number;
-  status: 'open' | 'archived';
-  activeOrderId?: string;
-}
-
 export interface ChatMessage {
   id: string;
   sender: 'client' | 'staff';
@@ -167,12 +155,12 @@ export interface ChatMessage {
 }
 
 export const DEFAULT_USERS: User[] = [
-  { id: 'usr-admin', name: 'Carlos Mendoza (Administrador)', username: 'admin', password: 'admin', role: 'admin', pin: '1234', active: true },
-  { id: 'usr-cocina', name: 'Chef Doña Rosa (Cocina)', username: 'cocina', password: 'cocina', role: 'kitchen', pin: '1234', active: true },
-  { id: 'usr-parrilla', name: 'Beto Parrillero (Parrilla/Plancha)', username: 'parrilla', password: 'parrilla', role: 'parrilla', pin: '1234', active: true },
-  { id: 'usr-caja', name: 'Valeria Gómez (Caja y Cobro)', username: 'caja', password: 'caja', role: 'cashier', pin: '1234', active: true },
-  { id: 'usr-mesero', name: 'Luis Hernández (Mesero)', username: 'mesero', password: 'mesero', role: 'waiter', pin: '1234', active: true },
-  { id: 'usr-abigail', name: 'Antonieta Abigail Villagómez', username: 'abigail', password: 'abigail', role: 'kitchen', pin: '1234', active: true },
+  { id: 'usr-admin', name: 'Carlos Mendoza (Administrador)', username: 'admin', password: 'admin2026', role: 'admin', pin: '4321', active: true },
+  { id: 'usr-cocina', name: 'Chef Doña Rosa (Cocina)', username: 'cocina', password: 'cocina2026', role: 'kitchen', pin: '7890', active: true },
+  { id: 'usr-parrilla', name: 'Beto Parrillero (Parrilla/Plancha)', username: 'parrilla', password: 'parrilla2026', role: 'parrilla', pin: '5678', active: true },
+  { id: 'usr-caja', name: 'Valeria Gómez (Caja y Cobro)', username: 'caja', password: 'caja2026', role: 'cashier', pin: '9012', active: true },
+  { id: 'usr-mesero', name: 'Luis Hernández (Mesero)', username: 'mesero', password: 'mesero2026', role: 'waiter', pin: '1122', active: true },
+  { id: 'usr-abigail', name: 'Antonieta Abigail Villagómez', username: 'abigail', password: 'abigail2026', role: 'kitchen', pin: '3344', active: true },
 ];
 
 

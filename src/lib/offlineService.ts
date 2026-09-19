@@ -35,7 +35,7 @@ type CacheListener = (collectionName: string, data: any[]) => void;
 const cacheListeners = new Map<string, Set<CacheListener>>();
 
 // Safe localStorage wrapper for iframe applets
-const safeStorage = {
+export const safeStorage = {
   getItem: (key: string): string | null => {
     try {
       return localStorage.getItem(key);
@@ -172,18 +172,21 @@ export function preloadUsersCache() {
         if (!Array.isArray(parsed) || parsed.length === 0) {
           saveLocalCache('users', DEFAULT_USERS);
         } else {
-          // Merge defaults if any default role is missing
+          // Normalize existing cached users and merge defaults if any default role is missing
           let updated = false;
-          const merged = [...parsed];
+          const merged: User[] = parsed.map((u: any) => ({
+            ...u,
+            pin: u.pin ? String(u.pin).trim() : '',
+            password: u.password ? String(u.password).trim() : ''
+          }));
+
           DEFAULT_USERS.forEach(def => {
             if (!merged.some(u => u.id === def.id || (u.username && def.username && u.username.toLowerCase() === def.username.toLowerCase()))) {
               merged.push(def);
               updated = true;
             }
           });
-          if (updated) {
-            saveLocalCache('users', merged);
-          }
+          saveLocalCache('users', merged);
         }
       } catch (e) {
         saveLocalCache('users', DEFAULT_USERS);
@@ -199,7 +202,20 @@ export async function syncUsersCacheFromFirestore() {
   try {
     const snap = await withTimeout(getDocs(collection(db, "users")), 3500);
     if (!snap.empty) {
-      const firestoreUsers: User[] = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) }));
+      const firestoreUsers: User[] = snap.docs.map(d => {
+        const data = d.data() as any;
+        return {
+          id: d.id,
+          name: data.name || data.username || 'Personal',
+          username: data.username || '',
+          password: data.password ? String(data.password).trim() : '',
+          email: data.email || '',
+          role: data.role || 'waiter',
+          active: data.active !== false,
+          pin: data.pin ? String(data.pin).trim() : '',
+          isGoogleUser: !!data.isGoogleUser
+        };
+      });
       const merged: User[] = [...firestoreUsers];
       DEFAULT_USERS.forEach(def => {
         if (!merged.some(u => u.id === def.id || (u.username && def.username && u.username.toLowerCase() === def.username.toLowerCase()))) {
