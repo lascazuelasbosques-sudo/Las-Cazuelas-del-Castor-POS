@@ -15,6 +15,7 @@ import {
 import { db } from "../firebase";
 import toast from "react-hot-toast";
 import { DEFAULT_FALLBACK_CATEGORIES, DEFAULT_FALLBACK_PRODUCTS } from "./defaultMenuData";
+import { DEFAULT_USERS, User } from "../types";
 
 export interface OfflineOperation {
   id: string;
@@ -119,6 +120,10 @@ export function getLocalCache(collectionName: string): any[] {
     saveLocalCache('categories', DEFAULT_FALLBACK_CATEGORIES);
     return DEFAULT_FALLBACK_CATEGORIES;
   }
+  if (collectionName === 'users') {
+    saveLocalCache('users', DEFAULT_USERS);
+    return DEFAULT_USERS;
+  }
 
   return [];
 }
@@ -152,8 +157,68 @@ export function preloadMenuCache() {
   }
 }
 
+/**
+ * Preloads and warms up the offline cache database for all users and staff roles,
+ * ensuring complete offline login validation with real responsible names.
+ */
+export function preloadUsersCache() {
+  try {
+    const cachedUsers = safeStorage.getItem('offline_cache_col_users');
+    if (!cachedUsers) {
+      saveLocalCache('users', DEFAULT_USERS);
+    } else {
+      try {
+        const parsed = JSON.parse(cachedUsers);
+        if (!Array.isArray(parsed) || parsed.length === 0) {
+          saveLocalCache('users', DEFAULT_USERS);
+        } else {
+          // Merge defaults if any default role is missing
+          let updated = false;
+          const merged = [...parsed];
+          DEFAULT_USERS.forEach(def => {
+            if (!merged.some(u => u.id === def.id || (u.username && def.username && u.username.toLowerCase() === def.username.toLowerCase()))) {
+              merged.push(def);
+              updated = true;
+            }
+          });
+          if (updated) {
+            saveLocalCache('users', merged);
+          }
+        }
+      } catch (e) {
+        saveLocalCache('users', DEFAULT_USERS);
+      }
+    }
+  } catch (err) {
+    console.warn("Failed to warm up users cache:", err);
+  }
+}
+
+export async function syncUsersCacheFromFirestore() {
+  if (isSimulatingOffline || !isBrowserOnline) return;
+  try {
+    const snap = await withTimeout(getDocs(collection(db, "users")), 3500);
+    if (!snap.empty) {
+      const firestoreUsers: User[] = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) }));
+      const merged: User[] = [...firestoreUsers];
+      DEFAULT_USERS.forEach(def => {
+        if (!merged.some(u => u.id === def.id || (u.username && def.username && u.username.toLowerCase() === def.username.toLowerCase()))) {
+          merged.push(def);
+        }
+      });
+      saveLocalCache('users', merged);
+    }
+  } catch (e) {
+    // Offline or quota exceeded
+  }
+}
+
 // Auto-run cache preload on load
 preloadMenuCache();
+preloadUsersCache();
+if (isBrowserOnline && !isSimulatingOffline) {
+  syncUsersCacheFromFirestore().catch(() => {});
+}
 
 // Cache listeners subscription
 export function subscribeToCollectionCache(collectionName: string, listener: CacheListener) {

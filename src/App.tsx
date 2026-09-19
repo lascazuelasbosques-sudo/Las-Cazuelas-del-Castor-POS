@@ -288,6 +288,20 @@ export default function App() {
       setFirebaseUser(user);
       
       if (!user) {
+        // Do NOT wipe local/offline staff sessions when Firebase Auth resolves to null!
+        const savedPosUser = localStorage.getItem('posUser');
+        if (savedPosUser) {
+          try {
+            const parsed = JSON.parse(savedPosUser);
+            if (parsed && (!parsed.isGoogleUser || parsed.role)) {
+              // Local staff or offline authenticated user is preserved
+              setPosUser(parsed);
+              setUserRole(parsed.role);
+              setLoading(false);
+              return;
+            }
+          } catch (err) {}
+        }
         setPosUser(null);
         localStorage.removeItem('posUser');
         setLoading(false);

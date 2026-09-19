@@ -27,6 +27,7 @@ import { seedDatabase, restoreDeletedProducts } from "../seed";
 import { handleFirestoreError, OperationType } from "../lib/firestoreErrorHandler";
 import { User, UserRole, CashLog, DEFAULT_USERS } from "../types";
 import { formatCurrency, cn, getRoleLabel } from "@/src/lib/utils";
+import { saveLocalCache } from "../lib/offlineService";
 import { auth } from "../firebase";
 
 const SUPER_ADMIN_EMAIL = "lascazuelasbosques@gmail.com";
@@ -321,8 +322,14 @@ export const AdminView = () => {
         fetchedUsers = DEFAULT_USERS;
       }
       
-      // Cleanup: Delete Admins that are NOT Google Users (and not the Super Admin email)
-      const invalidAdmins = fetchedUsers.filter(u => u.role === 'admin' && !u.isGoogleUser && u.email !== SUPER_ADMIN_EMAIL);
+      // Cleanup: Delete Admins that are NOT Google Users (and not the Super Admin email or offline emergency admin)
+      const invalidAdmins = fetchedUsers.filter(u => 
+        u.role === 'admin' && 
+        !u.isGoogleUser && 
+        u.email !== SUPER_ADMIN_EMAIL &&
+        u.id !== 'usr-admin' &&
+        u.username !== 'admin'
+      );
       
       let baseUsers = fetchedUsers;
       if (invalidAdmins.length > 0) {
@@ -392,13 +399,17 @@ export const AdminView = () => {
         } catch (e) {
           console.warn("Could not delete duplicates due to quota/offline:", e);
         }
-        setUsers(baseUsers.filter(u => !toDelete.some(td => td.id === u.id)));
+        const cleanedUsers = baseUsers.filter(u => !toDelete.some(td => td.id === u.id));
+        setUsers(cleanedUsers);
+        saveLocalCache('users', cleanedUsers);
       } else {
         setUsers(baseUsers);
+        saveLocalCache('users', baseUsers);
       }
     } catch (error) {
       console.warn("Error fetching users from Firestore, using defaults:", error);
       setUsers(DEFAULT_USERS);
+      saveLocalCache('users', DEFAULT_USERS);
     }
   };
 

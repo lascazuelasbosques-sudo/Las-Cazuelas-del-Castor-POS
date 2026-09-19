@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from "react";
 import { 
   Smartphone, Download, CheckCircle2, Share, Bell, X, 
-  Wifi, WifiOff, HardDrive, Sparkles, RefreshCw, Layers, ShieldCheck 
+  Wifi, WifiOff, HardDrive, Sparkles, RefreshCw, Layers, ShieldCheck, Users 
 } from "lucide-react";
-import { preloadMenuCache, getLocalCache } from "../lib/offlineService";
+import { preloadMenuCache, preloadUsersCache, getLocalCache } from "../lib/offlineService";
 import toast from "react-hot-toast";
 
 interface OfflineInstallerModalProps {
@@ -17,9 +17,10 @@ export function OfflineInstallerModal({ isOpen, onClose }: OfflineInstallerModal
   const [isIOS, setIsIOS] = useState(false);
   const [isOnline, setIsOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true);
   const [isPreparingOffline, setIsPreparingOffline] = useState(false);
-  const [offlineStats, setOfflineStats] = useState<{ productsCount: number; categoriesCount: number; isCached: boolean }>({
+  const [offlineStats, setOfflineStats] = useState<{ productsCount: number; categoriesCount: number; usersCount: number; isCached: boolean }>({
     productsCount: 0,
     categoriesCount: 0,
+    usersCount: 0,
     isCached: false
   });
 
@@ -65,9 +66,11 @@ export function OfflineInstallerModal({ isOpen, onClose }: OfflineInstallerModal
   const updateCacheStats = () => {
     const products = getLocalCache('products') || [];
     const categories = getLocalCache('categories') || [];
+    const users = getLocalCache('users') || [];
     setOfflineStats({
       productsCount: products.length,
       categoriesCount: categories.length,
+      usersCount: users.length,
       isCached: products.length > 0
     });
   };
@@ -96,8 +99,9 @@ export function OfflineInstallerModal({ isOpen, onClose }: OfflineInstallerModal
   const handlePrepareOffline = async () => {
     setIsPreparingOffline(true);
     try {
-      // 1. Warm up menu cache in localStorage
+      // 1. Warm up menu & users cache in localStorage
       preloadMenuCache();
+      preloadUsersCache();
       
       // 2. Pre-cache app shell and static resources in Service Worker Cache if supported
       if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
@@ -114,7 +118,7 @@ export function OfflineInstallerModal({ isOpen, onClose }: OfflineInstallerModal
       }
 
       updateCacheStats();
-      toast.success('¡Sistema y comidas 100% listos para trabajar fuera de línea!', {
+      toast.success('¡Sistema, comidas y usuarios listos para trabajar fuera de línea!', {
         icon: '💾',
         duration: 4000
       });
@@ -181,9 +185,9 @@ export function OfflineInstallerModal({ isOpen, onClose }: OfflineInstallerModal
           <div className="flex items-center gap-2">
             <HardDrive size={16} className="text-amber-400" />
             <div className="text-[11px]">
-              <span className="text-stone-400 block">Comidas en Caché</span>
+              <span className="text-stone-400 block">Base de Datos Local</span>
               <span className="font-bold text-stone-200">
-                {offlineStats.productsCount} platillos ({offlineStats.categoriesCount} cat.)
+                {offlineStats.productsCount} platillos • {offlineStats.usersCount} usuarios
               </span>
             </div>
           </div>

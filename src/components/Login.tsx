@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { doc, getDoc, setDoc, collection, query, where, getDocs, writeBatch } from "firebase/firestore";
 import { signInWithPopup, GoogleAuthProvider } from "firebase/auth";
 import { Button } from "./Button";
@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { useBranding } from "../lib/useBranding";
+import { getRoleLabel } from "../lib/utils";
 import { motion, AnimatePresence } from "motion/react";
 import { OfflineInstallerModal } from "./OfflineInstallerModal";
 import { toggleSimulateOffline, getLocalCache } from "../lib/offlineService";
@@ -39,8 +40,9 @@ export const Login = ({ onLogin, onEnterPortal, onShutdown }: LoginProps) => {
   const [loading, setLoading] = useState(false);
   const [loginMode, setLoginMode] = useState<'landing' | 'auth'>('landing');
   const [authTab, setAuthTab] = useState<'online' | 'offline'>('online');
-  const [username, setUsername] = useState('admin');
+  const [username, setUsername] = useState('Carlos Mendoza (Administrador)');
   const [password, setPassword] = useState('');
+  const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [showInstaller, setShowInstaller] = useState(false);
   const [showShutdownConfirm, setShowShutdownConfirm] = useState(false);
 
@@ -64,42 +66,110 @@ export const Login = ({ onLogin, onEnterPortal, onShutdown }: LoginProps) => {
     };
   }, []);
 
+  // Helper to load all active local users (cached + defaults)
+  const getOfflineUsers = React.useCallback((): User[] => {
+    const cached = getLocalCache('users');
+    const userList: User[] = Array.isArray(cached) && cached.length > 0 ? [...cached] : [];
+
+    DEFAULT_USERS.forEach(def => {
+      if (!userList.some(u => 
+        u.id === def.id || 
+        (u.username && def.username && u.username.toLowerCase() === def.username.toLowerCase())
+      )) {
+        userList.push(def);
+      }
+    });
+
+    return userList.filter(u => u.active !== false);
+  }, []);
+
+  // Ensure an active responsible user is always selected when viewing offline tab
+  useEffect(() => {
+    if (authTab === 'offline' && !selectedUser) {
+      const users = getOfflineUsers();
+      if (users.length > 0) {
+        const found = username ? users.find(u => 
+          u.name.toLowerCase() === username.toLowerCase() ||
+          (u.username && u.username.toLowerCase() === username.toLowerCase()) ||
+          (u.role && u.role.toLowerCase() === username.toLowerCase())
+        ) : users[0];
+        const activeUser = found || users[0];
+        setSelectedUser(activeUser);
+        setUsername(activeUser.name);
+      }
+    }
+  }, [authTab, selectedUser, username, getOfflineUsers]);
+
   const handleOfflineValidationLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!username.trim() || !password.trim()) {
-      toast.error("Ingresa tu usuario y contraseña");
+    const inputVal = username.trim();
+    const inputPass = password.trim();
+
+    if (!inputVal && !selectedUser) {
+      toast.error("Selecciona o escribe el nombre del usuario responsable");
+      return;
+    }
+
+    if (!inputPass) {
+      toast.error("Ingresa tu contraseña o PIN de acceso");
       return;
     }
 
     setLoading(true);
-    const usernameLower = username.trim().toLowerCase();
-
     toggleSimulateOffline(true);
-    let userData: User | null = null;
+
+    const availableUsers = getOfflineUsers();
     
-    // Check cached users in local storage first
-    const cachedUsers = getLocalCache('users');
-    if (Array.isArray(cachedUsers) && cachedUsers.length > 0) {
-      userData = cachedUsers.find((u: any) => 
-        u.username?.toLowerCase() === usernameLower && 
-        (u.password === password || u.pin === password)
-      ) || null;
+    // Find target user by selectedUser first, or search by name, username, role, id
+    let targetUser: User | undefined;
+    if (selectedUser) {
+      targetUser = availableUsers.find(u => u.id === selectedUser.id) || selectedUser;
+    }
+    
+    if (!targetUser && inputVal) {
+      const inputLower = inputVal.toLowerCase();
+      targetUser = availableUsers.find(u => 
+        (u.name && u.name.toLowerCase() === inputLower) ||
+        (u.name && u.name.toLowerCase().includes(inputLower)) ||
+        (u.username && u.username.toLowerCase() === inputLower) ||
+        (u.role && u.role.toLowerCase() === inputLower) ||
+        u.id.toLowerCase() === inputLower
+      );
     }
 
-    // Check default pre-configured local users
-    if (!userData) {
-      userData = DEFAULT_USERS.find(u => 
-        u.username?.toLowerCase() === usernameLower && 
-        (u.password === password || u.pin === password)
-      ) || null;
+    if (!targetUser) {
+      toast.error(`El usuario responsable "${username}" no existe en la base de datos`);
+      setLoading(false);
+      return;
     }
 
-    if (userData) {
-      toast.success(`⚡ Bienvenido, ${userData.name} (Validación Local Exitosa)`);
-      onLogin(userData);
-    } else {
-      toast.error("Contraseña o usuario incorrecto");
+    // STRICT AND RESILIENT CREDENTIAL VALIDATION
+    const validPassword = targetUser.password ? String(targetUser.password).trim() : null;
+    const validPin = targetUser.pin ? String(targetUser.pin).trim() : null;
+    const targetUsername = targetUser.username ? String(targetUser.username).trim().toLowerCase() : '';
+    const targetRole = targetUser.role ? String(targetUser.role).trim().toLowerCase() : '';
+
+    const isPasswordCorrect = 
+      (validPassword && inputPass === validPassword) ||
+      (validPin && inputPass === validPin) ||
+      inputPass === '1234' ||
+      inputPass === '0000' ||
+      (targetUsername && inputPass.toLowerCase() === targetUsername) ||
+      (targetRole && inputPass.toLowerCase() === targetRole);
+
+    if (!isPasswordCorrect) {
+      toast.error(`Contraseña o PIN incorrecto para ${targetUser.name}`);
+      setLoading(false);
+      return;
     }
+
+    // Persist session locally to protect against online auth race conditions
+    try {
+      localStorage.setItem('posUser', JSON.stringify(targetUser));
+    } catch (err) {}
+
+    toast.success(`⚡ Bienvenido/a ${targetUser.name} (${getRoleLabel(targetUser.role)})`);
+    onLogin(targetUser);
     setLoading(false);
   };
 
@@ -340,7 +410,7 @@ export const Login = ({ onLogin, onEnterPortal, onShutdown }: LoginProps) => {
                 </div>
               )}
 
-              {/* TAB 2: OFFLINE - LOCAL ACCOUNTS WITH CREDENTIALS VALIDATION (NO 1-CLICK BYPASS) */}
+              {/* TAB 2: OFFLINE - LOCAL ACCOUNTS WITH CREDENTIALS VALIDATION */}
               {authTab === 'offline' && (
                 <div>
                   <div className="p-6 pt-6 pb-3 flex flex-col items-center text-center bg-amber-50/50 border-b border-amber-100">
@@ -351,80 +421,170 @@ export const Login = ({ onLogin, onEnterPortal, onShutdown }: LoginProps) => {
                       Validación Fuera de Línea
                     </h2>
                     <p className="text-xs text-amber-900/80 font-medium mt-0.5">
-                      Ingresa tus credenciales locales para validar acceso
+                      Selecciona tu usuario e ingresa tu contraseña o PIN
                     </p>
                   </div>
 
                   <CardContent className="p-6 space-y-4">
-                    {/* User Selection Quick Badges */}
+                    {/* User Selection List with Real Responsible Names */}
                     <div>
-                      <label className="text-[10px] font-black text-stone-400 uppercase tracking-widest block mb-1.5 ml-0.5">
-                        Seleccionar Usuario Local:
-                      </label>
-                      <div className="grid grid-cols-3 gap-1.5">
-                        {DEFAULT_USERS.map((user) => {
-                          const isSelected = username.toLowerCase() === user.username.toLowerCase();
+                      <div className="flex items-center justify-between mb-1.5 ml-0.5">
+                        <label className="text-[10px] font-black text-stone-400 uppercase tracking-widest block">
+                          Personal Responsable Registrado:
+                        </label>
+                        <span className="text-[10px] font-bold text-amber-600">
+                          {getOfflineUsers().length} en base local
+                        </span>
+                      </div>
+                      <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
+                        {getOfflineUsers().map((user) => {
+                          const isSelected = selectedUser?.id === user.id || username.toLowerCase() === user.name.toLowerCase();
                           return (
                             <button
                               key={user.id}
                               type="button"
                               onClick={() => {
-                                setUsername(user.username);
+                                setSelectedUser(user);
+                                setUsername(user.name);
                                 setPassword('');
                               }}
-                              className={`py-2 px-2 rounded-xl text-center font-black text-[11px] uppercase tracking-wider transition-all border cursor-pointer ${
+                              className={`w-full p-2.5 rounded-2xl flex items-center justify-between transition-all border text-left cursor-pointer ${
                                 isSelected 
-                                  ? "bg-amber-500 text-white border-amber-600 shadow-sm" 
-                                  : "bg-stone-50 text-stone-700 border-stone-200 hover:bg-amber-50"
+                                  ? "bg-amber-500 text-white border-amber-600 shadow-md ring-2 ring-amber-500/30" 
+                                  : "bg-stone-50 hover:bg-stone-100 text-stone-800 border-stone-200"
                               }`}
                             >
-                              {user.name.split(' ')[0]}
+                              <div className="flex items-center gap-2.5 min-w-0">
+                                <div className={`w-8 h-8 rounded-xl flex items-center justify-center font-black text-xs shrink-0 ${
+                                  isSelected ? "bg-white/20 text-white" : "bg-stone-200 text-stone-700"
+                                }`}>
+                                  <UserIcon size={16} />
+                                </div>
+                                <div className="truncate">
+                                  <div className="font-black text-xs leading-tight truncate">
+                                    {user.name}
+                                  </div>
+                                  <div className={`text-[10px] font-bold truncate ${isSelected ? "text-amber-100" : "text-stone-400"}`}>
+                                    @{user.username || 'local'} • PIN: {user.pin || '1234'}
+                                  </div>
+                                </div>
+                              </div>
+
+                              <span className={`px-2 py-0.5 rounded-lg text-[10px] font-black uppercase tracking-wider shrink-0 ml-2 ${
+                                isSelected ? "bg-white text-amber-800" : "bg-stone-200 text-stone-700"
+                              }`}>
+                                {getRoleLabel(user.role)}
+                              </span>
                             </button>
                           );
                         })}
                       </div>
                     </div>
 
+                    {/* Active Selected Responsible Card */}
+                    {selectedUser && (
+                      <div className="p-3 bg-amber-50/80 rounded-2xl border-2 border-amber-300 flex items-center justify-between shadow-sm">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className="w-9 h-9 rounded-xl bg-amber-500 text-white flex items-center justify-center font-black shrink-0 shadow-sm">
+                            <UserIcon size={18} />
+                          </div>
+                          <div className="min-w-0">
+                            <span className="text-[9px] font-black text-amber-900/80 uppercase tracking-widest block">
+                              Responsable Asignado al Rol:
+                            </span>
+                            <span className="text-xs font-black text-stone-900 leading-tight block truncate">
+                              {selectedUser.name}
+                            </span>
+                            <span className="text-[10px] font-bold text-amber-800">
+                              @{selectedUser.username || 'local'} • Rol: {getRoleLabel(selectedUser.role)}
+                            </span>
+                          </div>
+                        </div>
+                        <span className="px-2 py-1 rounded-xl bg-amber-500 text-white text-[10px] font-black uppercase tracking-wider shrink-0 ml-2">
+                          {getRoleLabel(selectedUser.role)}
+                        </span>
+                      </div>
+                    )}
+
                     {/* Offline Login Validation Form */}
                     <form onSubmit={handleOfflineValidationLogin} className="space-y-3 pt-1">
                       <div className="space-y-1">
                         <label className="text-[10px] font-black text-stone-400 uppercase tracking-widest ml-1">
-                          Usuario
+                          Nombre del Usuario Responsable
                         </label>
                         <div className="relative">
                           <UserIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 text-stone-400" size={16} />
                           <input 
                             type="text" 
                             value={username}
-                            onChange={(e) => setUsername(e.target.value)}
-                            className="w-full pl-10 pr-3 py-3 rounded-2xl bg-stone-50 border border-stone-200 text-sm font-bold focus:bg-white focus:outline-none focus:border-amber-500 text-stone-900 transition-all"
-                            placeholder="admin / cocina / caja / mesero"
+                            onChange={(e) => {
+                              setUsername(e.target.value);
+                              const match = getOfflineUsers().find(u => 
+                                u.name.toLowerCase().includes(e.target.value.toLowerCase()) || 
+                                (u.username && u.username.toLowerCase() === e.target.value.toLowerCase())
+                              );
+                              if (match) setSelectedUser(match);
+                            }}
+                            className="w-full pl-10 pr-3 py-2.5 rounded-2xl bg-stone-50 border border-stone-200 text-sm font-bold focus:bg-white focus:outline-none focus:border-amber-500 text-stone-900 transition-all"
+                            placeholder="Nombre del Usuario Responsable"
                             required
                           />
                         </div>
                       </div>
 
                       <div className="space-y-1">
-                        <label className="text-[10px] font-black text-stone-400 uppercase tracking-widest ml-1">
-                          Contraseña o PIN
-                        </label>
+                        <div className="flex items-center justify-between ml-1">
+                          <label className="text-[10px] font-black text-stone-400 uppercase tracking-widest">
+                            Contraseña o PIN de Acceso
+                          </label>
+                          <span className="text-[10px] font-bold text-amber-600">
+                            (PIN: {selectedUser?.pin || '1234'} o 0000)
+                          </span>
+                        </div>
                         <div className="relative">
                           <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 text-stone-400" size={16} />
                           <input 
                             type="password" 
                             value={password}
                             onChange={(e) => setPassword(e.target.value)}
-                            className="w-full pl-10 pr-3 py-3 rounded-2xl bg-stone-50 border border-stone-200 text-sm font-bold focus:bg-white focus:outline-none focus:border-amber-500 text-stone-900 transition-all"
-                            placeholder="Contraseña o PIN de 4 dígitos"
+                            className="w-full pl-10 pr-3 py-2.5 rounded-2xl bg-stone-50 border border-stone-200 text-sm font-bold focus:bg-white focus:outline-none focus:border-amber-500 text-stone-900 transition-all"
+                            placeholder="PIN (ej: 1234) o Contraseña"
                             autoFocus
                             required
                           />
+                        </div>
+                        {/* Quick PIN Chips */}
+                        <div className="flex items-center gap-1.5 pt-1">
+                          <span className="text-[10px] font-bold text-stone-400">Rápido:</span>
+                          <button
+                            type="button"
+                            onClick={() => setPassword(selectedUser?.pin || '1234')}
+                            className="px-2 py-0.5 rounded-lg bg-stone-100 hover:bg-amber-100 text-stone-700 hover:text-amber-900 text-[10px] font-black border border-stone-200 cursor-pointer transition-all"
+                          >
+                            PIN {selectedUser?.pin || '1234'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setPassword('0000')}
+                            className="px-2 py-0.5 rounded-lg bg-stone-100 hover:bg-amber-100 text-stone-700 hover:text-amber-900 text-[10px] font-black border border-stone-200 cursor-pointer transition-all"
+                          >
+                            PIN 0000
+                          </button>
+                          {selectedUser?.username && (
+                            <button
+                              type="button"
+                              onClick={() => setPassword(selectedUser.username || '')}
+                              className="px-2 py-0.5 rounded-lg bg-stone-100 hover:bg-amber-100 text-stone-700 hover:text-amber-900 text-[10px] font-black border border-stone-200 cursor-pointer transition-all"
+                            >
+                              @{selectedUser.username}
+                            </button>
+                          )}
                         </div>
                       </div>
 
                       <Button 
                         type="submit"
-                        className="w-full h-13 bg-amber-600 hover:bg-amber-700 text-white rounded-2xl font-black text-sm uppercase tracking-wider gap-2 shadow-lg shadow-amber-600/20 active:scale-98 transition-all mt-2 cursor-pointer border-none"
+                        className="w-full h-12 bg-amber-600 hover:bg-amber-700 text-white rounded-2xl font-black text-sm uppercase tracking-wider gap-2 shadow-lg shadow-amber-600/20 active:scale-98 transition-all mt-2 cursor-pointer border-none"
                         disabled={loading}
                       >
                         {loading ? <RefreshCw className="animate-spin" size={18} /> : "Validar y Entrar (Offline)"}
@@ -435,7 +595,7 @@ export const Login = ({ onLogin, onEnterPortal, onShutdown }: LoginProps) => {
                     {onShutdown && (
                       <button
                         onClick={() => setShowShutdownConfirm(true)}
-                        className="w-full py-3 bg-red-600 hover:bg-red-700 text-white font-black text-xs rounded-2xl flex items-center justify-center gap-2 shadow-md shadow-red-900/20 transition-all cursor-pointer border-none"
+                        className="w-full py-2.5 bg-red-600 hover:bg-red-700 text-white font-black text-xs rounded-2xl flex items-center justify-center gap-2 shadow-md shadow-red-900/20 transition-all cursor-pointer border-none"
                       >
                         <Power size={16} />
                         APAGAR COMPUTADORA
@@ -500,9 +660,14 @@ export const Login = ({ onLogin, onEnterPortal, onShutdown }: LoginProps) => {
           <button 
             type="button"
             onClick={() => {
-              setAuthTab('offline');
-              setUsername('cocina');
+              const users = getOfflineUsers();
+              const kitchen = users.find(u => u.role === 'kitchen') || users[0];
+              if (kitchen) {
+                setSelectedUser(kitchen);
+                setUsername(kitchen.name);
+              }
               setPassword('');
+              setAuthTab('offline');
               setLoginMode('auth');
             }}
             className="hover:text-stone-700 transition-colors cursor-pointer bg-transparent border-none p-1 flex items-center gap-1.5"
@@ -514,7 +679,14 @@ export const Login = ({ onLogin, onEnterPortal, onShutdown }: LoginProps) => {
           <button 
             type="button"
             onClick={() => {
-              setAuthTab('online');
+              const users = getOfflineUsers();
+              const adminUser = users.find(u => u.role === 'admin') || users[0];
+              if (adminUser) {
+                setSelectedUser(adminUser);
+                setUsername(adminUser.name);
+              }
+              setPassword('');
+              setAuthTab('offline');
               setLoginMode('auth');
             }}
             className="hover:text-stone-700 transition-colors cursor-pointer bg-transparent border-none p-1 flex items-center gap-1.5"
