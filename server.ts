@@ -43,6 +43,51 @@ async function startServer() {
     res.json({ status: "ok", service: "Las Cazuelas Cash Audit Notifier" });
   });
 
+  // API Route to shut down Linux Mint / Host System
+  app.post("/api/system/shutdown", async (req, res) => {
+    console.log("[Linux Mint Shutdown] Solicitud de apagado de sistema recibida");
+    try {
+      const { exec } = await import("child_process");
+      
+      // Multi-tier Linux poweroff command:
+      // 1. D-Bus systemd poweroff (Works without sudo password on Linux Mint / Ubuntu / Debian desktop sessions)
+      // 2. systemctl poweroff
+      // 3. shutdown -h now
+      // 4. sudo commands if configured
+      // 5. Cinnamon/XFCE/MATE session shutdown
+      const shutdownCommands = [
+        "dbus-send --system --print-reply --dest=org.freedesktop.login1 /org/freedesktop/login1 org.freedesktop.login1.Manager.PowerOff boolean:true",
+        "systemctl poweroff",
+        "cinnamon-session-quit --power-off",
+        "xfce4-session-logout --halt",
+        "mate-session-save --shutdown-dialog",
+        "sudo systemctl poweroff",
+        "sudo shutdown -h now",
+        "shutdown -h now",
+        "poweroff"
+      ];
+
+      const commandToRun = shutdownCommands.join(" || ");
+
+      exec(commandToRun, (error, stdout, stderr) => {
+        if (error) {
+          console.warn("[Linux Shutdown Note]:", error.message, stderr);
+        } else {
+          console.log("[Linux Shutdown]: Comando ejecutado con éxito:", stdout);
+        }
+      });
+
+      res.json({
+        success: true,
+        message: "Comando de apagado enviado al sistema Linux Mint.",
+        instructions: "Si Linux solicita permisos de superusuario, puedes configurar 'sudo visudo' para permitir shutdown sin contraseña."
+      });
+    } catch (err: any) {
+      console.error("Error invoking shutdown on Linux:", err);
+      res.status(500).json({ success: false, error: err?.message || String(err) });
+    }
+  });
+
   // API Route to send a test email & create a test cash movement
   app.post("/api/send-test-email", async (req, res) => {
     try {

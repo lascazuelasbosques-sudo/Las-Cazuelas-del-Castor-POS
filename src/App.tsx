@@ -40,7 +40,13 @@ export default function App() {
   const [isSimulatedFullscreen, setIsSimulatedFullscreen] = useState(false);
   const [isSystemShutdown, setIsSystemShutdown] = useState(false);
 
-  const handleShutdown = () => {
+  const handleShutdown = async () => {
+    try {
+      await fetch('/api/system/shutdown', { method: 'POST' }).catch(() => {});
+    } catch (e) {
+      console.warn("Could not reach shutdown API:", e);
+    }
+
     auth.signOut();
     setPosUser(null);
     localStorage.removeItem('posUser');
