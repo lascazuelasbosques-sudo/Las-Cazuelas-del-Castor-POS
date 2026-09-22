@@ -129,7 +129,7 @@ export function PWAInstallBanner({ onDismiss, compact = false }: PWAInstallBanne
           </div>
           <div className="flex flex-col">
             <div className="flex items-center gap-2">
-              <span className="font-black text-xs uppercase tracking-wide text-amber-400">Instala la App en tu Celular o PC</span>
+              <span className="font-black text-xs uppercase tracking-wide text-amber-400">Instala la App (Android, Windows, Linux Mint)</span>
               <span className="px-1.5 py-0.5 bg-emerald-950 text-emerald-300 text-[8px] font-extrabold rounded-md uppercase border border-emerald-800">100% Offline</span>
             </div>
             <p className="text-[10px] text-stone-300 font-medium leading-tight">

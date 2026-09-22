@@ -1,7 +1,8 @@
 {
-  "name": "Radio Las Cazuelas del Castor",
+  "id": "/",
+  "name": "Las Cazuelas del Castor",
   "short_name": "Las Cazuelas",
-  "description": "Sistema de comandas, radio walkie-talkie y notificaciones en tiempo real para Las Cazuelas del Castor",
+  "description": "Sistema de comandas, punto de venta y notificaciones para Las Cazuelas del Castor",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
@@ -10,35 +11,54 @@
   "theme_color": "#1c1917",
   "lang": "es-MX",
   "dir": "ltr",
-  "categories": ["business", "utilities", "food"],
+  "categories": ["business", "food", "utilities"],
   "icons": [
     {
-      "src": "/logo_las_cazuelas_del_castor.jpg",
+      "src": "/pwa-192x192.png",
       "sizes": "192x192",
-      "type": "image/jpeg",
+      "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/logo_las_cazuelas_del_castor.jpg",
+      "src": "/pwa-512x512.png",
       "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/pwa-maskable-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/logo_las_cazuelas_del_castor.jpg",
+      "sizes": "232x228",
       "type": "image/jpeg",
-      "purpose": "any maskable"
+      "purpose": "any"
     }
   ],
   "shortcuts": [
     {
-      "name": "Walkie Talkie",
-      "short_name": "Walkie",
-      "description": "Abrir comunicación por voz y radio",
-      "url": "/#walkie",
-      "icons": [{ "src": "/logo_las_cazuelas_del_castor.jpg", "sizes": "192x192" }]
+      "name": "Comandas",
+      "short_name": "Comandas",
+      "description": "Levantar y consultar comandas",
+      "url": "/#orders",
+      "icons": [{ "src": "/pwa-192x192.png", "sizes": "192x192", "type": "image/png" }]
     },
     {
       "name": "Cocina",
       "short_name": "Cocina",
       "description": "Ver comandas en pantalla de cocina",
       "url": "/#kitchen",
-      "icons": [{ "src": "/logo_las_cazuelas_del_castor.jpg", "sizes": "192x192" }]
+      "icons": [{ "src": "/pwa-192x192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "Caja",
+      "short_name": "Caja",
+      "description": "Cobro y arqueo de caja",
+      "url": "/#cashier",
+      "icons": [{ "src": "/pwa-192x192.png", "sizes": "192x192", "type": "image/png" }]
     }
   ]
 }

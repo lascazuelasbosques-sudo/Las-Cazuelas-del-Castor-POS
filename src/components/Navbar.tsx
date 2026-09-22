@@ -465,7 +465,7 @@ export const Navbar = ({
           <button
             onClick={() => setIsInstallerOpen(true)}
             className="flex flex-col items-center gap-1 p-2 rounded-xl text-amber-600 hover:bg-amber-50 shrink-0"
-            title="Instalar App / Preparar Offline"
+            title="Instalar App en Android, Windows o Linux Mint"
           >
             <Download size={21} />
             <span className="text-[9px] font-extrabold whitespace-nowrap">Instalar</span>
@@ -585,11 +585,11 @@ export const Navbar = ({
         <Button 
           variant="outline" 
           className="justify-center lg:justify-start gap-2.5 w-full border-amber-300/80 bg-amber-50/70 text-amber-900 hover:bg-amber-100 px-0 lg:px-3 h-[36px] rounded-xl text-xs font-bold transition-all shadow-sm"
-          title="Instalador del Sistema Offline"
+          title="Instalar App en Android, Windows o Linux Mint"
           onClick={() => setIsInstallerOpen(true)}
         >
           <Smartphone size={16} className="text-amber-600 shrink-0" />
-          <span className="hidden lg:inline">Instalar / Offline</span>
+          <span className="hidden lg:inline">Instalar App (PC/Móvil)</span>
         </Button>
 
         {/* USB Cable Printer Button (54mm Direct) & Quick Reconnect */}

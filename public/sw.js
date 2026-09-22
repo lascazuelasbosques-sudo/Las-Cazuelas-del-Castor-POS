@@ -1,9 +1,13 @@
-const CACHE_NAME = 'cazuelas-pos-v3';
+const CACHE_NAME = 'cazuelas-pos-v4';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
   '/manifest.json',
-  '/logo_las_cazuelas_del_castor.jpg'
+  '/logo_las_cazuelas_del_castor.jpg',
+  '/pwa-192x192.png',
+  '/pwa-512x512.png',
+  '/pwa-maskable-512x512.png',
+  '/apple-touch-icon.png'
 ];
 
 // Install Event - Pre-cache essential offline shell
