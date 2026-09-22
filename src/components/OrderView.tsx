@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Search, Plus, Minus, ShoppingCart, Utensils as UtensilsIcon, History, X, Trash2, Loader2, CheckCircle2, User } from "lucide-react";
+import { Search, Plus, Minus, ShoppingCart, Utensils as UtensilsIcon, History, X, Trash2, Loader2, CheckCircle2, User, Send, RotateCcw } from "lucide-react";
 import { Button } from "./Button";
 import { Card, CardContent, CardHeader, CardFooter } from "./Card";
 import { formatCurrency, cn, customRound } from "@/src/lib/utils";
@@ -1363,7 +1363,7 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
           )}
         </div>
 
-        <div className="p-4 bg-stone-50 border-t border-stone-200 space-y-3 shrink-0 mb-20 md:mb-0">
+        <div className="p-4 bg-stone-50 border-t border-stone-200 space-y-3 shrink-0 pb-safe md:pb-4 mb-0 md:mb-0">
           <div className="flex justify-between items-center text-lg font-bold">
             <span>Total</span>
             <span className="text-mex-terracotta">{formatCurrency(total)}</span>
@@ -1435,31 +1435,44 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
               Confirmar y Mandar a Cocina (WP)
             </Button>
           )}
-          <div className="grid grid-cols-2 gap-2">
-            <Button variant="outline" className="w-full h-12" onClick={() => {
-              setCart([]);
-              setIsTakeaway(false);
-              setTableNumber('');
-              setNotes('');
-              setEditingOrderId(null);
-              setEditingOrderStatus(null);
-              setShowCartMobile(false);
-            }}>
-              {editingOrderId ? 'Cancelar' : 'Limpiar'}
+          <div className="grid grid-cols-2 gap-2.5">
+            <Button 
+              variant="outline" 
+              className="w-full h-12 flex items-center justify-center gap-2 font-black text-xs uppercase tracking-wider border-2 border-stone-300 hover:border-red-500 hover:text-red-600 transition-all rounded-xl active:scale-[0.97]"
+              onClick={() => {
+                setCart([]);
+                setIsTakeaway(false);
+                setTableNumber('');
+                setNotes('');
+                setEditingOrderId(null);
+                setEditingOrderStatus(null);
+                setShowCartMobile(false);
+              }}
+            >
+              {editingOrderId ? <X size={16} className="shrink-0" /> : <RotateCcw size={16} className="shrink-0" />}
+              <span>{editingOrderId ? 'Cancelar' : 'Limpiar'}</span>
             </Button>
             <Button 
               variant="primary" 
-              className="w-full h-12 flex items-center justify-center gap-2" 
+              className={cn(
+                "w-full h-12 flex items-center justify-center gap-2 font-black text-xs uppercase tracking-wider shadow-md rounded-xl active:scale-[0.97] transition-all border-none",
+                cart.length > 0 && (isTakeaway || tableNumber)
+                  ? "bg-mex-green hover:bg-mex-green/90 text-white shadow-mex-green/15"
+                  : "bg-stone-200 text-stone-400 border border-stone-300 cursor-not-allowed"
+              )}
               disabled={isSending || cart.length === 0 || (!isTakeaway && !tableNumber)}
               onClick={handleSendOrder}
             >
               {isSending ? (
                 <>
-                  <Loader2 className="animate-spin text-white" size={16} />
+                  <Loader2 className="animate-spin text-white shrink-0" size={16} />
                   <span>Enviando...</span>
                 </>
               ) : (
-                editingOrderId ? 'Actualizar' : 'Enviar'
+                <>
+                  {editingOrderId ? <CheckCircle2 size={16} className="shrink-0" /> : <Send size={16} className="shrink-0" />}
+                  <span>{editingOrderId ? 'Actualizar' : 'Enviar'}</span>
+                </>
               )}
             </Button>
           </div>
