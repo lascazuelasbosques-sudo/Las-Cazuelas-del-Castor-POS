@@ -5671,44 +5671,46 @@ const safeParseDate = (timestamp: any): Date => {
             </CardHeader>
             <CardContent className="p-5 max-h-[75vh] overflow-y-auto space-y-4">
               {/* Ticket Preview on Screen */}
-              <div id="preaccount-ticket-content" className="bg-white border-2 border-dashed border-stone-300 p-5 rounded-xl font-mono text-xs space-y-3 shadow-xs">
+              <div id="preaccount-ticket-content" className="bg-white border-2 border-dashed border-stone-300 p-5 rounded-xl font-mono text-sm space-y-3 shadow-xs">
                 <div className="text-center space-y-1">
                   <img 
                     src="/logo_las_cazuelas_del_castor.jpg" 
                     alt="Logo Las Cazuelas del Castor" 
-                    style={{ width: '20mm', height: '20mm', filter: 'grayscale(100%) contrast(140%)', WebkitFilter: 'grayscale(100%) contrast(140%)' }}
+                    style={{ width: '22mm', height: '22mm', filter: 'grayscale(100%) contrast(140%)', WebkitFilter: 'grayscale(100%) contrast(140%)' }}
                     className="rounded-full object-cover mx-auto mb-1.5 border border-stone-300 shadow-xs" 
                   />
-                  <p className="font-black text-sm tracking-tight text-black">LAS CAZUELAS DEL CASTOR</p>
-                  <p className="font-extrabold text-[11px] text-amber-800 uppercase tracking-wider bg-amber-50 py-1 rounded border border-amber-200">
+                  <p className="font-black text-base tracking-tight text-black">LAS CAZUELAS DEL CASTOR</p>
+                  <p className="font-black text-xs text-amber-900 uppercase tracking-wider bg-amber-50 py-1 rounded border border-amber-300">
                     PRE-CUENTA / COBRO PENDIENTE
                   </p>
-                  <p className="text-[10px] text-stone-500">{new Date().toLocaleString()}</p>
+                  <p className="text-xs font-bold text-stone-700">
+                    Fecha: {new Date().toLocaleDateString('es-MX', { day: '2-digit', month: '2-digit', year: 'numeric' })} {new Date().toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}
+                  </p>
                 </div>
 
-                <div className="border-t border-stone-200 pt-2 space-y-0.5 text-[11px]">
-                  <p>Mesa: <span className="font-semibold">{preAccountData.group.displayTitle}</span></p>
-                  <p>Folios: <span className="font-semibold">{preAccountData.group.folios.join(", ")}</span></p>
-                  <p>Mesero: <span className="font-semibold">{preAccountData.group.waiterNames[0] || 'Atendido'}</span></p>
+                <div className="border-t border-stone-200 pt-2 space-y-0.5 text-xs">
+                  <p>Mesa: <span className="font-bold">{preAccountData.group.displayTitle}</span></p>
+                  <p>Folios: <span className="font-bold">{preAccountData.group.folios.join(", ")}</span></p>
+                  <p>Mesero: <span className="font-bold">{preAccountData.group.waiterNames[0] || 'Atendido'}</span></p>
                 </div>
 
                 <div className="border-t border-stone-200 pt-2 space-y-1 text-xs">
                   {preAccountData.group.orders.flatMap(order => 
                     order.items.map((item, idx) => (
-                      <div key={idx} className="flex justify-between">
+                      <div key={idx} className="flex justify-between font-medium">
                         <span>{item.quantity}x {item.name}</span>
-                        <span className="font-semibold">{formatCurrency(item.price * item.quantity)}</span>
+                        <span className="font-bold">{formatCurrency(item.price * item.quantity)}</span>
                       </div>
                     ))
                   )}
                 </div>
 
                 <div className="border-t border-stone-200 pt-2 space-y-1 font-bold text-xs">
-                  <div className="flex justify-between text-stone-600 font-normal text-[11px]">
+                  <div className="flex justify-between text-stone-600 font-normal text-xs">
                     <span>Subtotal (Efectivo/Transf):</span>
                     <span>{formatCurrency(preAccountData.total)}</span>
                   </div>
-                  <div className="flex justify-between text-amber-800 font-medium text-[11px]">
+                  <div className="flex justify-between text-amber-800 font-medium text-xs">
                     <span>Comisión Tarjeta (+4%):</span>
                     <span>+{formatCurrency(customRound(preAccountData.total * CARD_FEE_PERCENTAGE))}</span>
                   </div>
@@ -5720,7 +5722,7 @@ const safeParseDate = (timestamp: any): Date => {
                     <span>TOTAL A PAGAR:</span>
                     <span className="text-mex-brown font-black">{formatCurrency(preAccountData.total)}</span>
                   </div>
-                  <div className="text-center pt-2 text-[10px] text-stone-500 font-sans leading-tight font-normal">
+                  <div className="text-center pt-2 text-xs text-stone-500 font-sans leading-tight font-normal">
                     <p className="font-bold text-amber-800 uppercase">* CUENTA PENDIENTE DE PAGO *</p>
                     <p>Favor de pagar en caja o con su mesero.</p>
                     <p className="italic mt-1 text-stone-400">¡Gracias por su compra! Vuelva pronto</p>
@@ -5849,27 +5851,29 @@ const safeParseDate = (timestamp: any): Date => {
 
               {/* Contenedor invisible fuera de pantalla exclusivamente para renderizado PDF si se solicita */}
               <div className="fixed -left-[9999px] -top-[9999px] opacity-0 pointer-events-none">
-                <div id="ticket-content" className="bg-white p-6 rounded-xl font-mono text-xs w-[300px]">
+                <div id="ticket-content" className="bg-white p-6 rounded-xl font-mono text-sm w-[320px]">
                   <div className="text-center space-y-1 mb-3">
-                    <p className="font-black text-sm">LAS CAZUELAS DEL CASTOR</p>
-                    <p className="text-xs">Ticket de Venta</p>
-                    <p className="text-xs">{new Date().toLocaleString()}</p>
+                    <p className="font-black text-base">LAS CAZUELAS DEL CASTOR</p>
+                    <p className="text-xs font-bold uppercase text-stone-600">Ticket de Venta</p>
+                    <p className="text-xs font-semibold text-stone-800">
+                      Fecha: {new Date().toLocaleDateString('es-MX', { day: '2-digit', month: '2-digit', year: 'numeric' })} {new Date().toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}
+                    </p>
                   </div>
-                  <div className="border-t border-b border-stone-200 py-2 space-y-1 mb-3">
-                    <p>Mesa: {lastPaymentData.group.displayTitle}</p>
-                    <p>Folios: {lastPaymentData.group.folios.join(", ")}</p>
-                    <p>Mesero: {lastPaymentData.group.waiterNames[0] || 'Atendido'}</p>
+                  <div className="border-t border-b border-stone-200 py-2 space-y-1 mb-3 text-xs">
+                    <p>Mesa: <span className="font-bold">{lastPaymentData.group.displayTitle}</span></p>
+                    <p>Folios: <span className="font-bold">{lastPaymentData.group.folios.join(", ")}</span></p>
+                    <p>Mesero: <span className="font-bold">{lastPaymentData.group.waiterNames[0] || 'Atendido'}</span></p>
                   </div>
-                  <div className="space-y-1 mb-3">
+                  <div className="space-y-1 mb-3 text-xs">
                     {lastPaymentData.group.orders.flatMap(o => o.items || []).map((item, idx) => (
-                      <div key={idx} className="flex justify-between">
+                      <div key={idx} className="flex justify-between font-medium">
                         <span>{item.quantity}x {item.name}</span>
-                        <span>{formatCurrency(item.price * item.quantity)}</span>
+                        <span className="font-bold">{formatCurrency(item.price * item.quantity)}</span>
                       </div>
                     ))}
                   </div>
                   {lastPaymentData.method === 'card' ? (
-                    <div className="border-t border-stone-200 pt-2 space-y-1">
+                    <div className="border-t border-stone-200 pt-2 space-y-1 text-xs">
                       <div className="flex justify-between text-stone-600">
                         <span>Subtotal</span>
                         <span>{formatCurrency(lastPaymentData.group.total)}</span>
@@ -5878,13 +5882,13 @@ const safeParseDate = (timestamp: any): Date => {
                         <span>Comisión Tarjeta (4%)</span>
                         <span>+{formatCurrency(customRound(lastPaymentData.group.total * CARD_FEE_PERCENTAGE))}</span>
                       </div>
-                      <div className="flex justify-between font-bold pt-1 border-t border-stone-200">
+                      <div className="flex justify-between font-bold pt-1 border-t border-stone-200 text-sm">
                         <span>Total Cobrado</span>
                         <span>{formatCurrency(lastPaymentData.total)}</span>
                       </div>
                     </div>
                   ) : (
-                    <div className="border-t border-stone-200 pt-2 font-bold flex justify-between">
+                    <div className="border-t border-stone-200 pt-2 font-bold flex justify-between text-sm">
                       <span>Total</span>
                       <span>{formatCurrency(lastPaymentData.total)}</span>
                     </div>
