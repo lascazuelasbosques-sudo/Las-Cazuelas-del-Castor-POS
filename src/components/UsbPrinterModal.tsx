@@ -112,7 +112,7 @@ export const UsbPrinterModal: React.FC<UsbPrinterModalProps> = ({ isOpen, onClos
             </div>
             <div>
               <h2 className="text-base font-black tracking-tight">Impresora USB</h2>
-              <p className="text-[10px] text-stone-400 font-mono">Formato 54mm (Ticket Térmico)</p>
+              <p className="text-[10px] text-stone-400 font-mono">Formato 52x90mm (Ticket Térmico)</p>
             </div>
           </div>
           <button 
@@ -221,7 +221,7 @@ export const UsbPrinterModal: React.FC<UsbPrinterModalProps> = ({ isOpen, onClos
               ) : (
                 <>
                   <PrinterCheck size={18} />
-                  Prueba de Impresión (Ticket 54mm)
+                  Prueba de Impresión (Ticket 52x90mm)
                 </>
               )}
             </button>

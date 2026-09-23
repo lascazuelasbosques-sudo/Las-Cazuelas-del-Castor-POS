@@ -400,8 +400,8 @@ function format30Columns(left: string, right: string): string {
   return cleanLeft + spaces + cleanRight + "\n";
 }
 
-// Build ESC/POS bytes for 54mm ticket
-export function build50x60TicketBytes(order: {
+// Build ESC/POS bytes for 52x90mm ticket
+export function build52x90TicketBytes(order: {
   folio?: string;
   customerName?: string;
   tableNumber?: string;
@@ -415,11 +415,12 @@ export function build50x60TicketBytes(order: {
   isPreAccount?: boolean;
 }): Uint8Array {
   const ESC = '\x1B';
+  const GS = '\x1D';
 
   let itemsBody = "";
   let itemsSum = 0;
   if (order.items && Array.isArray(order.items) && order.items.length > 0) {
-    order.items.slice(0, 10).forEach(item => {
+    order.items.slice(0, 15).forEach(item => {
       const extraStr = item.hasExtraCheese ? '+Q' : '';
       const lineTotal = (item.price || 0) * (item.quantity || 1);
       itemsSum += lineTotal;
@@ -427,8 +428,8 @@ export function build50x60TicketBytes(order: {
       const rightCol = `$${lineTotal.toFixed(0)}`;
       itemsBody += format30Columns(leftCol, rightCol);
     });
-    if (order.items.length > 10) {
-      itemsBody += `...y ${order.items.length - 10} mas\n`;
+    if (order.items.length > 15) {
+      itemsBody += `...y ${order.items.length - 15} mas\n`;
     }
   } else {
     itemsBody = "Consumo General\n";
@@ -453,59 +454,68 @@ export function build50x60TicketBytes(order: {
 
   let totalsBlock = "";
   if (order.isPreAccount) {
-    totalsBlock += format30Columns("Subtotal (Efectivo):", `$${subtotalVal.toFixed(2)}`);
+    totalsBlock += format30Columns("Subtotal:", `$${subtotalVal.toFixed(2)}`);
     totalsBlock += format30Columns("Comision Tarjeta (4%):", `+$${calculatedCardFee.toFixed(2)}`);
     totalsBlock += format30Columns("TOTAL C/TARJETA:", `$${cardTotalVal.toFixed(2)}`);
     totalsBlock += "------------------------------\n";
-    totalsBlock += ESC + '\x45\x01' + format30Columns("TOTAL A PAGAR:", `$${(order.total || subtotalVal).toFixed(2)}`) + ESC + '\x45\x00';
+    totalsBlock += ESC + '\x45\x01' + GS + '\x21\x01' + format30Columns("TOTAL A PAGAR:", `$${(order.total || subtotalVal).toFixed(2)}`) + GS + '\x21\x00' + ESC + '\x45\x00';
   } else if (order.paymentMethod === 'card' || (order.cardFee && order.cardFee > 0)) {
     totalsBlock += format30Columns("Subtotal:", `$${subtotalVal.toFixed(2)}`);
     totalsBlock += format30Columns("Comision Tarjeta (4%):", `+$${calculatedCardFee.toFixed(2)}`);
     totalsBlock += "------------------------------\n";
-    totalsBlock += ESC + '\x45\x01' + format30Columns("TOTAL TARJETA:", `$${(order.total || cardTotalVal).toFixed(2)}`) + ESC + '\x45\x00';
+    totalsBlock += ESC + '\x45\x01' + GS + '\x21\x01' + format30Columns("TOTAL TARJETA:", `$${(order.total || cardTotalVal).toFixed(2)}`) + GS + '\x21\x00' + ESC + '\x45\x00';
   } else {
-    totalsBlock += ESC + '\x45\x01' + format30Columns("TOTAL:", `$${(order.total || subtotalVal).toFixed(2)}`) + ESC + '\x45\x00';
+    totalsBlock += ESC + '\x45\x01' + GS + '\x21\x01' + format30Columns("TOTAL:", `$${(order.total || subtotalVal).toFixed(2)}`) + GS + '\x21\x00' + ESC + '\x45\x00';
   }
 
   const commands =
     ESC + '\x40' +                      // Init
-    ESC + '\x33\x12' +                  // Compact line spacing (18 dots)
+    ESC + '\x33\x14' +                  // Clean line spacing
     ESC + '\x61\x01' +                  // Center
     ESC + '\x45\x01' +                  // Bold ON
+    GS + '\x21\x01' +                   // Double Height ON
     "LAS CAZUELAS DEL CASTOR\n" +
-    ESC + '\x45\x00' +                  // Bold OFF
+    GS + '\x21\x00' +                   // Double Height OFF
     headerTitle +
     `Folio:#${order.folio || '0'} | ${typeLabel}\n` +
     `Fecha: ${dateStr} ${timeStr}\n` +
-    "------------------------------\n" +   // 30 dashes (54mm width)
+    "------------------------------\n" +   // 30 dashes (52mm width)
     ESC + '\x61\x00' +                  // Left
     itemsBody +
+    ESC + '\x45\x00' +                  // Bold OFF
     "------------------------------\n" +
     totalsBlock +
     ESC + '\x61\x01' +
+    ESC + '\x45\x01' +
     footerText +
-    "\n\n";                            // 2 line feeds (~1cm bottom tolerance)
+    ESC + '\x45\x00' +
+    "\n\n";                            // 2 line feeds
 
   return new TextEncoder().encode(commands);
 }
 
-// Send 54mm Test Ticket over USB Cable
+// Keep alias for compatibility
+export const build50x60TicketBytes = build52x90TicketBytes;
+
+// Send 52x90mm Test Ticket over USB Cable
 export async function printUsbTestTicket(): Promise<void> {
   if (currentDiagnostic.connectionType === 'webusb' || currentDiagnostic.connectionType === 'webserial') {
     const ESC = '\x1B';
+    const GS = '\x1D';
     const commands =
       ESC + '\x40' +                      // Init
-      ESC + '\x33\x12' +                  // Compact line spacing
+      ESC + '\x33\x14' +                  // Clean line spacing
       ESC + '\x61\x01' +                  // Center
       ESC + '\x45\x01' +                  // Bold ON
+      GS + '\x21\x01' +
       "LAS CAZUELAS DEL CASTOR\n" +
-      ESC + '\x45\x00' +
-      "PRUEBA USB 54MM\n" +
+      GS + '\x21\x00' +
+      "PRUEBA TICKET 52X90\n" +
       `Fecha: ${new Date().toLocaleDateString('es-MX')}\n` +
       "------------------------------\n" +   // 30 dashes
       ESC + '\x61\x00' +                  // Left
       format30Columns("Canal:", "Cable USB") +
-      format30Columns("Ancho:", "54 mm") +
+      format30Columns("Formato:", "52x90 mm") +
       format30Columns("Estado:", "Conectado OK") +
       "------------------------------\n" +
       ESC + '\x45\x01' +
@@ -521,8 +531,8 @@ export async function printUsbTestTicket(): Promise<void> {
     return;
   }
 
-  // System print fallback for 54mm
-  print50x60ViaSystem({
+  // System print fallback for 52x90mm
+  print52x90ViaSystem({
     folio: "0001",
     tableNumber: "Mesa 1",
     items: [
@@ -534,8 +544,8 @@ export async function printUsbTestTicket(): Promise<void> {
   });
 }
 
-// System print helper for 54mm receipt
-export function print50x60ViaSystem(ticketData: {
+// System print helper for 52x90mm receipt
+export function print52x90ViaSystem(ticketData: {
   folio?: string;
   customerName?: string;
   tableNumber?: string;
@@ -562,13 +572,15 @@ export function print50x60ViaSystem(ticketData: {
         itemsSum += lineTotal;
         const extraNote = it.hasExtraCheese ? ' (+Q)' : '';
         return `
-          <div style="display: flex; justify-content: space-between; font-size: 11.5px; margin: 3px 0; line-height: 1.25;">
-            <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 35mm; font-weight: 600;">${it.quantity} ${it.name}${extraNote}</span>
-            <span style="font-weight: bold; font-size: 11.5px;">$${lineTotal.toFixed(0)}</span>
+          <div style="display: flex; justify-content: space-between; align-items: baseline; font-size: 13px; margin: 3px 0; line-height: 1.25; color: #000000; font-family: Arial, sans-serif;">
+            <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 37mm; font-weight: 800; color: #000000;">
+              <strong style="font-size: 14px; font-weight: 900; color: #000000;">${it.quantity}x</strong> ${it.name}${extraNote}
+            </span>
+            <span style="font-weight: 900; font-size: 13.5px; color: #000000; margin-left: 2px;">$${lineTotal.toFixed(0)}</span>
           </div>
         `;
       }).join('')
-    : '<div style="text-align: center; font-size: 11px; font-style: italic;">Consumo General</div>';
+    : '<div style="text-align: center; font-size: 13px; font-weight: bold; color: #000000;">Consumo General</div>';
 
   if (!itemsSum) itemsSum = ticketData.total || 0;
 
@@ -579,51 +591,51 @@ export function print50x60ViaSystem(ticketData: {
   const cardTotalVal = subtotalVal + calculatedCardFee;
 
   const preAccountHeader = ticketData.isPreAccount 
-    ? '<div style="font-weight: 900; font-size: 11px; margin-top: 2px; text-transform: uppercase; border: 1.5px solid #000; padding: 2px 4px; display: inline-block;">PRE-CUENTA / PENDIENTE</div>'
+    ? '<div style="font-weight: 900; font-size: 12px; margin-top: 2px; text-transform: uppercase; border: 2px solid #000000; padding: 2px 4px; display: inline-block; color: #000000;">PRE-CUENTA / PENDIENTE</div>'
     : '';
 
   const footerNote = ticketData.isPreAccount
-    ? 'Cuenta pendiente de cobro<br/>Favor de liquidar en caja'
-    : '¡Gracias por su compra!<br/>Vuelva pronto';
+    ? 'CUENTA PENDIENTE DE COBRO<br/>FAVOR DE LIQUIDAR EN CAJA'
+    : '¡GRACIAS POR SU COMPRA!<br/>VUELVA PRONTO';
 
   let totalsHtml = "";
   if (ticketData.isPreAccount) {
     totalsHtml = `
-      <div style="display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 3px;">
+      <div style="display: flex; justify-content: space-between; font-size: 12.5px; font-weight: 800; color: #000000; margin-bottom: 2px;">
         <span>Subtotal (Efectivo):</span>
         <span>$${subtotalVal.toFixed(2)}</span>
       </div>
-      <div style="display: flex; justify-content: space-between; font-size: 11px; color: #b45309; margin-bottom: 3px;">
+      <div style="display: flex; justify-content: space-between; font-size: 12.5px; font-weight: 800; color: #000000; margin-bottom: 2px;">
         <span>Comisión Tarjeta (4%):</span>
         <span>+$${calculatedCardFee.toFixed(2)}</span>
       </div>
-      <div style="display: flex; justify-content: space-between; font-size: 11.5px; font-weight: bold; color: #92400e; margin-bottom: 3px; border-bottom: 1px dashed #000; padding-bottom: 3px;">
-        <span>TOTAL CON TARJETA:</span>
+      <div style="display: flex; justify-content: space-between; font-size: 13px; font-weight: 900; color: #000000; margin-bottom: 3px; border-bottom: 1.5px dashed #000000; padding-bottom: 2px;">
+        <span>TOTAL C/ TARJETA:</span>
         <span>$${cardTotalVal.toFixed(2)}</span>
       </div>
-      <div style="display: flex; justify-content: space-between; font-weight: 900; font-size: 13.5px; margin-top: 4px;">
+      <div style="display: flex; justify-content: space-between; font-weight: 900; font-size: 16px; margin-top: 4px; border-top: 2px solid #000000; padding-top: 3px; color: #000000;">
         <span>TOTAL A PAGAR:</span>
         <span>$${(ticketData.total || subtotalVal).toFixed(2)}</span>
       </div>
     `;
   } else if (ticketData.paymentMethod === 'card' || (ticketData.cardFee && ticketData.cardFee > 0)) {
     totalsHtml = `
-      <div style="display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 3px;">
+      <div style="display: flex; justify-content: space-between; font-size: 12.5px; font-weight: 800; color: #000000; margin-bottom: 2px;">
         <span>Subtotal:</span>
         <span>$${subtotalVal.toFixed(2)}</span>
       </div>
-      <div style="display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 3px;">
+      <div style="display: flex; justify-content: space-between; font-size: 12.5px; font-weight: 800; color: #000000; margin-bottom: 2px;">
         <span>Comisión Tarjeta (4%):</span>
         <span>+$${calculatedCardFee.toFixed(2)}</span>
       </div>
-      <div style="display: flex; justify-content: space-between; font-weight: 900; font-size: 13.5px; border-top: 1.5px dashed #000; padding-top: 4px;">
+      <div style="display: flex; justify-content: space-between; font-weight: 900; font-size: 16px; border-top: 2px solid #000000; padding-top: 4px; color: #000000;">
         <span>TOTAL TARJETA:</span>
         <span>$${(ticketData.total || cardTotalVal).toFixed(2)}</span>
       </div>
     `;
   } else {
     totalsHtml = `
-      <div style="display: flex; justify-content: space-between; font-weight: 900; font-size: 13.5px;">
+      <div style="display: flex; justify-content: space-between; font-weight: 900; font-size: 16px; border-top: 2px solid #000000; padding-top: 4px; color: #000000;">
         <span>TOTAL:</span>
         <span>$${(ticketData.total || subtotalVal).toFixed(2)}</span>
       </div>
@@ -635,24 +647,27 @@ export function print50x60ViaSystem(ticketData: {
   const timeStr = now.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
 
   printEl.innerHTML = `
-    <div style="text-align: center; margin-bottom: 3px;">
-      <img src="/logo_las_cazuelas_del_castor.jpg" alt="Logo Las Cazuelas del Castor" style="width: 22mm; height: 22mm; border-radius: 50%; object-fit: cover; margin: 0 auto 3px auto; display: block; filter: grayscale(100%) contrast(150%); -webkit-filter: grayscale(100%) contrast(150%);" />
-      <div style="font-weight: 900; font-size: 12.5px; line-height: 1.2; letter-spacing: -0.2px;">LAS CAZUELAS DEL CASTOR</div>
+    <div style="text-align: center; margin-bottom: 2px;">
+      <img src="/logo_las_cazuelas_del_castor.jpg" alt="Logo Las Cazuelas del Castor" style="width: 20mm; height: 20mm; border-radius: 50%; object-fit: cover; margin: 0 auto 2px auto; display: block; filter: contrast(180%) brightness(90%); -webkit-filter: contrast(180%) brightness(90%);" />
+      <div style="font-weight: 900; font-size: 14.5px; line-height: 1.15; color: #000000; letter-spacing: -0.3px; font-family: Arial, sans-serif;">LAS CAZUELAS DEL CASTOR</div>
       ${preAccountHeader}
     </div>
-    <div style="text-align: center; font-size: 11.5px; font-weight: bold; margin-top: 2px;">Folio:#${ticketData.folio || '0001'} | ${ticketData.tableNumber || 'Mesa'}</div>
-    <div style="text-align: center; font-size: 11px; font-weight: 600; margin-top: 1px;">Fecha: ${dateStr} ${timeStr}</div>
-    <div style="border-top: 1.5px dashed #000; margin: 5px 0;"></div>
+    <div style="text-align: center; font-size: 13px; font-weight: 900; margin-top: 2px; color: #000000; font-family: Arial, sans-serif;">FOLIO:#${ticketData.folio || '0001'} | ${ticketData.tableNumber || 'MESA'}</div>
+    <div style="text-align: center; font-size: 12px; font-weight: 800; margin-top: 1px; color: #000000; font-family: Arial, sans-serif;">FECHA: ${dateStr} ${timeStr}</div>
+    <div style="border-top: 2px dashed #000000; margin: 4px 0;"></div>
     <div>${itemsList}</div>
-    <div style="border-top: 1.5px dashed #000; margin: 5px 0;"></div>
+    <div style="border-top: 2px dashed #000000; margin: 4px 0;"></div>
     ${totalsHtml}
-    <div style="text-align: center; font-size: 10.5px; margin-top: 6px; font-style: italic; font-weight: bold; line-height: 1.2;">${footerNote}</div>
+    <div style="text-align: center; font-size: 11px; margin-top: 6px; font-weight: 900; color: #000000; line-height: 1.25; font-family: Arial, sans-serif;">${footerNote}</div>
   `;
 
   setTimeout(() => {
     window.print();
   }, 100);
 }
+
+// Keep alias for compatibility
+export const print50x60ViaSystem = print52x90ViaSystem;
 
 // Build ESC/POS bytes for 54mm Sales Report ticket (Daily / Weekly / Monthly)
 export function build54mmSalesReportBytes(report: {
@@ -734,33 +749,33 @@ export function print54mmSalesReportViaSystem(report: {
   let breakdownHtml = "";
   if (report.totalCash !== undefined || report.totalCard !== undefined || report.totalTransfer !== undefined) {
     breakdownHtml = `
-      <div style="border-top: 1px dashed #000; margin: 4px 0;"></div>
-      <div style="font-weight: bold; font-size: 9px; margin-bottom: 2px;">MÉTODOS DE PAGO:</div>
-      ${report.totalCash !== undefined ? `<div style="display:flex; justify-content:space-between; font-size:9px;"><span>Efectivo:</span><b>$${report.totalCash.toFixed(2)}</b></div>` : ''}
-      ${report.totalCard !== undefined ? `<div style="display:flex; justify-content:space-between; font-size:9px;"><span>Tarjeta:</span><b>$${report.totalCard.toFixed(2)}</b></div>` : ''}
-      ${report.totalTransfer !== undefined ? `<div style="display:flex; justify-content:space-between; font-size:9px;"><span>Transfer:</span><b>$${report.totalTransfer.toFixed(2)}</b></div>` : ''}
+      <div style="border-top: 2px dashed #000000; margin: 4px 0;"></div>
+      <div style="font-weight: 900; font-size: 11px; margin-bottom: 2px; color: #000000;">MÉTODOS DE PAGO:</div>
+      ${report.totalCash !== undefined ? `<div style="display:flex; justify-content:space-between; font-size:11.5px; font-weight:800; color:#000000;"><span>Efectivo:</span><b>$${report.totalCash.toFixed(2)}</b></div>` : ''}
+      ${report.totalCard !== undefined ? `<div style="display:flex; justify-content:space-between; font-size:11.5px; font-weight:800; color:#000000;"><span>Tarjeta:</span><b>$${report.totalCard.toFixed(2)}</b></div>` : ''}
+      ${report.totalTransfer !== undefined ? `<div style="display:flex; justify-content:space-between; font-size:11.5px; font-weight:800; color:#000000;"><span>Transfer:</span><b>$${report.totalTransfer.toFixed(2)}</b></div>` : ''}
     `;
   }
 
   printEl.innerHTML = `
-    <div style="text-align: center; margin-bottom: 3px;">
-      <img src="/logo_las_cazuelas_del_castor.jpg" alt="Logo" style="width: 22mm; height: 22mm; border-radius: 50%; object-fit: cover; margin: 0 auto 3px auto; display: block; filter: grayscale(100%) contrast(150%);" />
-      <div style="font-weight: 900; font-size: 12px; line-height: 1.2;">LAS CAZUELAS DEL CASTOR</div>
-      <div style="font-weight: bold; font-size: 11px; margin-top: 2px;">REPORTE GENERAL DE VENTAS</div>
-      <div style="font-size: 10.5px; font-weight: bold; color: #111;">${report.periodLabel}</div>
-      <div style="font-size: 10px; color: #222; font-weight: 600;">Emisión: ${dateStr} ${timeStr}</div>
+    <div style="text-align: center; margin-bottom: 2px;">
+      <img src="/logo_las_cazuelas_del_castor.jpg" alt="Logo" style="width: 20mm; height: 20mm; border-radius: 50%; object-fit: cover; margin: 0 auto 2px auto; display: block; filter: contrast(180%) brightness(90%);" />
+      <div style="font-weight: 900; font-size: 14px; line-height: 1.2; color: #000000; font-family: Arial, sans-serif;">LAS CAZUELAS DEL CASTOR</div>
+      <div style="font-weight: 900; font-size: 12px; margin-top: 2px; color: #000000;">REPORTE GENERAL DE VENTAS</div>
+      <div style="font-size: 11.5px; font-weight: 900; color: #000000;">${report.periodLabel}</div>
+      <div style="font-size: 11px; color: #000000; font-weight: 800;">Emisión: ${dateStr} ${timeStr}</div>
     </div>
-    <div style="border-top: 1.5px dashed #000; margin: 4px 0;"></div>
-    <div style="font-size: 11px; line-height: 1.35;">
-      <div style="display: flex; justify-content: space-between;"><span>Ventas Totales:</span><b>$${(report.totalSales || 0).toFixed(2)}</b></div>
-      <div style="display: flex; justify-content: space-between;"><span>Gastos / Egresos:</span><b>-$${(report.totalExpenses || 0).toFixed(2)}</b></div>
-      <div style="display: flex; justify-content: space-between; font-weight: 900; border-top: 1px solid #000; margin-top: 3px; padding-top: 3px; font-size: 12px;"><span>FLUJO NETO:</span><b>$${net.toFixed(2)}</b></div>
+    <div style="border-top: 2px dashed #000000; margin: 4px 0;"></div>
+    <div style="font-size: 12.5px; line-height: 1.35; color: #000000; font-family: Arial, sans-serif; font-weight: 800;">
+      <div style="display: flex; justify-content: space-between;"><span>Ventas Totales:</span><b style="font-size: 13.5px;">$${(report.totalSales || 0).toFixed(2)}</b></div>
+      <div style="display: flex; justify-content: space-between;"><span>Gastos / Egresos:</span><b style="font-size: 13.5px;">-$${(report.totalExpenses || 0).toFixed(2)}</b></div>
+      <div style="display: flex; justify-content: space-between; font-weight: 900; border-top: 2px solid #000000; margin-top: 3px; padding-top: 3px; font-size: 14px; color: #000000;"><span>FLUJO NETO:</span><b>$${net.toFixed(2)}</b></div>
       <div style="display: flex; justify-content: space-between; margin-top: 3px;"><span>Transacciones:</span><b>${report.totalTransactions || 0}</b></div>
-      ${report.averageTicket !== undefined ? `<div style="display: flex; justify-content: space-between;"><span>Ticket Promed:</span><b>$${report.averageTicket.toFixed(2)}</b></div>` : ''}
+      ${report.averageTicket !== undefined ? `<div style="display: flex; justify-content: space-between;"><span>Ticket Promedio:</span><b>$${report.averageTicket.toFixed(2)}</b></div>` : ''}
     </div>
     ${breakdownHtml}
-    <div style="border-top: 1.5px dashed #000; margin: 4px 0;"></div>
-    <div style="text-align: center; font-size: 10px; font-weight: bold;">Fin de Reporte de Ventas</div>
+    <div style="border-top: 2px dashed #000000; margin: 4px 0;"></div>
+    <div style="text-align: center; font-size: 11px; font-weight: 900; color: #000000;">Fin de Reporte de Ventas</div>
   `;
 
   setTimeout(() => {
