@@ -185,6 +185,23 @@
         "status": { "type": "string", "enum": ["active", "offline"] }
       },
       "required": ["name", "role", "lastSeen", "status"]
+    },
+    "UserSession": {
+      "title": "UserSession",
+      "description": "Sesión activa única por usuario y dispositivo para control de concurrencia",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "userRole": { "type": "string" },
+        "sessionToken": { "type": "string" },
+        "deviceId": { "type": "string" },
+        "platform": { "type": "string" },
+        "active": { "type": "boolean" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "sessionToken", "deviceId"]
     }
   },
   "firestore": {
@@ -192,6 +209,7 @@
     "/products": { "schema": "Product", "description": "Colección de productos" },
     "/orders": { "schema": "Order", "description": "Colección de pedidos" },
     "/users": { "schema": "User", "description": "Colección de usuarios" },
+    "/user_sessions": { "schema": "UserSession", "description": "Control de sesiones únicas de usuario" },
     "/cashLogs": { "schema": "CashLog", "description": "Colección de registros de caja" },
     "/cashAudits": { "schema": "CashAudit", "description": "Colección de arqueos de caja" },
     "/settings": { "schema": "Setting", "description": "Configuraciones del sistema" },

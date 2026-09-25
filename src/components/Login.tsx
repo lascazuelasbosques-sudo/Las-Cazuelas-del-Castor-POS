@@ -409,6 +409,25 @@ export const Login = ({ onLogin, onEnterPortal, onShutdown }: LoginProps) => {
 
             {/* PRIMARY SYSTEM ACCESS BUTTONS */}
             <div className="w-full space-y-2.5 pt-1">
+              {/* PRIMARY: ACCESO PERSONAL / COMANDAS */}
+              <button
+                onClick={() => {
+                  setLoginMode('auth');
+                }}
+                className="w-full bg-stone-950 hover:bg-stone-900 text-white rounded-2xl p-3.5 flex items-center justify-between group transition-all shadow-lg active:scale-95 cursor-pointer border border-stone-800"
+              >
+                <div className="flex flex-col items-start text-left">
+                  <span className="text-[9px] font-black uppercase tracking-widest text-mex-gold mb-0.5">Personal del Restaurante</span>
+                  <span className="text-sm font-black tracking-tight flex items-center gap-2 text-white">
+                    <ChefHat size={16} className="text-mex-gold" />
+                    INGRESAR AL SISTEMA (POS)
+                  </span>
+                </div>
+                <div className="w-8 h-8 bg-stone-800 rounded-xl flex items-center justify-center group-hover:bg-mex-gold group-hover:text-stone-950 transition-all text-stone-300">
+                  <ChevronRight size={16} className="group-hover:translate-x-0.5 transition-transform" />
+                </div>
+              </button>
+
               {/* SECONDARY: WHATSAPP CLIENTES */}
               <button
                 onClick={onEnterPortal}
@@ -487,6 +506,10 @@ export const Login = ({ onLogin, onEnterPortal, onShutdown }: LoginProps) => {
                     <p className="text-xs text-stone-500 font-medium mt-1">
                       Acceso principal verificado por cuenta Google
                     </p>
+                    <div className="mt-2.5 px-3 py-1 rounded-full bg-stone-100 border border-stone-200 text-[10px] font-black text-stone-600 uppercase tracking-wider flex items-center gap-1.5">
+                      <Lock size={12} className="text-amber-600" />
+                      1 Sesión por Usuario • 1 Ventana por Dispositivo
+                    </div>
                   </div>
 
                   <CardContent className="p-6 pt-2 space-y-4">
@@ -550,6 +573,10 @@ export const Login = ({ onLogin, onEnterPortal, onShutdown }: LoginProps) => {
                     <p className="text-[11px] text-amber-900/80 font-medium mt-0.5">
                       Selecciona tu usuario e ingresa tu PIN personal registrado
                     </p>
+                    <div className="mt-2 px-3 py-1 rounded-full bg-amber-100/80 border border-amber-300 text-[10px] font-black text-amber-900 uppercase tracking-wider flex items-center gap-1.5">
+                      <Lock size={12} className="text-amber-800" />
+                      Sesión Única Activa • 1 Ventana Máxima
+                    </div>
                   </div>
 
                   <CardContent className="p-5 space-y-3.5">

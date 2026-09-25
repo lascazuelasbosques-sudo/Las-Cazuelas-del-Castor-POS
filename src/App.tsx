@@ -24,6 +24,8 @@ import { db } from './firebase';
 import { Order, User as POSUser } from './types';
 import { useBranding } from './lib/useBranding';
 import { useDraggable } from './lib/useDraggable';
+import { DuplicateTabScreen } from './components/DuplicateTabScreen';
+import { initSingleTabLock, registerUserSession, clearUserSession } from './lib/sessionGuard';
 
 export default function App() {
   const dragExitPortal = useDraggable();
@@ -39,6 +41,50 @@ export default function App() {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isSimulatedFullscreen, setIsSimulatedFullscreen] = useState(false);
   const [isSystemShutdown, setIsSystemShutdown] = useState(false);
+  const [isDuplicateTab, setIsDuplicateTab] = useState(false);
+
+  // Single Window / Tab enforcement per device
+  useEffect(() => {
+    const cleanupTabLock = initSingleTabLock({
+      onDuplicateTab: () => {
+        setIsDuplicateTab(true);
+      },
+      onBecameMaster: () => {
+        setIsDuplicateTab(false);
+      }
+    });
+
+    return () => {
+      cleanupTabLock();
+    };
+  }, []);
+
+  // Monitor single active user session across devices
+  useEffect(() => {
+    if (!posUser) {
+      clearUserSession();
+      return;
+    }
+
+    const userId = posUser.id || (posUser as any).uid || posUser.name;
+    registerUserSession(
+      userId,
+      posUser.name,
+      posUser.role,
+      (reason) => {
+        // Force remote logout
+        toast.error(reason, { duration: 8000, icon: '🔒' });
+        auth.signOut();
+        setPosUser(null);
+        localStorage.removeItem('posUser');
+        clearUserSession();
+      }
+    );
+
+    return () => {
+      clearUserSession();
+    };
+  }, [posUser?.id, posUser?.name]);
 
   const handleShutdown = async () => {
     try {
@@ -47,6 +93,7 @@ export default function App() {
       console.warn("Could not reach shutdown API:", e);
     }
 
+    clearUserSession();
     auth.signOut();
     setPosUser(null);
     localStorage.removeItem('posUser');
@@ -425,6 +472,23 @@ export default function App() {
     };
   }, [posUser, userRole]);
 
+  if (isDuplicateTab) {
+    return (
+      <DuplicateTabScreen 
+        onForceTakeover={() => {
+          try {
+            const currentTabId = sessionStorage.getItem('pos_current_window_id') || `tab_${Date.now()}`;
+            localStorage.setItem('pos_active_tab_id', currentTabId);
+            localStorage.setItem('pos_active_tab_heartbeat', String(Date.now()));
+            setIsDuplicateTab(false);
+          } catch (e) {
+            location.reload();
+          }
+        }} 
+      />
+    );
+  }
+
   if (isSystemShutdown) {
     return <ShutdownScreen onReboot={() => setIsSystemShutdown(false)} />;
   }
@@ -504,6 +568,7 @@ export default function App() {
   }
 
   const handleLogout = () => {
+    clearUserSession();
     auth.signOut();
     setPosUser(null);
     localStorage.removeItem('posUser');

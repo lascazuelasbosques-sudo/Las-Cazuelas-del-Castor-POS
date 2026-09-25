@@ -118,6 +118,10 @@ service cloud.firestore {
       allow read, write: if true;
     }
 
+    match /user_sessions/{userId} {
+      allow read, write: if true;
+    }
+
     // Add transactions match just in case it's used as a collection
     match /transactions/{id} {
       allow read, write: if true;
