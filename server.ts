@@ -189,6 +189,12 @@ async function startServer() {
               return;
             }
 
+            // Do not send email notification for comandas / orders sent to caja or paid
+            if (data.orderIds && data.orderIds.length > 0) {
+              console.log(`[Segundo Plano] Omitiendo correo para comanda / cobro de pedido ID: ${docId}`);
+              return;
+            }
+
             console.log(`[Segundo Plano] ¡Nuevo movimiento detectado! ID: ${docId}, Tipo: ${data.type}, Monto: ${data.amount}`);
             
             // Execute email dispatch in the background

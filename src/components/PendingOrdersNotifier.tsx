@@ -296,32 +296,8 @@ export function PendingOrdersNotifier({ userRole = 'waiter' }: { userRole?: stri
               speakText(speakMsg);
             }, 800);
 
-            const toastInfo = newest.folio || newest.tableNumber ? `Mesa ${newest.tableNumber}` : newest.clientName || "Llevar";
-            toast(`🔔 Nuevo pedido recibido: ${toastInfo}`, {
-              icon: "🍳",
-              duration: 5000,
-              style: {
-                background: "#1e293b",
-                color: "#fff",
-                fontWeight: "bold",
-              }
-            });
-            
             // Reset the timer since we just spoke, preventing immediate repetition
             lastPlayTimeRef.current = Date.now();
-          }
-
-          // Trigger system background Notification
-          if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted" && userRole !== 'admin') {
-            try {
-              new Notification("🍳 ¡NUEVO PEDIDO RECIBIDO!", {
-                body: speakMsg,
-                requireInteraction: true,
-                tag: `new-order-notifier-${newest.id}`
-              });
-            } catch (e) {
-              console.error("Web Notification error on new order:", e);
-            }
           }
         }
       }

@@ -1,5 +1,3 @@
-import toast from "react-hot-toast";
-
 export interface MovementEmailData {
   id?: string;
   type: 'income' | 'expense' | 'egress' | 'opening' | 'closing' | 'audit' | string;
@@ -50,12 +48,6 @@ export async function sendMovementNotification(
   // Check if offline before attempting
   if (typeof navigator !== "undefined" && !navigator.onLine) {
     enqueueEmail(payloadData);
-    if (!options.quiet) {
-      toast("📶 Sin conexión. Notificación por correo guardada en espera (se enviará al reconectar).", {
-        icon: "📬",
-        duration: 4000
-      });
-    }
     return {
       success: true,
       status: 'queued',
@@ -79,12 +71,6 @@ export async function sendMovementNotification(
     const resData = await response.json();
     
     if (resData.success) {
-      if (!options.quiet) {
-        toast.success("📧 Notificación por correo enviada a lascazuelasbosques@gmail.com", {
-          id: `email-sent-${logId}`,
-          duration: 3500
-        });
-      }
       return {
         success: true,
         status: 'sent',
@@ -96,12 +82,6 @@ export async function sendMovementNotification(
   } catch (err: any) {
     console.warn("[EmailService] Failed to send email online, queuing for retry:", err?.message || err);
     enqueueEmail(payloadData);
-    if (!options.quiet) {
-      toast("📶 Error de envío. Notificación por correo puesta en espera para reintento automático.", {
-        icon: "📥",
-        duration: 4000
-      });
-    }
     return {
       success: true,
       status: 'queued',
@@ -158,13 +138,6 @@ export async function processPendingEmails(): Promise<number> {
   }
 
   savePendingEmailsQueue(remainingQueue);
-
-  if (successCount > 0) {
-    toast.success(`📧 Se enviaron ${successCount} correo(s) de notificación que estaban en espera.`, {
-      id: "pending-emails-flushed",
-      duration: 5000
-    });
-  }
 
   return successCount;
 }

@@ -873,7 +873,6 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
           localStorage.setItem("prep_song_file_name", nextSong.name);
         }
       }
-      toast.success("🔀 ¡Preparación iniciada! Se activó el shuffle y se eligió canción aleatoria.");
     }
     wasPreparingRef.current = isPreparing;
   }, [isPreparing, prepSongType, uploadedFiles, customLibrary]);
@@ -1264,7 +1263,6 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
         updateData.movementLogs = arrayUnion(movementLog);
 
         await updateOfflineDoc("orders", orderId, updateData);
-        toast.success(`Comanda de ${station === 'plancha' ? 'Parrilla' : 'Cocina'} en preparación`);
       } else if (action === 'finish_station') {
         // Mark items for this station as completed
         const updatedItems = order.items.map(item => {
@@ -1313,7 +1311,6 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
         if (updateData.status === 'ready') {
           await notifyWhatsAppReady(orderId, order);
         }
-        toast.success(`Comanda de ${station === 'plancha' ? 'Parrilla' : 'Cocina'} lista`);
       }
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, "orders");
@@ -1666,31 +1663,8 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
                   navigator.vibrate([800, 200, 800, 200, 1200, 300, 1200]);
                 } catch (ve) {}
               }
-
-              const title = `🍳 ¡NUEVA COMANDA EN ${stationName.toUpperCase()}!`;
-              const body = `Comanda de ${orderInfo}. Inicia preparación para silenciar el buzzer.`;
-
-              if ('serviceWorker' in navigator) {
-                navigator.serviceWorker.ready.then((reg) => {
-                  reg.showNotification(title, {
-                    body,
-                    icon: '/logo_las_cazuelas_del_castor.jpg',
-                    badge: '/logo_las_cazuelas_del_castor.jpg',
-                    tag: `new-ticket-${id}`,
-                    vibrate: [800, 200, 800, 200, 1200, 300, 1200],
-                    renotify: true,
-                    requireInteraction: true, // Mantiene la notificación despertando la pantalla
-                    silent: false,
-                    data: { url: window.location.href }
-                  } as any).catch(err => console.warn("SW notification error:", err));
-                }).catch(() => {
-                  new Notification(title, { body, tag: `new-ticket-${id}` });
-                });
-              } else {
-                new Notification(title, { body, tag: `new-ticket-${id}` });
-              }
             } catch (e) {
-              console.error("Web Notification error on new ticket:", e);
+              console.error("Alert error on new ticket:", e);
             }
           }
         });

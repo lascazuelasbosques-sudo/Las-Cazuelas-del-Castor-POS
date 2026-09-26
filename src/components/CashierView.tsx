@@ -280,7 +280,6 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
       });
       
       setEditingPaymentItem(null);
-      toast.success(isDrink ? "Refresco / Bebida actualizado (directo a cobrar)" : "Artículo actualizado y enviado a cocina");
     } catch (error) {
       console.error("Error updating order item:", error);
       toast.error("Error al actualizar el artículo");
@@ -350,7 +349,6 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
 
       setShowAddPaymentItem(false);
       setAddPaymentItemForm({ name: '', price: 0, quantity: 1 });
-      toast.success(isDrink ? "Refresco / Bebida agregado (directo a cobrar)" : "Artículo agregado y enviado a cocina");
     } catch (error) {
       console.error("Error adding order item:", error);
       toast.error("Error al agregar el artículo");
@@ -1174,7 +1172,6 @@ const safeParseDate = (timestamp: any): Date => {
     }
 
     setIsProcessingPayment(true);
-    const toastId = toast.loading("Registrando pago...");
     try {
       const batch = writeBatch(db);
       
@@ -1248,8 +1245,6 @@ const safeParseDate = (timestamp: any): Date => {
 
       await batch.commit();
 
-      sendMovementNotification({ id: logRef.id, ...paymentLogData });
-
       setLastPaymentData({ group: selectedGroup, method: paymentMethod, total: finalTotal });
       setShowPaymentModal(false);
 
@@ -1271,11 +1266,10 @@ const safeParseDate = (timestamp: any): Date => {
       setCashReceived('');
       setTransferReceipt(null);
       setClientName('');
-      toast.success("Pago registrado correctamente", { id: toastId });
     } catch (error) {
       console.error("Error in handleConfirmPayment:", error);
       handleFirestoreError(error, OperationType.WRITE, "orders/cashLogs");
-      toast.error("Error al procesar el pago", { id: toastId });
+      toast.error("Error al procesar el pago");
     } finally {
       setIsProcessingPayment(false);
     }
@@ -1294,7 +1288,6 @@ const safeParseDate = (timestamp: any): Date => {
     }
 
     setIsProcessingCreditPayment(true);
-    const toastId = toast.loading("Registrando cobro de crédito...");
     try {
       const batch = writeBatch(db);
 
@@ -1349,8 +1342,6 @@ const safeParseDate = (timestamp: any): Date => {
 
       await batch.commit();
 
-      sendMovementNotification({ id: logRef.id, ...creditLogData });
-
       const creditGroup: GroupedOrder = {
         id: selectedCreditOrder.id,
         displayTitle: selectedCreditOrder.tableNumber || selectedCreditOrder.clientName || 'Crédito',
@@ -1378,10 +1369,9 @@ const safeParseDate = (timestamp: any): Date => {
       setCreditTip(0);
       setCreditInterest(0);
       setCreditExtra(0);
-      toast.success("Cobro de crédito registrado correctamente", { id: toastId });
     } catch (error) {
       console.error("Error in handleConfirmCreditPayment:", error);
-      toast.error("Error al registrar cobro de crédito", { id: toastId });
+      toast.error("Error al registrar cobro de crédito");
     } finally {
       setIsProcessingCreditPayment(false);
     }
@@ -1504,7 +1494,6 @@ const safeParseDate = (timestamp: any): Date => {
   };
 
   const handleAcceptGroupOrders = async (group: GroupedOrder) => {
-    const toastId = toast.loading("Confirmando pedido...");
     try {
       const userInfo = getLoggedUserForLog();
       const confirmLog = {
@@ -1546,11 +1535,9 @@ const safeParseDate = (timestamp: any): Date => {
           }
         }
       }
-
-      toast.success("¡Pedido confirmado y enviado a cocina!", { id: toastId });
     } catch (error) {
       console.error("Error accepting group orders:", error);
-      toast.error("Error al confirmar el pedido", { id: toastId });
+      toast.error("Error al confirmar el pedido");
     }
   };
 
@@ -2090,7 +2077,6 @@ const safeParseDate = (timestamp: any): Date => {
         });
       });
       await batch.commit();
-      toast.success(`Recibo entregado a ${group.displayTitle}. Mesa con cobro pendiente.`);
     } catch (err) {
       console.error("Error al marcar recibo entregado:", err);
       toast.error("Error al actualizar pedido.");

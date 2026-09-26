@@ -536,7 +536,6 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
         orderData.movementLogs = arrayUnion(updateLog);
 
         await updateOfflineDoc("orders", editingOrderId, orderData);
-        toast.success("Pedido actualizado y enviado a cocina");
       } else {
         // Generate folio
         const counterRef = doc(db, 'counters', 'orders');
@@ -588,7 +587,6 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
         orderData.movementLogs = [initialLog];
         
         await addOfflineDoc("orders", orderData);
-        toast.success("Pedido enviado a cocina");
       }
       
       setCart([]);
@@ -1385,7 +1383,6 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
               className="w-full h-12 bg-amber-600 hover:bg-amber-700 font-extrabold text-xs uppercase tracking-wider mb-2 flex items-center justify-center gap-1.5 shadow-md shadow-amber-600/10 cursor-pointer"
               onClick={async () => {
                 if (!editingOrderId) return;
-                const toastId = toast.loading("Confirmando pedido...");
                 try {
                   await updateDoc(doc(db, "orders", editingOrderId), {
                     whatsAppConfirmed: true,
@@ -1414,7 +1411,6 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
                     }
                   }
 
-                  toast.success("¡Pedido confirmado y enviado a cocina!", { id: toastId });
                   setEditingOrderWhatsAppUnconfirmed(false);
                   
                   // Clear state
@@ -1426,7 +1422,6 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
                   setEditingOrderStatus(null);
                   setShowCartMobile(false);
                 } catch (e) {
-                  toast.dismiss(toastId);
                   handleFirestoreError(e, OperationType.UPDATE, "orders");
                 }
               }}

@@ -572,8 +572,6 @@ export default function WhatsAppInternoView({ userRole, mode = 'staff' }: WhatsA
 
     setIsPortalSending(true);
     try {
-      toast.loading("Enviando orden...", { id: "p-order" });
-      
       // Get consecutivo
       let consecutive = 1;
       // Standard POS consecutive
@@ -636,8 +634,6 @@ export default function WhatsAppInternoView({ userRole, mode = 'staff' }: WhatsA
       // 1. Add order doc
       const orderRef = await addDoc(collection(db, "orders"), orderData);
       
-      toast.success("¡Pedido enviado con éxito!", { id: "p-order" });
-      
       // Auto-clear unread if the chat was reused
       await updateDoc(doc(db, "chats", cleanPhone), {
         unreadCount: 0
@@ -693,10 +689,7 @@ export default function WhatsAppInternoView({ userRole, mode = 'staff' }: WhatsA
       setPortalStep('success');
       setPortalCart([]);
       setPortalNotes("");
-      
-      toast.success("¡Pedido creado y enviado vía WhatsApp simulado!", { id: "p-order" });
     } catch (err) {
-      toast.dismiss("p-order");
       handleFirestoreError(err, OperationType.CREATE, "orders");
     } finally {
       setIsPortalSending(false);
@@ -881,7 +874,6 @@ export default function WhatsAppInternoView({ userRole, mode = 'staff' }: WhatsA
         whatsAppConfirmed: true,
         updatedAt: new Date().toISOString()
       });
-      toast.success("¡Pedido aceptado! Enviado a cocina como pendiente.");
 
       const notificationTxt = "👨‍🍳 *ACEPTADO:* Tu pedido ya fue aceptado por Las Cazuelas y está en espera en la cocina para ser preparado. ¡Te avisamos cuando iniciemos!";
 
