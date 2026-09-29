@@ -26,6 +26,12 @@ import { useBranding } from './lib/useBranding';
 import { useDraggable } from './lib/useDraggable';
 import { DuplicateTabScreen } from './components/DuplicateTabScreen';
 import { initSingleTabLock, registerUserSession, clearUserSession } from './lib/sessionGuard';
+import { 
+  saveUserSession, 
+  restoreUserSession, 
+  clearUserSessionPersistence, 
+  safePurgeCacheAndMaintain 
+} from './lib/userSessionPersistence';
 
 export default function App() {
   const dragExitPortal = useDraggable();
@@ -94,9 +100,9 @@ export default function App() {
     }
 
     clearUserSession();
+    clearUserSessionPersistence();
     auth.signOut();
     setPosUser(null);
-    localStorage.removeItem('posUser');
     setIsSystemShutdown(true);
     try {
       const doc = document as any;
@@ -297,13 +303,14 @@ export default function App() {
     };
     testConnection();
 
-    // 1. Load POS user from local storage
-    try {
-      const savedUser = localStorage.getItem('posUser');
-      if (savedUser) {
-        const parsedUser = JSON.parse(savedUser);
-        if (parsedUser && parsedUser.name) {
-          const nameLower = parsedUser.name.toLowerCase().trim();
+    // 1. Proactive storage hygiene to prevent quota bloat
+    safePurgeCacheAndMaintain(true).catch(() => {});
+
+    // 2. Load POS user from multi-tier persistence (survives cache clear)
+    restoreUserSession().then((restoredUser) => {
+      if (restoredUser) {
+        if (restoredUser.name) {
+          const nameLower = restoredUser.name.toLowerCase().trim();
           if (
             nameLower === 'abigail' || 
             nameLower === 'antonieta abigail' || 
@@ -311,24 +318,23 @@ export default function App() {
             nameLower === 'abigail villagomez' || 
             nameLower.includes('abigail')
           ) {
-            parsedUser.name = 'Antonieta Abigail Villagómez';
-            try { localStorage.setItem('posUser', JSON.stringify(parsedUser)); } catch (e) {}
+            restoredUser.name = 'Antonieta Abigail Villagómez';
+            saveUserSession(restoredUser).catch(() => {});
           }
         }
-        setPosUser(parsedUser);
-        setUserRole(parsedUser.role);
-        if (parsedUser.role === 'kitchen' || parsedUser.role === 'parrilla') {
+        setPosUser(restoredUser);
+        setUserRole(restoredUser.role);
+        if (restoredUser.role === 'kitchen' || restoredUser.role === 'parrilla') {
           setActiveTab('kitchen');
         } else {
           setActiveTab('orders');
         }
       }
-    } catch (e) {
-      console.warn("Error reading saved user from storage", e);
-      try { localStorage.removeItem('posUser'); } catch (err) {}
-    }
+    }).catch(e => {
+      console.warn("Error restoring saved user session:", e);
+    });
 
-    // 2. Handle Firebase Auth
+    // 3. Handle Firebase Auth
     let unsubUserDoc: (() => void) | null = null;
 
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
@@ -336,21 +342,15 @@ export default function App() {
       
       if (!user) {
         // Do NOT wipe local/offline staff sessions when Firebase Auth resolves to null!
-        const savedPosUser = localStorage.getItem('posUser');
-        if (savedPosUser) {
-          try {
-            const parsed = JSON.parse(savedPosUser);
-            if (parsed && (!parsed.isGoogleUser || parsed.role)) {
-              // Local staff or offline authenticated user is preserved
-              setPosUser(parsed);
-              setUserRole(parsed.role);
-              setLoading(false);
-              return;
-            }
-          } catch (err) {}
+        const restored = await restoreUserSession();
+        if (restored) {
+          setPosUser(restored);
+          setUserRole(restored.role);
+          setLoading(false);
+          return;
         }
         setPosUser(null);
-        localStorage.removeItem('posUser');
+        clearUserSessionPersistence();
         setLoading(false);
         return;
       }
@@ -358,6 +358,16 @@ export default function App() {
       // If we have a firebase user, ensure they have a document in 'users'
       try {
         if (user.isAnonymous) {
+          const savedPosUser = localStorage.getItem('posUser');
+          if (savedPosUser) {
+            try {
+              const parsed = JSON.parse(savedPosUser);
+              if (parsed && parsed.role) {
+                setPosUser(parsed);
+                setUserRole(parsed.role);
+              }
+            } catch (err) {}
+          }
           setLoading(false);
           return;
         }
@@ -549,7 +559,7 @@ export default function App() {
             }
             setPosUser(userToSave);
             setUserRole(userToSave.role);
-            localStorage.setItem('posUser', JSON.stringify(userToSave));
+            saveUserSession(userToSave).catch(() => {});
             if (userToSave.role === 'kitchen' || userToSave.role === 'parrilla') {
               setActiveTab('kitchen');
             } else {
@@ -569,9 +579,9 @@ export default function App() {
 
   const handleLogout = () => {
     clearUserSession();
+    clearUserSessionPersistence();
     auth.signOut();
     setPosUser(null);
-    localStorage.removeItem('posUser');
     exitFullscreen();
   };
 

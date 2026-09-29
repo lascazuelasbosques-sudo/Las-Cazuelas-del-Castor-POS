@@ -11,7 +11,8 @@ let firestoreInstance;
 try {
   firestoreInstance = initializeFirestore(app, {
     localCache: persistentLocalCache({
-      tabManager: persistentMultipleTabManager()
+      tabManager: persistentMultipleTabManager(),
+      cacheSizeBytes: 25 * 1024 * 1024 // 25MB safe bounded LRU cache
     })
   }, firebaseConfig.firestoreDatabaseId);
 } catch (e) {

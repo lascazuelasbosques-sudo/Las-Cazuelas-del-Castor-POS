@@ -255,16 +255,42 @@ export async function registerUserSession(
     console.warn("Could not register session in cloud (operating offline or quota):", err);
   }
 
+  const registrationTime = Date.now();
+
   // Subscribe to real-time changes to detect if another device logs in
   try {
     sessionUnsubscribe = onSnapshot(sessionDocRef, (snap) => {
       if (snap.exists()) {
+        // Skip if local client still has pending writes for this document
+        if (snap.metadata?.hasPendingWrites) {
+          return;
+        }
+
         const data = snap.data();
-        if (data && data.sessionToken && data.sessionToken !== sessionToken) {
-          // Another device or login took over this user account!
-          console.warn(`User ${userName} logged in from another device/session.`);
+        if (!data || !data.sessionToken) return;
+
+        // Skip during initial registration grace period (8 seconds) to prevent startup race conditions
+        if (Date.now() - registrationTime < 8000) {
+          return;
+        }
+
+        // If the deviceId matches, it's the SAME device (page refresh or same browser) - NEVER terminate!
+        if (data.deviceId && data.deviceId === deviceId) {
+          return;
+        }
+
+        // Allow concurrent access for shared POS staff roles (waiters, kitchen, grill, cashier) across tablets
+        const roleLower = String(userRole || '').toLowerCase();
+        const isSharedRole = ['waiter', 'mesero', 'kitchen', 'cocina', 'parrilla', 'cashier', 'caja'].includes(roleLower);
+        if (isSharedRole) {
+          return;
+        }
+
+        if (data.sessionToken !== sessionToken && data.deviceId !== deviceId) {
+          // Another distinct device legitimately claimed this specific user account
+          console.warn(`User ${userName} logged in from another device (${data.deviceId}).`);
           onRemoteTerminated(
-            `La sesión se ha cerrado porque este usuario inició sesión en otro dispositivo o ventana.`
+            `La sesión se ha cerrado porque este usuario inició sesión en otro dispositivo.`
           );
         }
       }

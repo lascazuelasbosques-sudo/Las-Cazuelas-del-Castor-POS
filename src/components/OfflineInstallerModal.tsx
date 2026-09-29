@@ -4,7 +4,8 @@ import {
   Wifi, WifiOff, HardDrive, Sparkles, RefreshCw, Layers, ShieldCheck, Users,
   Terminal, Copy, Check, ExternalLink, ArrowRight
 } from "lucide-react";
-import { preloadMenuCache, preloadUsersCache, getLocalCache } from "../lib/offlineService";
+import { preloadMenuCache, preloadUsersCache, getLocalCache, syncOfflineData } from "../lib/offlineService";
+import { safePurgeCacheAndMaintain } from "../lib/userSessionPersistence";
 import toast from "react-hot-toast";
 
 interface OfflineInstallerModalProps {
@@ -191,6 +192,25 @@ StartupWMClass=las-cazuelas
       toast.success('Comidas y base de datos guardadas en caché local.');
     } finally {
       setIsPreparingOffline(false);
+    }
+  };
+
+  const [isCleaningCache, setIsCleaningCache] = useState(false);
+
+  const handleCleanAndRepairCache = async () => {
+    setIsCleaningCache(true);
+    try {
+      const { freedKeys } = await safePurgeCacheAndMaintain(true);
+      await syncOfflineData();
+      updateCacheStats();
+      toast.success(`Caché optimizada y base de datos reparada (${freedKeys} archivos liberados). Tu cuenta y sesión permanecen intactas.`, {
+        icon: '🛡️',
+        duration: 5000
+      });
+    } catch (e) {
+      toast.error('Error al optimizar caché');
+    } finally {
+      setIsCleaningCache(false);
     }
   };
 
@@ -589,6 +609,41 @@ StartupWMClass=las-cazuelas
               <>
                 <Download size={15} strokeWidth={2.5} />
                 <span>Descargar y Actualizar Caché Offline</span>
+              </>
+            )}
+          </button>
+        </div>
+
+        {/* Safe Cache Optimization & Auto-Repair Section */}
+        <div className="bg-stone-950 p-4 rounded-2xl border border-stone-800 flex flex-col gap-2.5">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-xs font-black uppercase text-stone-300">
+              <ShieldCheck size={16} className="text-emerald-400" />
+              <span>Optimización y Reparación de Almacenamiento</span>
+            </div>
+            <span className="px-2 py-0.5 bg-stone-900 text-stone-400 border border-stone-800 text-[9px] font-bold rounded-full uppercase">
+              Protección de Cuenta
+            </span>
+          </div>
+
+          <p className="text-[11px] text-stone-400 font-medium leading-relaxed">
+            Si notas lentitud o problemas al guardar datos, presiona este botón para purgar registros temporales y reparar la base de datos local. <strong className="text-stone-200">Tu cuenta, usuario y PIN no se borrarán.</strong>
+          </p>
+
+          <button
+            onClick={handleCleanAndRepairCache}
+            disabled={isCleaningCache}
+            className="w-full py-2 px-4 bg-stone-900 hover:bg-stone-800 text-stone-200 hover:text-white border border-stone-700 font-bold rounded-xl text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-50"
+          >
+            {isCleaningCache ? (
+              <>
+                <RefreshCw size={14} className="animate-spin text-amber-400" />
+                <span>Reparando y optimizando...</span>
+              </>
+            ) : (
+              <>
+                <RefreshCw size={14} className="text-amber-400" />
+                <span>Optimizar Caché y Reparar Guardado (Sin cerrar cuenta)</span>
               </>
             )}
           </button>

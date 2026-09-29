@@ -992,7 +992,7 @@ const safeParseDate = (timestamp: any): Date => {
       setCreditOrders(activeCreditData);
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, "orders (credit)");
-    });
+    }, { isPartialQuery: true, customCacheKey: 'orders_credit' });
 
     const qCancelledOrders = query(
       collection(db, "orders"),
@@ -1002,7 +1002,7 @@ const safeParseDate = (timestamp: any): Date => {
       setCancelledOrders(cData);
     }, (error) => {
       console.error("Error loading cancelled orders:", error);
-    });
+    }, { isPartialQuery: true, customCacheKey: 'orders_cancelled' });
     
     // Fetch products
     const qProducts = query(collection(db, "products"), orderBy("name", "asc"));
@@ -1243,7 +1243,29 @@ const safeParseDate = (timestamp: any): Date => {
       };
       batch.set(logRef, paymentLogData);
 
-      await batch.commit();
+      try {
+        await Promise.race([
+          batch.commit(),
+          new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout en commit batch")), 3500))
+        ]);
+      } catch (batchErr) {
+        console.warn("Batch commit timeout or network error, executing resilient offline updates:", batchErr);
+        for (const order of selectedGroup.orders) {
+          const orderCardFee = paymentMethod === 'card' ? customRound(order.total * CARD_FEE_PERCENTAGE) : 0;
+          const orderTotal = customRound(order.total + orderCardFee);
+          await updateOfflineDoc("orders", order.id, {
+            status: 'paid',
+            paymentMethod,
+            cardFee: orderCardFee,
+            total: orderTotal,
+            transferReceiptUrl: paymentMethod === 'transfer' ? (transferReceipt || "") : null,
+            clientName: paymentMethod === 'credit' ? clientName.trim() : null,
+            creditStatus: paymentMethod === 'credit' ? 'pending' : null,
+            updatedAt: new Date().toISOString()
+          });
+        }
+        await addOfflineDoc("cashLogs", paymentLogData);
+      }
 
       setLastPaymentData({ group: selectedGroup, method: paymentMethod, total: finalTotal });
       setShowPaymentModal(false);
@@ -1340,7 +1362,25 @@ const safeParseDate = (timestamp: any): Date => {
       };
       batch.set(logRef, creditLogData);
 
-      await batch.commit();
+      try {
+        await Promise.race([
+          batch.commit(),
+          new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout en commit batch de crédito")), 3500))
+        ]);
+      } catch (batchErr) {
+        console.warn("Credit batch commit timeout or error, executing resilient offline updates:", batchErr);
+        await updateOfflineDoc("orders", selectedCreditOrder.id, {
+          creditStatus: 'paid',
+          creditPaidAt: new Date().toISOString(),
+          creditPaidMethod: creditPaymentMethod,
+          tip: creditTip,
+          interest: creditInterest,
+          extra: creditExtra,
+          totalPaid: totalPaid,
+          updatedAt: new Date().toISOString()
+        });
+        await addOfflineDoc("cashLogs", creditLogData);
+      }
 
       const creditGroup: GroupedOrder = {
         id: selectedCreditOrder.id,

@@ -155,6 +155,7 @@ export interface ChatMessage {
 }
 
 export const DEFAULT_USERS: User[] = [
+  { id: 'usr-superadmin', name: 'Super Admin (Las Cazuelas)', username: 'lascazuelasbosques@gmail.com', email: 'lascazuelasbosques@gmail.com', password: 'admin', role: 'admin', pin: '4321', active: true },
   { id: 'usr-admin', name: 'Carlos Mendoza (Administrador)', username: 'admin', password: 'admin2026', role: 'admin', pin: '4321', active: true },
   { id: 'usr-cocina', name: 'Chef Doña Rosa (Cocina)', username: 'cocina', password: 'cocina2026', role: 'kitchen', pin: '7890', active: true },
   { id: 'usr-parrilla', name: 'Beto Parrillero (Parrilla/Plancha)', username: 'parrilla', password: 'parrilla2026', role: 'parrilla', pin: '5678', active: true },

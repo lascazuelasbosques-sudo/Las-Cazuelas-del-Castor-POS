@@ -16,6 +16,7 @@ import { db } from "../firebase";
 import toast from "react-hot-toast";
 import { DEFAULT_FALLBACK_CATEGORIES, DEFAULT_FALLBACK_PRODUCTS } from "./defaultMenuData";
 import { DEFAULT_USERS, User } from "../types";
+import { safePurgeCacheAndMaintain } from "./userSessionPersistence";
 
 export interface OfflineOperation {
   id: string;
@@ -34,7 +35,7 @@ const stateListeners = new Set<OfflineStateListener>();
 type CacheListener = (collectionName: string, data: any[]) => void;
 const cacheListeners = new Map<string, Set<CacheListener>>();
 
-// Safe localStorage wrapper for iframe applets
+// Resilient self-healing localStorage wrapper with QuotaExceeded auto-healing
 export const safeStorage = {
   getItem: (key: string): string | null => {
     try {
@@ -46,7 +47,19 @@ export const safeStorage = {
   setItem: (key: string, value: string): void => {
     try {
       localStorage.setItem(key, value);
-    } catch (e) {}
+    } catch (e) {
+      // Storage quota exceeded or disabled. Execute immediate auto-prune to protect critical data
+      console.warn(`[StorageGuard] Quota warning on "${key}". Executing emergency cache cleanup.`);
+      try {
+        safePurgeCacheAndMaintain(true);
+        localStorage.setItem(key, value);
+      } catch (retryErr) {
+        // If still failing, drop non-critical cache if not an essential key
+        if (key !== 'posUser' && key !== 'offline_operations_queue') {
+          console.warn(`[StorageGuard] Skipped non-critical cache write for "${key}" to preserve quota.`);
+        }
+      }
+    }
   },
   removeItem: (key: string): void => {
     try {
@@ -97,6 +110,54 @@ function notifyStateChange() {
   stateListeners.forEach(listener => listener(isOffline, pendingCount));
 }
 
+/**
+ * Sanitizes collection data before saving to localStorage to prevent quota exhaustion:
+ * 1. Strips out large base64 image strings (e.g. transfer receipts).
+ * 2. Prunes old/inactive records (keeps active orders + recent items).
+ */
+export function sanitizeCollectionDataForStorage(collectionName: string, data: any[]): any[] {
+  if (!Array.isArray(data)) return [];
+
+  const sanitized = data.map(item => {
+    if (!item || typeof item !== 'object') return item;
+    const clean = { ...item };
+    
+    // Strip large base64 receipt blobs from local cache (Firestore maintains full file)
+    if (typeof clean.transferReceiptUrl === 'string' && clean.transferReceiptUrl.length > 250) {
+      clean.transferReceiptUrl = '[imagen_comprobante_en_nube]';
+    }
+    
+    // Strip any raw base64 data URLs > 500 chars to avoid filling up 5MB quota
+    for (const prop of Object.keys(clean)) {
+      if (typeof clean[prop] === 'string' && clean[prop].startsWith('data:image') && clean[prop].length > 500) {
+        clean[prop] = '[imagen_en_nube]';
+      }
+    }
+    return clean;
+  });
+
+  if (collectionName === 'orders') {
+    // Retain all active kitchen/dining orders + up to 50 recent settled orders
+    const active = sanitized.filter(o => o && ['pending', 'preparing', 'ready', 'served'].includes(o.status || 'pending'));
+    const nonActive = sanitized.filter(o => !['pending', 'preparing', 'ready', 'served'].includes(o.status || 'pending')).slice(0, 50);
+    return [...active, ...nonActive];
+  }
+
+  if (collectionName === 'cashLogs') {
+    return sanitized.slice(0, 30);
+  }
+
+  if (collectionName === 'cashAudits') {
+    return sanitized.slice(0, 15);
+  }
+
+  if (collectionName === 'tipLoans') {
+    return sanitized.slice(0, 20);
+  }
+
+  return sanitized;
+}
+
 // Local cache methods
 export function getLocalCache(collectionName: string): any[] {
   const dataStr = safeStorage.getItem(`offline_cache_col_${collectionName}`);
@@ -130,10 +191,30 @@ export function getLocalCache(collectionName: string): any[] {
 
 export function saveLocalCache(collectionName: string, data: any[]) {
   try {
-    safeStorage.setItem(`offline_cache_col_${collectionName}`, JSON.stringify(data));
-    notifyCacheListeners(collectionName, data);
+    const cleanData = sanitizeCollectionDataForStorage(collectionName, data);
+    safeStorage.setItem(`offline_cache_col_${collectionName}`, JSON.stringify(cleanData));
+    notifyCacheListeners(collectionName, cleanData);
   } catch (e) {
     console.error(`Error saving local cache for ${collectionName}:`, e);
+  }
+}
+
+/**
+ * Merges partial query snapshot documents into local cache without wiping out other items.
+ */
+export function mergeDocsIntoLocalCache(collectionName: string, partialDocs: any[]) {
+  try {
+    const existing = getLocalCache(collectionName);
+    const map = new Map(existing.map(d => [d.id, d]));
+    for (const doc of partialDocs) {
+      if (doc && doc.id) {
+        map.set(doc.id, { ...(map.get(doc.id) || {}), ...doc });
+      }
+    }
+    const merged = Array.from(map.values());
+    saveLocalCache(collectionName, merged);
+  } catch (e) {
+    console.warn(`Error merging partial docs into ${collectionName}:`, e);
   }
 }
 
@@ -486,10 +567,12 @@ export function onOfflineSnapshot(
   collectionName: string,
   queryInstance: any,
   onData: (data: any[]) => void,
-  onError?: (error: any) => void
+  onError?: (error: any) => void,
+  options?: { isPartialQuery?: boolean; customCacheKey?: string }
 ) {
+  const cacheKey = options?.customCacheKey || collectionName;
   // Always trigger immediately with local cache to avoid visual delay
-  const cachedData = getLocalCache(collectionName);
+  const cachedData = getLocalCache(cacheKey);
   
   // Merge cached data with any offline modifications currently in the queue
   const queue = getQueue().filter(op => op.collectionName === collectionName);
@@ -526,7 +609,7 @@ export function onOfflineSnapshot(
   // If we are strictly simulated offline, do not connect to network
   if (isSimulatingOffline) {
     // Just listen to local cache modifications
-    const unsubCache = subscribeToCollectionCache(collectionName, (_, updatedCacheData) => {
+    const unsubCache = subscribeToCollectionCache(cacheKey, (_, updatedCacheData) => {
       onData(updatedCacheData);
     });
     return unsubCache;
@@ -538,8 +621,17 @@ export function onOfflineSnapshot(
     (snapshot) => {
       const docsData = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
       
-      // Save to local cache
-      saveLocalCache(collectionName, docsData);
+      // Save to local cache safely
+      if (options?.isPartialQuery) {
+        // Never wipe full collection cache for partial queries
+        if (options?.customCacheKey) {
+          saveLocalCache(options.customCacheKey, docsData);
+        } else {
+          mergeDocsIntoLocalCache(collectionName, docsData);
+        }
+      } else {
+        saveLocalCache(cacheKey, docsData);
+      }
       
       // Merge with offline queue again
       let finalData = [...docsData];
