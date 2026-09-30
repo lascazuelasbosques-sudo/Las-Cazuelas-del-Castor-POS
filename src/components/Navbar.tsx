@@ -1,13 +1,11 @@
 import { useState, useEffect, useRef } from "react";
-import { Utensils, ClipboardList, Package, CreditCard, Settings, LogOut, Menu, ChefHat, MessageSquare, Bell, Maximize2, Minimize2, Radio, Smartphone, Download, Printer, Usb, HelpCircle, Power } from "lucide-react";
+import { Utensils, ClipboardList, Package, CreditCard, Settings, LogOut, Menu, ChefHat, MessageSquare, Bell, Maximize2, Minimize2, Radio, Printer, Usb, HelpCircle, Power } from "lucide-react";
 import { Button } from "./Button";
 import { cn, getRoleLabel } from "@/src/lib/utils";
 import { auth, db } from "../firebase";
 import { collection, query, where, onSnapshot } from "firebase/firestore";
 import { Order } from "../types";
 import { useBranding } from "../lib/useBranding";
-import { PWAInstallBanner } from "./PWAInstallBanner";
-import { OfflineInstallerModal } from "./OfflineInstallerModal";
 import { UsbPrinterModal } from "./UsbPrinterModal";
 import { HelpManualModal } from "./HelpManualModal";
 import { reconnectPrinterService } from "../lib/usbPrinter";
@@ -53,7 +51,6 @@ export const Navbar = ({
   const [localIsFullscreen, setLocalIsFullscreen] = useState(false);
   const [isOffline, setIsOffline] = useState(getOfflineStatus());
   const [pendingOps, setPendingOps] = useState(getPendingOperationsCount());
-  const [isInstallerOpen, setIsInstallerOpen] = useState(false);
   const [isUsbModalOpen, setIsUsbModalOpen] = useState(false);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
   const [showShutdownConfirm, setShowShutdownConfirm] = useState(false);
@@ -420,7 +417,6 @@ export const Navbar = ({
         {/* Dynamic scroll indicators / Actions on mobile */}
         <div className="flex md:hidden items-center gap-1 pl-2 border-l border-stone-200 shrink-0">
           <WeatherClockWidget compact />
-          <PWAInstallBanner compact />
           <FullScreenLockControl compact />
 
           {/* Compact Offline Switcher for Mobile */}
@@ -460,15 +456,6 @@ export const Navbar = ({
           >
             <HelpCircle size={21} className="text-mex-gold" />
             <span className="text-[9px] font-extrabold whitespace-nowrap">Ayuda</span>
-          </button>
-
-          <button
-            onClick={() => setIsInstallerOpen(true)}
-            className="flex flex-col items-center gap-1 p-2 rounded-xl text-amber-600 hover:bg-amber-50 shrink-0"
-            title="Instalar App en Android, Windows o Linux Mint"
-          >
-            <Download size={21} />
-            <span className="text-[9px] font-extrabold whitespace-nowrap">Instalar</span>
           </button>
 
           <button
@@ -581,17 +568,6 @@ export const Navbar = ({
         {/* Lock Screen Button */}
         <FullScreenLockControl />
 
-        {/* PWA / Offline Installer Button */}
-        <Button 
-          variant="outline" 
-          className="justify-center lg:justify-start gap-2.5 w-full border-amber-300/80 bg-amber-50/70 text-amber-900 hover:bg-amber-100 px-0 lg:px-3 h-[36px] rounded-xl text-xs font-bold transition-all shadow-sm"
-          title="Instalar App en Android, Windows o Linux Mint"
-          onClick={() => setIsInstallerOpen(true)}
-        >
-          <Smartphone size={16} className="text-amber-600 shrink-0" />
-          <span className="hidden lg:inline">Instalar App (PC/Móvil)</span>
-        </Button>
-
         {/* USB Cable Printer Button (52x90mm Direct) & Quick Reconnect */}
         <div className="flex items-center gap-1.5 w-full">
           <Button 
@@ -694,12 +670,6 @@ export const Navbar = ({
       <HelpManualModal
         isOpen={isHelpOpen}
         onClose={() => setIsHelpOpen(false)}
-      />
-
-      {/* Offline PWA Installer Modal */}
-      <OfflineInstallerModal
-        isOpen={isInstallerOpen}
-        onClose={() => setIsInstallerOpen(false)}
       />
 
       {/* USB Cable Printer Modal (50x60) */}

@@ -7,7 +7,6 @@ import { db, auth } from "../firebase";
 import { collection, onSnapshot, query, where, orderBy, doc, updateDoc, addDoc, arrayUnion } from "firebase/firestore";
 import { onOfflineSnapshot, updateOfflineDoc } from "@/src/lib/offlineService";
 import { cn, customRound } from "@/src/lib/utils";
-import { PWAInstallBanner } from "./PWAInstallBanner";
 import toast from "react-hot-toast";
 import { handleFirestoreError, OperationType } from "@/src/lib/firestoreErrorHandler";
 import { checkIsBistec, analyzeMeatIngredients } from "@/src/lib/orderUtils";
@@ -1919,9 +1918,6 @@ export const KitchenView = ({ onEditOrder, userRole = 'admin', onNavigateToOrder
             </div>
 
             <div className="space-y-4 overflow-y-auto flex-1 pr-1.5 scrollbar-thin pb-4">
-              {/* PWA Mobile App Install Section */}
-              <PWAInstallBanner />
-
               <p className="text-[10px] text-stone-500 font-bold uppercase tracking-widest leading-relaxed">
                 Control de vibrador, alarmas y destellos de luz para los nuevos pedidos de cocina.
               </p>

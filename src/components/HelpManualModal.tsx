@@ -197,7 +197,7 @@ export const HelpManualModal: React.FC<HelpManualModalProps> = ({ isOpen, onClos
                 <ul className="list-disc list-inside space-y-1.5 text-xs text-stone-700 leading-relaxed">
                   <li>Todas las ventas y movimientos se guardan en la memoria local del dispositivo.</li>
                   <li>Al restablecer la red, el indicador mostrará los cambios pendientes y podrá presionar <strong>Subir / Sincronizar</strong>.</li>
-                  <li>Puede instalar la aplicación en su pantalla de inicio usando el botón <strong>Instalar / Offline</strong>.</li>
+                  <li>Puede instalar la aplicación en su PC o teléfono directamente desde la barra del navegador (icono ⊕ o 'Instalar aplicación').</li>
                 </ul>
               </div>
             </div>

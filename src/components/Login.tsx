@@ -30,7 +30,6 @@ import toast from "react-hot-toast";
 import { useBranding } from "../lib/useBranding";
 import { getRoleLabel } from "../lib/utils";
 import { motion, AnimatePresence } from "motion/react";
-import { OfflineInstallerModal } from "./OfflineInstallerModal";
 import { 
   toggleSimulateOffline, 
   getLocalCache, 
@@ -56,7 +55,6 @@ export const Login = ({ onLogin, onEnterPortal, onShutdown }: LoginProps) => {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
-  const [showInstaller, setShowInstaller] = useState(false);
   const [showShutdownConfirm, setShowShutdownConfirm] = useState(false);
   const [localUsers, setLocalUsers] = useState<User[]>([]);
   const pinInputRef = useRef<HTMLInputElement>(null);
@@ -882,11 +880,6 @@ export const Login = ({ onLogin, onEnterPortal, onShutdown }: LoginProps) => {
           v.4.0 • SISTEMA OFICIAL CAZUELAS
         </p>
       </footer>
-
-      <OfflineInstallerModal 
-        isOpen={showInstaller} 
-        onClose={() => setShowInstaller(false)} 
-      />
     </div>
   );
 };
