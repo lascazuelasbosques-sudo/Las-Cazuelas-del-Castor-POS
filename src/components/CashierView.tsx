@@ -10,7 +10,7 @@ import { db, auth } from "../firebase";
 import { collection, onSnapshot, query, where, orderBy, doc, updateDoc, addDoc, deleteDoc, writeBatch, getDocs, getDocsFromServer, arrayUnion } from "firebase/firestore";
 import { handleFirestoreError, OperationType } from "../lib/firestoreErrorHandler";
 import { isDrinkItem } from "../lib/drinkUtils";
-import { getUsbPrinterDiagnostic, autoConnectUsbPrinter, sendUsbRawData, build50x60TicketBytes, print50x60ViaSystem, build54mmSalesReportBytes, print54mmSalesReportViaSystem } from "../lib/usbPrinter";
+import { getUsbPrinterDiagnostic, autoConnectUsbPrinter, sendUsbRawData, build50x60TicketBytes, print50x60ViaSystem, build54mmSalesReportBytes, print54mmSalesReportViaSystem, UsbPrinterDiagnostic } from "../lib/usbPrinter";
 import { sendMovementNotification } from "../lib/emailService";
 import toast from "react-hot-toast";
 import { 
@@ -1899,6 +1899,12 @@ const safeParseDate = (timestamp: any): Date => {
 
     setLastPaymentData({ group, method: method as any, total: log.amount });
     setShowSuccessModal(true);
+    triggerAutoPrintTicket({
+      group,
+      method: method as any,
+      total: log.amount,
+      isPreAccount: false
+    });
   };
 
   const generateTicketPDF = async (shouldDownload = true) => {
@@ -1980,9 +1986,16 @@ const safeParseDate = (timestamp: any): Date => {
 
       let usbDiag = getUsbPrinterDiagnostic();
 
-      // If not connected, try auto-connecting to previously paired USB device
+      // If not connected, try auto-connecting to previously paired USB device with quick timeout
       if (!usbDiag.connected || (usbDiag.connectionType !== 'webusb' && usbDiag.connectionType !== 'webserial')) {
-        usbDiag = await autoConnectUsbPrinter();
+        try {
+          usbDiag = await Promise.race([
+            autoConnectUsbPrinter(),
+            new Promise<UsbPrinterDiagnostic>((_, reject) => setTimeout(() => reject(new Error("Timeout USB")), 400))
+          ]);
+        } catch {
+          usbDiag = getUsbPrinterDiagnostic();
+        }
       }
 
       if (usbDiag.connected && (usbDiag.connectionType === 'webusb' || usbDiag.connectionType === 'webserial')) {
@@ -5757,7 +5770,7 @@ const safeParseDate = (timestamp: any): Date => {
               </div>
 
             </CardContent>
-            <CardFooter className="p-5 pt-2 flex flex-col items-center justify-center">
+            <CardFooter className="p-5 pt-2 flex flex-col gap-2 items-center justify-center">
               <Button 
                 className="w-full h-14 rounded-2xl bg-amber-600 hover:bg-amber-700 text-white font-black text-sm sm:text-base uppercase tracking-wider shadow-lg shadow-amber-600/30 flex items-center justify-center gap-3 cursor-pointer transition-all active:scale-[0.98]"
                 onClick={async () => {
@@ -5768,6 +5781,17 @@ const safeParseDate = (timestamp: any): Date => {
               >
                 <Printer size={22} className="shrink-0" />
                 <span>Imprimir Recibo</span>
+              </Button>
+
+              <Button
+                variant="outline"
+                className="w-full h-11 rounded-xl border-stone-300 text-stone-700 hover:bg-stone-50 font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer"
+                onClick={async () => {
+                  await generatePreAccountPDF(true);
+                }}
+              >
+                <DownloadCloud size={16} className="text-amber-700 shrink-0" />
+                <span>Guardar / Descargar PDF</span>
               </Button>
             </CardFooter>
           </Card>

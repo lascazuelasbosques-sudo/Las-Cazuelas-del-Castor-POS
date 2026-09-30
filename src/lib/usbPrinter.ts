@@ -544,6 +544,162 @@ export async function printUsbTestTicket(): Promise<void> {
   });
 }
 
+// Core HTML receipt printing engine using hidden iframe + safe fallback
+export function printReceiptHtml(htmlContent: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    try {
+      // 1. Clean up any previous print iframe
+      const oldFrame = document.getElementById('receipt-print-frame');
+      if (oldFrame) {
+        try { document.body.removeChild(oldFrame); } catch (e) {}
+      }
+
+      // 2. Create isolated print iframe
+      const iframe = document.createElement('iframe');
+      iframe.id = 'receipt-print-frame';
+      iframe.style.position = 'fixed';
+      iframe.style.right = '0';
+      iframe.style.bottom = '0';
+      iframe.style.width = '0';
+      iframe.style.height = '0';
+      iframe.style.border = '0';
+      iframe.style.visibility = 'hidden';
+      document.body.appendChild(iframe);
+
+      const frameDoc = iframe.contentWindow?.document;
+      if (!frameDoc) {
+        throw new Error("No frame doc");
+      }
+
+      frameDoc.open();
+      frameDoc.write(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <title>Recibo Las Cazuelas del Castor</title>
+          <style>
+            @page {
+              size: 58mm auto;
+              margin: 2mm;
+            }
+            @media print {
+              html, body {
+                width: 54mm;
+                margin: 0 auto;
+                padding: 0;
+                background: #fff;
+                color: #000;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+              }
+            }
+            body {
+              width: 54mm;
+              margin: 0 auto;
+              padding: 1.5mm 1mm;
+              font-family: Arial, "Helvetica Neue", Helvetica, sans-serif;
+              color: #000000;
+              background: #ffffff;
+              box-sizing: border-box;
+            }
+            * {
+              color: #000000 !important;
+              box-sizing: border-box;
+            }
+          </style>
+        </head>
+        <body>
+          ${htmlContent}
+        </body>
+        </html>
+      `);
+      frameDoc.close();
+
+      const triggerPrint = () => {
+        try {
+          iframe.contentWindow?.focus();
+          iframe.contentWindow?.print();
+          resolve(true);
+        } catch (printErr) {
+          console.warn("[Printer] iframe.print() error, falling back to window.print:", printErr);
+          fallbackToWindowPrint(htmlContent);
+          resolve(false);
+        } finally {
+          setTimeout(() => {
+            try {
+              if (document.body.contains(iframe)) {
+                document.body.removeChild(iframe);
+              }
+            } catch (e) {}
+          }, 3500);
+        }
+      };
+
+      // Ensure images are fully decoded before triggering print
+      const images = frameDoc.images;
+      if (images && images.length > 0) {
+        let loaded = 0;
+        const total = images.length;
+        let isDone = false;
+        const onDone = () => {
+          if (isDone) return;
+          loaded++;
+          if (loaded >= total) {
+            isDone = true;
+            triggerPrint();
+          }
+        };
+
+        for (let i = 0; i < total; i++) {
+          if (images[i].complete) {
+            onDone();
+          } else {
+            images[i].onload = onDone;
+            images[i].onerror = onDone;
+          }
+        }
+        // Safety timeout in case an image hangs
+        setTimeout(() => {
+          if (!isDone) {
+            isDone = true;
+            triggerPrint();
+          }
+        }, 300);
+      } else {
+        setTimeout(triggerPrint, 120);
+      }
+    } catch (err) {
+      console.warn("[Printer] Could not print via iframe:", err);
+      fallbackToWindowPrint(htmlContent);
+      resolve(false);
+    }
+  });
+}
+
+function fallbackToWindowPrint(htmlContent: string) {
+  let printEl = document.getElementById('print-ticket-active');
+  if (!printEl) {
+    printEl = document.createElement('div');
+    printEl.id = 'print-ticket-active';
+    document.body.appendChild(printEl);
+  }
+  printEl.innerHTML = htmlContent;
+  document.body.classList.add('printing-ticket');
+
+  setTimeout(() => {
+    try {
+      window.print();
+    } catch (e) {
+      console.error("[Printer] window.print() failed:", e);
+    } finally {
+      setTimeout(() => {
+        document.body.classList.remove('printing-ticket');
+      }, 1000);
+    }
+  }, 150);
+}
+
 // System print helper for 52x90mm receipt
 export function print52x90ViaSystem(ticketData: {
   folio?: string;
@@ -557,14 +713,6 @@ export function print52x90ViaSystem(ticketData: {
   paymentMethod?: string;
   isPreAccount?: boolean;
 }): void {
-  // Ensure the single active print container exists in document
-  let printEl = document.getElementById('print-ticket-active');
-  if (!printEl) {
-    printEl = document.createElement('div');
-    printEl.id = 'print-ticket-active';
-    document.body.appendChild(printEl);
-  }
-
   let itemsSum = 0;
   const itemsList = ticketData.items && ticketData.items.length > 0 
     ? ticketData.items.map(it => {
@@ -646,7 +794,7 @@ export function print52x90ViaSystem(ticketData: {
   const dateStr = now.toLocaleDateString('es-MX', { day: '2-digit', month: '2-digit', year: 'numeric' });
   const timeStr = now.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
 
-  printEl.innerHTML = `
+  const ticketHtml = `
     <div style="text-align: center; margin-bottom: 2px;">
       <img src="/logo_las_cazuelas_del_castor.jpg" alt="Logo Las Cazuelas del Castor" style="width: 20mm; height: 20mm; border-radius: 50%; object-fit: cover; margin: 0 auto 2px auto; display: block; filter: contrast(180%) brightness(90%); -webkit-filter: contrast(180%) brightness(90%);" />
       <div style="font-weight: 900; font-size: 14.5px; line-height: 1.15; color: #000000; letter-spacing: -0.3px; font-family: Arial, sans-serif;">LAS CAZUELAS DEL CASTOR</div>
@@ -661,9 +809,7 @@ export function print52x90ViaSystem(ticketData: {
     <div style="text-align: center; font-size: 11px; margin-top: 6px; font-weight: 900; color: #000000; line-height: 1.25; font-family: Arial, sans-serif;">${footerNote}</div>
   `;
 
-  setTimeout(() => {
-    window.print();
-  }, 100);
+  printReceiptHtml(ticketHtml);
 }
 
 // Keep alias for compatibility
@@ -735,13 +881,6 @@ export function print54mmSalesReportViaSystem(report: {
   totalCard?: number;
   totalTransfer?: number;
 }): void {
-  let printEl = document.getElementById('print-ticket-active');
-  if (!printEl) {
-    printEl = document.createElement('div');
-    printEl.id = 'print-ticket-active';
-    document.body.appendChild(printEl);
-  }
-
   const net = (report.totalSales || 0) - (report.totalExpenses || 0);
   const timeStr = new Date().toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
   const dateStr = new Date().toLocaleDateString('es-MX', { day: '2-digit', month: '2-digit', year: 'numeric' });
@@ -757,7 +896,7 @@ export function print54mmSalesReportViaSystem(report: {
     `;
   }
 
-  printEl.innerHTML = `
+  const reportHtml = `
     <div style="text-align: center; margin-bottom: 2px;">
       <img src="/logo_las_cazuelas_del_castor.jpg" alt="Logo" style="width: 20mm; height: 20mm; border-radius: 50%; object-fit: cover; margin: 0 auto 2px auto; display: block; filter: contrast(180%) brightness(90%);" />
       <div style="font-weight: 900; font-size: 14px; line-height: 1.2; color: #000000; font-family: Arial, sans-serif;">LAS CAZUELAS DEL CASTOR</div>
@@ -778,7 +917,5 @@ export function print54mmSalesReportViaSystem(report: {
     <div style="text-align: center; font-size: 11px; font-weight: 900; color: #000000;">Fin de Reporte de Ventas</div>
   `;
 
-  setTimeout(() => {
-    window.print();
-  }, 100);
+  printReceiptHtml(reportHtml);
 }
