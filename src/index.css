@@ -78,8 +78,8 @@
     width: 52mm !important;
     max-width: 52mm !important;
     height: auto !important;
-    margin: 0 auto !important;
-    padding: 1mm 1mm 2mm 1mm !important;
+    margin: 0 !important;
+    padding: 0 !important;
     font-size: 12.5px !important;
     line-height: 1.25 !important;
     font-family: Arial, "Helvetica Neue", Helvetica, "Segoe UI", sans-serif !important;

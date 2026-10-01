@@ -580,13 +580,19 @@ export function printReceiptHtml(htmlContent: string): Promise<boolean> {
               size: 52mm auto;
               margin: 0;
             }
+            html, body {
+              margin: 0 !important;
+              padding: 0 !important;
+              top: 0 !important;
+              left: 0 !important;
+            }
             @media print {
               html, body {
                 width: 52mm;
                 max-width: 52mm;
                 height: auto;
-                margin: 0 auto;
-                padding: 1mm 1mm 2mm 1mm;
+                margin: 0 !important;
+                padding: 0 !important;
                 background: #fff;
                 color: #000;
                 -webkit-print-color-adjust: exact;
@@ -597,8 +603,8 @@ export function printReceiptHtml(htmlContent: string): Promise<boolean> {
               width: 52mm;
               max-width: 52mm;
               height: auto;
-              margin: 0 auto;
-              padding: 1mm 1mm 2mm 1mm;
+              margin: 0 !important;
+              padding: 0 !important;
               font-family: Arial, "Helvetica Neue", Helvetica, sans-serif;
               color: #000000;
               background: #ffffff;
@@ -796,8 +802,8 @@ export function print52x90ViaSystem(ticketData: {
   const timeStr = now.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
 
   const ticketHtml = `
-    <div style="width: 52mm; max-width: 52mm; height: auto; margin: 0 auto; padding: 0 1mm; box-sizing: border-box; font-family: Arial, sans-serif;">
-      <div style="text-align: center; margin-bottom: 2px;">
+    <div style="width: 52mm; max-width: 52mm; height: auto; margin: 0; padding: 0 0.5mm; box-sizing: border-box; font-family: Arial, sans-serif;">
+      <div style="text-align: center; margin-top: 0; margin-bottom: 2px; padding-top: 0;">
         <img src="/logo_las_cazuelas_del_castor.jpg" alt="Logo Las Cazuelas del Castor" style="width: 18mm; height: 18mm; border-radius: 50%; object-fit: cover; margin: 0 auto 2px auto; display: block; filter: contrast(180%) brightness(90%); -webkit-filter: contrast(180%) brightness(90%);" />
         <div style="font-weight: 900; font-size: 13.5px; line-height: 1.15; color: #000000; letter-spacing: -0.3px; font-family: Arial, sans-serif;">LAS CAZUELAS DEL CASTOR</div>
         ${preAccountHeader}
