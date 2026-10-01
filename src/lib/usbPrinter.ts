@@ -420,7 +420,7 @@ export function build52x90TicketBytes(order: {
   let itemsBody = "";
   let itemsSum = 0;
   if (order.items && Array.isArray(order.items) && order.items.length > 0) {
-    order.items.slice(0, 15).forEach(item => {
+    order.items.forEach(item => {
       const extraStr = item.hasExtraCheese ? '+Q' : '';
       const lineTotal = (item.price || 0) * (item.quantity || 1);
       itemsSum += lineTotal;
@@ -428,9 +428,6 @@ export function build52x90TicketBytes(order: {
       const rightCol = `$${lineTotal.toFixed(0)}`;
       itemsBody += format30Columns(leftCol, rightCol);
     });
-    if (order.items.length > 15) {
-      itemsBody += `...y ${order.items.length - 15} mas\n`;
-    }
   } else {
     itemsBody = "Consumo General\n";
     itemsSum = order.total || 0;
@@ -510,12 +507,12 @@ export async function printUsbTestTicket(): Promise<void> {
       GS + '\x21\x01' +
       "LAS CAZUELAS DEL CASTOR\n" +
       GS + '\x21\x00' +
-      "PRUEBA TICKET 52X90\n" +
+      "PRUEBA TICKET 52MM\n" +
       `Fecha: ${new Date().toLocaleDateString('es-MX')}\n` +
       "------------------------------\n" +   // 30 dashes
       ESC + '\x61\x00' +                  // Left
       format30Columns("Canal:", "Cable USB") +
-      format30Columns("Formato:", "52x90 mm") +
+      format30Columns("Formato:", "52mm Térmico") +
       format30Columns("Estado:", "Conectado OK") +
       "------------------------------\n" +
       ESC + '\x45\x01' +
@@ -580,14 +577,16 @@ export function printReceiptHtml(htmlContent: string): Promise<boolean> {
           <title>Recibo Las Cazuelas del Castor</title>
           <style>
             @page {
-              size: 58mm auto;
-              margin: 2mm;
+              size: 52mm auto;
+              margin: 0;
             }
             @media print {
               html, body {
-                width: 54mm;
+                width: 52mm;
+                max-width: 52mm;
+                height: auto;
                 margin: 0 auto;
-                padding: 0;
+                padding: 1mm 1mm 2mm 1mm;
                 background: #fff;
                 color: #000;
                 -webkit-print-color-adjust: exact;
@@ -595,9 +594,11 @@ export function printReceiptHtml(htmlContent: string): Promise<boolean> {
               }
             }
             body {
-              width: 54mm;
+              width: 52mm;
+              max-width: 52mm;
+              height: auto;
               margin: 0 auto;
-              padding: 1.5mm 1mm;
+              padding: 1mm 1mm 2mm 1mm;
               font-family: Arial, "Helvetica Neue", Helvetica, sans-serif;
               color: #000000;
               background: #ffffff;
@@ -720,15 +721,15 @@ export function print52x90ViaSystem(ticketData: {
         itemsSum += lineTotal;
         const extraNote = it.hasExtraCheese ? ' (+Q)' : '';
         return `
-          <div style="display: flex; justify-content: space-between; align-items: baseline; font-size: 13px; margin: 3px 0; line-height: 1.25; color: #000000; font-family: Arial, sans-serif;">
-            <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 37mm; font-weight: 800; color: #000000;">
-              <strong style="font-size: 14px; font-weight: 900; color: #000000;">${it.quantity}x</strong> ${it.name}${extraNote}
+          <div style="display: flex; justify-content: space-between; align-items: flex-start; font-size: 12px; margin: 2.5px 0; line-height: 1.25; color: #000000; font-family: Arial, sans-serif;">
+            <span style="font-weight: 800; color: #000000; flex: 1; padding-right: 4px; word-break: break-word;">
+              <strong style="font-size: 13px; font-weight: 900; color: #000000;">${it.quantity}x</strong> ${it.name}${extraNote}
             </span>
-            <span style="font-weight: 900; font-size: 13.5px; color: #000000; margin-left: 2px;">$${lineTotal.toFixed(0)}</span>
+            <span style="font-weight: 900; font-size: 12.5px; color: #000000; white-space: nowrap; margin-left: 2px;">$${lineTotal.toFixed(0)}</span>
           </div>
         `;
       }).join('')
-    : '<div style="text-align: center; font-size: 13px; font-weight: bold; color: #000000;">Consumo General</div>';
+    : '<div style="text-align: center; font-size: 12px; font-weight: bold; color: #000000;">Consumo General</div>';
 
   if (!itemsSum) itemsSum = ticketData.total || 0;
 
@@ -739,7 +740,7 @@ export function print52x90ViaSystem(ticketData: {
   const cardTotalVal = subtotalVal + calculatedCardFee;
 
   const preAccountHeader = ticketData.isPreAccount 
-    ? '<div style="font-weight: 900; font-size: 12px; margin-top: 2px; text-transform: uppercase; border: 2px solid #000000; padding: 2px 4px; display: inline-block; color: #000000;">PRE-CUENTA / PENDIENTE</div>'
+    ? '<div style="font-weight: 900; font-size: 11px; margin-top: 2px; text-transform: uppercase; border: 1.5px solid #000000; padding: 1.5px 3px; display: inline-block; color: #000000;">PRE-CUENTA / PENDIENTE</div>'
     : '';
 
   const footerNote = ticketData.isPreAccount
@@ -749,41 +750,41 @@ export function print52x90ViaSystem(ticketData: {
   let totalsHtml = "";
   if (ticketData.isPreAccount) {
     totalsHtml = `
-      <div style="display: flex; justify-content: space-between; font-size: 12.5px; font-weight: 800; color: #000000; margin-bottom: 2px;">
+      <div style="display: flex; justify-content: space-between; font-size: 12px; font-weight: 800; color: #000000; margin-bottom: 2px;">
         <span>Subtotal (Efectivo):</span>
         <span>$${subtotalVal.toFixed(2)}</span>
       </div>
-      <div style="display: flex; justify-content: space-between; font-size: 12.5px; font-weight: 800; color: #000000; margin-bottom: 2px;">
+      <div style="display: flex; justify-content: space-between; font-size: 12px; font-weight: 800; color: #000000; margin-bottom: 2px;">
         <span>Comisión Tarjeta (4%):</span>
         <span>+$${calculatedCardFee.toFixed(2)}</span>
       </div>
-      <div style="display: flex; justify-content: space-between; font-size: 13px; font-weight: 900; color: #000000; margin-bottom: 3px; border-bottom: 1.5px dashed #000000; padding-bottom: 2px;">
+      <div style="display: flex; justify-content: space-between; font-size: 12.5px; font-weight: 900; color: #000000; margin-bottom: 2px; border-bottom: 1.5px dashed #000000; padding-bottom: 2px;">
         <span>TOTAL C/ TARJETA:</span>
         <span>$${cardTotalVal.toFixed(2)}</span>
       </div>
-      <div style="display: flex; justify-content: space-between; font-weight: 900; font-size: 16px; margin-top: 4px; border-top: 2px solid #000000; padding-top: 3px; color: #000000;">
+      <div style="display: flex; justify-content: space-between; font-weight: 900; font-size: 15px; margin-top: 3px; border-top: 2px solid #000000; padding-top: 2px; color: #000000;">
         <span>TOTAL A PAGAR:</span>
         <span>$${(ticketData.total || subtotalVal).toFixed(2)}</span>
       </div>
     `;
   } else if (ticketData.paymentMethod === 'card' || (ticketData.cardFee && ticketData.cardFee > 0)) {
     totalsHtml = `
-      <div style="display: flex; justify-content: space-between; font-size: 12.5px; font-weight: 800; color: #000000; margin-bottom: 2px;">
+      <div style="display: flex; justify-content: space-between; font-size: 12px; font-weight: 800; color: #000000; margin-bottom: 2px;">
         <span>Subtotal:</span>
         <span>$${subtotalVal.toFixed(2)}</span>
       </div>
-      <div style="display: flex; justify-content: space-between; font-size: 12.5px; font-weight: 800; color: #000000; margin-bottom: 2px;">
+      <div style="display: flex; justify-content: space-between; font-size: 12px; font-weight: 800; color: #000000; margin-bottom: 2px;">
         <span>Comisión Tarjeta (4%):</span>
         <span>+$${calculatedCardFee.toFixed(2)}</span>
       </div>
-      <div style="display: flex; justify-content: space-between; font-weight: 900; font-size: 16px; border-top: 2px solid #000000; padding-top: 4px; color: #000000;">
+      <div style="display: flex; justify-content: space-between; font-weight: 900; font-size: 15px; border-top: 2px solid #000000; padding-top: 3px; color: #000000;">
         <span>TOTAL TARJETA:</span>
         <span>$${(ticketData.total || cardTotalVal).toFixed(2)}</span>
       </div>
     `;
   } else {
     totalsHtml = `
-      <div style="display: flex; justify-content: space-between; font-weight: 900; font-size: 16px; border-top: 2px solid #000000; padding-top: 4px; color: #000000;">
+      <div style="display: flex; justify-content: space-between; font-weight: 900; font-size: 15px; border-top: 2px solid #000000; padding-top: 3px; color: #000000;">
         <span>TOTAL:</span>
         <span>$${(ticketData.total || subtotalVal).toFixed(2)}</span>
       </div>
@@ -795,18 +796,20 @@ export function print52x90ViaSystem(ticketData: {
   const timeStr = now.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
 
   const ticketHtml = `
-    <div style="text-align: center; margin-bottom: 2px;">
-      <img src="/logo_las_cazuelas_del_castor.jpg" alt="Logo Las Cazuelas del Castor" style="width: 20mm; height: 20mm; border-radius: 50%; object-fit: cover; margin: 0 auto 2px auto; display: block; filter: contrast(180%) brightness(90%); -webkit-filter: contrast(180%) brightness(90%);" />
-      <div style="font-weight: 900; font-size: 14.5px; line-height: 1.15; color: #000000; letter-spacing: -0.3px; font-family: Arial, sans-serif;">LAS CAZUELAS DEL CASTOR</div>
-      ${preAccountHeader}
+    <div style="width: 52mm; max-width: 52mm; height: auto; margin: 0 auto; padding: 0 1mm; box-sizing: border-box; font-family: Arial, sans-serif;">
+      <div style="text-align: center; margin-bottom: 2px;">
+        <img src="/logo_las_cazuelas_del_castor.jpg" alt="Logo Las Cazuelas del Castor" style="width: 18mm; height: 18mm; border-radius: 50%; object-fit: cover; margin: 0 auto 2px auto; display: block; filter: contrast(180%) brightness(90%); -webkit-filter: contrast(180%) brightness(90%);" />
+        <div style="font-weight: 900; font-size: 13.5px; line-height: 1.15; color: #000000; letter-spacing: -0.3px; font-family: Arial, sans-serif;">LAS CAZUELAS DEL CASTOR</div>
+        ${preAccountHeader}
+      </div>
+      <div style="text-align: center; font-size: 12px; font-weight: 900; margin-top: 2px; color: #000000; font-family: Arial, sans-serif;">FOLIO:#${ticketData.folio || '0001'} | ${ticketData.tableNumber || 'MESA'}</div>
+      <div style="text-align: center; font-size: 11.5px; font-weight: 800; margin-top: 1px; color: #000000; font-family: Arial, sans-serif;">FECHA: ${dateStr} ${timeStr}</div>
+      <div style="border-top: 1.5px dashed #000000; margin: 3px 0;"></div>
+      <div>${itemsList}</div>
+      <div style="border-top: 1.5px dashed #000000; margin: 3px 0;"></div>
+      ${totalsHtml}
+      <div style="text-align: center; font-size: 10.5px; margin-top: 4px; font-weight: 900; color: #000000; line-height: 1.25; font-family: Arial, sans-serif;">${footerNote}</div>
     </div>
-    <div style="text-align: center; font-size: 13px; font-weight: 900; margin-top: 2px; color: #000000; font-family: Arial, sans-serif;">FOLIO:#${ticketData.folio || '0001'} | ${ticketData.tableNumber || 'MESA'}</div>
-    <div style="text-align: center; font-size: 12px; font-weight: 800; margin-top: 1px; color: #000000; font-family: Arial, sans-serif;">FECHA: ${dateStr} ${timeStr}</div>
-    <div style="border-top: 2px dashed #000000; margin: 4px 0;"></div>
-    <div>${itemsList}</div>
-    <div style="border-top: 2px dashed #000000; margin: 4px 0;"></div>
-    ${totalsHtml}
-    <div style="text-align: center; font-size: 11px; margin-top: 6px; font-weight: 900; color: #000000; line-height: 1.25; font-family: Arial, sans-serif;">${footerNote}</div>
   `;
 
   printReceiptHtml(ticketHtml);

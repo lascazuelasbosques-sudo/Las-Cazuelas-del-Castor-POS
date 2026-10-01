@@ -568,16 +568,16 @@ export const Navbar = ({
         {/* Lock Screen Button */}
         <FullScreenLockControl />
 
-        {/* USB Cable Printer Button (52x90mm Direct) & Quick Reconnect */}
+        {/* USB Cable Printer Button (52mm Direct) & Quick Reconnect */}
         <div className="flex items-center gap-1.5 w-full">
           <Button 
             variant="outline" 
             className="justify-center lg:justify-start gap-2 w-full border-amber-300/80 bg-amber-50 text-amber-900 hover:bg-amber-100 px-0 lg:px-3 h-[36px] rounded-xl text-xs font-bold transition-all shadow-sm flex-1"
-            title="Impresora Directa por Cable USB (52x90mm)"
+            title="Impresora Directa por Cable USB (52mm Térmico)"
             onClick={() => setIsUsbModalOpen(true)}
           >
             <Usb size={16} className="text-amber-700 shrink-0" />
-            <span className="hidden lg:inline">Impresora USB (52x90)</span>
+            <span className="hidden lg:inline">Impresora USB (52mm)</span>
           </Button>
 
           <Button

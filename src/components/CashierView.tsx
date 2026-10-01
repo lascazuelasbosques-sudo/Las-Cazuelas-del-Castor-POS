@@ -7541,7 +7541,7 @@ const safeParseDate = (timestamp: any): Date => {
                   }}
                 >
                   <Printer size={15} className="text-mex-brown" />
-                  Imprimir Ticket (52x90mm)
+                  Imprimir Ticket (52mm)
                 </Button>
 
                 <Button
