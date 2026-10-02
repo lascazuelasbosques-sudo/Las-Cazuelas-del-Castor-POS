@@ -9,7 +9,16 @@ import { getFirestore } from "firebase-admin/firestore";
 
 dotenv.config();
 
-const PORT = 3000;
+// Support PORT from CLI arguments (--port 3000) or process.env.PORT, default to 3000
+let portNumber = 3000;
+if (process.env.PORT) {
+  portNumber = parseInt(process.env.PORT, 10) || 3000;
+}
+const portArgIndex = process.argv.indexOf("--port");
+if (portArgIndex !== -1 && process.argv[portArgIndex + 1]) {
+  portNumber = parseInt(process.argv[portArgIndex + 1], 10) || portNumber;
+}
+const PORT = portNumber;
 
 // Read Firebase Config safely from project root
 const configPath = path.join(process.cwd(), "firebase-applet-config.json");
@@ -18,7 +27,7 @@ try {
   if (fs.existsSync(configPath)) {
     firebaseConfig = JSON.parse(fs.readFileSync(configPath, "utf-8"));
   } else {
-    console.warn("firebase-applet-config.json not found. Firestore background listener disabled.");
+    console.warn("firebase-applet-config.json not found.");
   }
 } catch (err) {
   console.error("Error reading firebase-applet-config.json:", err);
@@ -152,73 +161,37 @@ async function startServer() {
     }
   });
 
-  // --- BACKGROUND ROUTINE: FIRESTORE LIVE AUDIT LISTENER ---
-  if (firebaseConfig.projectId) {
-    try {
-      // Initialize Firebase Admin App if not already initialized
-      if (getApps().length === 0) {
-        initializeApp({
-          projectId: firebaseConfig.projectId,
-        });
-      }
-      // Use firestore database ID from configuration
-      const db = getFirestore(firebaseConfig.firestoreDatabaseId);
-
-      // We establish a marker time when the server booted to ignore old transactions.
-      const serverStartTime = new Date().toISOString();
-      console.log(`[Segundo Plano] Rutina iniciada a las ${new Date().toLocaleString("es-MX")}. Ignorando movimientos anteriores a: ${serverStartTime}`);
-
-      const processedLogs = new Set<string>();
-
-      // Listen to cashLogs collection
-      const cashLogsCol = db.collection("cashLogs");
-      const logsQuery = cashLogsCol.orderBy("timestamp", "desc").limit(10);
-
-      logsQuery.onSnapshot((snapshot) => {
-        snapshot.docChanges().forEach((change) => {
-          if (change.type === "added") {
-            const docId = change.doc.id;
-            const data = change.doc.data();
-            
-            // Skip if already processed
-            if (processedLogs.has(docId)) return;
-            processedLogs.add(docId);
-
-            // Skip records that were created before the server started
-            if (!data.timestamp || data.timestamp < serverStartTime) {
-              return;
-            }
-
-            // Do not send email notification for comandas / orders sent to caja or paid
-            if (data.orderIds && data.orderIds.length > 0) {
-              console.log(`[Segundo Plano] Omitiendo correo para comanda / cobro de pedido ID: ${docId}`);
-              return;
-            }
-
-            console.log(`[Segundo Plano] ¡Nuevo movimiento detectado! ID: ${docId}, Tipo: ${data.type}, Monto: ${data.amount}`);
-            
-            // Execute email dispatch in the background
-            sendMovementEmail(docId, data).catch((err) => {
-              console.warn(`[Segundo Plano] Advertencia procesando correo para ${docId}:`, err);
-            });
-          }
-        });
-      }, (err) => {
-        console.error("[Segundo Plano] Error en el listener de Firestore:", err);
-      });
-
-    } catch (fbErr) {
-      console.error("[Segundo Plano] Error inicializando listener de Firebase:", fbErr);
-    }
-  }
-
   // Vite middleware setup (Required for AI Studio Preview Routing)
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: { 
+        middlewareMode: true,
+        hmr: false
+      },
       appType: "spa",
     });
     app.use(vite.middlewares);
+
+    // Ensure SPA fallback serves transformed index.html
+    app.use("*", async (req, res, next) => {
+      if (req.originalUrl.startsWith("/api")) {
+        return next();
+      }
+      try {
+        const url = req.originalUrl;
+        const indexPath = path.resolve(process.cwd(), "index.html");
+        if (fs.existsSync(indexPath)) {
+          let template = fs.readFileSync(indexPath, "utf-8");
+          template = await vite.transformIndexHtml(url, template);
+          res.status(200).set({ "Content-Type": "text/html" }).end(template);
+        } else {
+          next();
+        }
+      } catch (e: any) {
+        vite.ssrFixStacktrace(e);
+        next(e);
+      }
+    });
   } else {
     const distPath = fs.existsSync(path.join(process.cwd(), "dist", "index.html"))
       ? path.join(process.cwd(), "dist")
@@ -230,8 +203,47 @@ async function startServer() {
   }
 
   app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on http://localhost:${PORT}`);
+    console.log(`Server running on http://0.0.0.0:${PORT}`);
   });
+
+  // --- OPTIONAL BACKGROUND ROUTINE: FIRESTORE LIVE AUDIT LISTENER ---
+  // Only attempt if explicit service account or ADC credentials exist
+  if (firebaseConfig.projectId && (process.env.GOOGLE_APPLICATION_CREDENTIALS || process.env.FIREBASE_CONFIG)) {
+    try {
+      if (getApps().length === 0) {
+        initializeApp({
+          projectId: firebaseConfig.projectId,
+        });
+      }
+      const db = getFirestore(firebaseConfig.firestoreDatabaseId);
+      const serverStartTime = new Date().toISOString();
+      const processedLogs = new Set<string>();
+
+      const cashLogsCol = db.collection("cashLogs");
+      const logsQuery = cashLogsCol.orderBy("timestamp", "desc").limit(10);
+
+      logsQuery.onSnapshot((snapshot) => {
+        snapshot.docChanges().forEach((change) => {
+          if (change.type === "added") {
+            const docId = change.doc.id;
+            const data = change.doc.data();
+            if (processedLogs.has(docId)) return;
+            processedLogs.add(docId);
+            if (!data.timestamp || data.timestamp < serverStartTime) return;
+            if (data.orderIds && data.orderIds.length > 0) return;
+
+            sendMovementEmail(docId, data).catch((err) => {
+              console.warn(`[Segundo Plano] Advertencia procesando correo para ${docId}:`, err);
+            });
+          }
+        });
+      }, (err) => {
+        console.warn("[Segundo Plano] Aviso: listener de Firestore en segundo plano no disponible:", err.message);
+      });
+    } catch (fbErr: any) {
+      console.warn("[Segundo Plano] Aviso: Firebase Admin omitido en servidor:", fbErr.message);
+    }
+  }
 }
 
 const sentEmailLogIds = new Set<string>();
