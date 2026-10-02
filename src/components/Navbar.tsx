@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Utensils, ClipboardList, Package, CreditCard, Settings, LogOut, Menu, ChefHat, MessageSquare, Bell, Maximize2, Minimize2, Radio, Printer, Usb, HelpCircle, Power } from "lucide-react";
+import { Utensils, ClipboardList, Package, CreditCard, Settings, LogOut, Menu, ChefHat, MessageSquare, Bell, Maximize2, Minimize2, Radio, Printer, Usb, HelpCircle, Power, Monitor, Smartphone } from "lucide-react";
 import { Button } from "./Button";
 import { cn, getRoleLabel } from "@/src/lib/utils";
 import { auth, db } from "../firebase";
@@ -20,6 +20,7 @@ import {
   toggleSimulateOffline, 
   syncOfflineData 
 } from "../lib/offlineService";
+import { useDeviceMode } from "../lib/useDeviceMode";
 
 interface NavbarProps {
   activeTab: string;
@@ -289,28 +290,16 @@ export const Navbar = ({
   }, []);
 
   const [imageError, setImageError] = useState(false);
-  const [isPC, setIsPC] = useState(false);
+  const { isPC, isTouch, preference, setPreference, cycleDeviceMode } = useDeviceMode();
   const logoUrl = branding.logoUrl;
 
-  useEffect(() => {
-    const checkDevice = () => {
-      const isWideScreen = window.innerWidth >= 1024;
-      const userAgentMobile = /Mobi|Android|iPhone|iPad|iPod|Windows Phone/i.test(navigator.userAgent);
-      setIsPC(isWideScreen && !userAgentMobile);
-    };
-
-    checkDevice();
-    window.addEventListener('resize', checkDevice);
-    return () => window.removeEventListener('resize', checkDevice);
-  }, []);
-
   const navItems = [
-    { id: 'orders', label: 'Pedidos', icon: Utensils, roles: ['admin', 'waiter', 'cashier', 'kitchen', 'parrilla'] },
-    { id: 'whatsapp', label: 'WhatsApp', icon: MessageSquare, roles: ['admin', 'cashier', 'waiter'] },
-    { id: 'kitchen', label: userRole === 'parrilla' ? 'Parrilla' : 'Cocina', icon: ClipboardList, roles: ['admin', 'kitchen', 'parrilla'] },
-    { id: 'inventory', label: 'Comidas', icon: ChefHat, roles: ['admin', 'kitchen', 'parrilla', 'cashier', 'waiter'] },
-    { id: 'cash', label: 'Caja', icon: CreditCard, roles: ['admin', 'cashier', 'waiter'] },
-    { id: 'admin', label: 'Admin', icon: Settings, roles: ['admin'] },
+    { id: 'orders', label: 'Pedidos', icon: Utensils, roles: ['admin', 'waiter', 'cashier', 'kitchen', 'parrilla'], shortcut: 'Alt+1' },
+    { id: 'whatsapp', label: 'WhatsApp', icon: MessageSquare, roles: ['admin', 'cashier', 'waiter'], shortcut: 'Alt+5' },
+    { id: 'kitchen', label: userRole === 'parrilla' ? 'Parrilla' : 'Cocina', icon: ClipboardList, roles: ['admin', 'kitchen', 'parrilla'], shortcut: 'Alt+2' },
+    { id: 'inventory', label: 'Comidas', icon: ChefHat, roles: ['admin', 'kitchen', 'parrilla', 'cashier', 'waiter'], shortcut: 'Alt+4' },
+    { id: 'cash', label: 'Caja', icon: CreditCard, roles: ['admin', 'cashier', 'waiter'], shortcut: 'Alt+3' },
+    { id: 'admin', label: 'Admin', icon: Settings, roles: ['admin'], shortcut: 'Alt+6' },
   ];
 
   const filteredItems = navItems.filter(item => item.roles.includes(userRole));
@@ -410,12 +399,30 @@ export const Navbar = ({
               )}>
                 {item.label}
               </span>
+              {item.shortcut && (
+                <span className="hidden xl:inline text-[9px] font-mono text-stone-400 bg-stone-100/90 px-1 py-0.5 rounded ml-auto border border-stone-200/50">
+                  {item.shortcut}
+                </span>
+              )}
             </button>
           ))}
         </div>
 
         {/* Dynamic scroll indicators / Actions on mobile */}
         <div className="flex md:hidden items-center gap-1 pl-2 border-l border-stone-200 shrink-0">
+          {/* Quick Device Mode Toggle on Mobile */}
+          <button
+            onClick={() => {
+              cycleDeviceMode();
+              toast(isPC ? "Cambiado a Modo Táctil / Móvil" : "Cambiado a Modo PC / Escritorio", { icon: isPC ? '📱' : '🖥️' });
+            }}
+            className="flex flex-col items-center gap-1 p-2 rounded-xl text-stone-600 hover:bg-stone-50 shrink-0"
+            title="Cambiar Modo de Interfaz (PC / Móvil)"
+          >
+            {isPC ? <Monitor size={20} className="text-stone-800" /> : <Smartphone size={20} className="text-mex-green" />}
+            <span className="text-[9px] font-extrabold whitespace-nowrap">{isPC ? "Modo PC" : "Modo Touch"}</span>
+          </button>
+
           <WeatherClockWidget compact />
           <FullScreenLockControl compact />
 
@@ -514,6 +521,66 @@ export const Navbar = ({
           {isFullscreen ? <Minimize2 size={16} className="text-mex-gold" /> : <Maximize2 size={16} className="text-mex-green" />}
           <span className="hidden lg:inline">{isFullscreen ? "Ventana Normal" : "Pantalla Completa"}</span>
         </Button>
+
+        {/* Device Interface Mode Switcher (PC Mouse vs Touch Screen) */}
+        <div className="p-2 bg-stone-50 border border-stone-200/80 rounded-xl text-left w-full hidden md:block">
+          <div className="flex items-center justify-between mb-1.5 px-0.5">
+            <span className="text-[9px] uppercase font-black text-stone-500 tracking-wider">Interfaz</span>
+            <span className="text-[9px] font-bold text-stone-500">
+              {preference === 'auto' ? `Auto: ${isPC ? 'PC' : 'Touch'}` : isPC ? 'PC Forzado' : 'Touch Forzado'}
+            </span>
+          </div>
+          <div className="grid grid-cols-2 gap-1">
+            <button
+              type="button"
+              onClick={() => {
+                setPreference('pc');
+                toast.success("Modo PC: Optimizado para mouse y teclado", { icon: '🖥️' });
+              }}
+              className={cn(
+                "flex items-center justify-center gap-1.5 py-1.5 px-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer border",
+                isPC 
+                  ? "bg-stone-900 text-white border-stone-900 shadow-sm" 
+                  : "bg-white text-stone-600 border-stone-200 hover:bg-stone-100"
+              )}
+              title="Diseño optimizado para PC con Mouse, Teclado y Pantalla Ancha"
+            >
+              <Monitor size={12} />
+              <span className="hidden lg:inline">PC / Mouse</span>
+              <span className="lg:hidden">PC</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setPreference('mobile');
+                toast.success("Modo Táctil: Botones amplios para pantalla touch", { icon: '📱' });
+              }}
+              className={cn(
+                "flex items-center justify-center gap-1.5 py-1.5 px-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer border",
+                !isPC 
+                  ? "bg-mex-green text-white border-mex-green shadow-sm" 
+                  : "bg-white text-stone-600 border-stone-200 hover:bg-stone-100"
+              )}
+              title="Diseño optimizado para Pantallas Táctiles (Touchscreen y Móviles)"
+            >
+              <Smartphone size={12} />
+              <span className="hidden lg:inline">Táctil / Touch</span>
+              <span className="lg:hidden">Touch</span>
+            </button>
+          </div>
+          {preference !== 'auto' && (
+            <button
+              type="button"
+              onClick={() => {
+                setPreference('auto');
+                toast("Detección Automática de Dispositivo activada", { icon: '🔄' });
+              }}
+              className="w-full mt-1.5 text-[8px] font-bold text-center text-stone-400 hover:text-stone-700 underline uppercase tracking-wider cursor-pointer border-none bg-transparent"
+            >
+              Restablecer a Detección Automática
+            </button>
+          )}
+        </div>
 
         {/* Offline Sync Controls */}
         <div className="p-2 bg-stone-50 border border-stone-200/60 rounded-xl text-left w-full hidden md:block">

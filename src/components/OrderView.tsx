@@ -21,6 +21,7 @@ import { handleFirestoreError, OperationType } from "../lib/firestoreErrorHandle
 import { getFallbackProductImage } from "../lib/presetImages";
 import { checkIsBistec } from "../lib/orderUtils";
 import { isDrinkItem } from "../lib/drinkUtils";
+import { useDeviceMode } from "../lib/useDeviceMode";
 
 interface OrderViewProps {
   orderToEdit?: Order | null;
@@ -29,6 +30,7 @@ interface OrderViewProps {
 }
 
 export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }: OrderViewProps) => {
+  const { isPC, isTouch } = useDeviceMode();
   const getLoggedUserForLog = () => {
     let waiterName = "Mesero";
     try {
@@ -664,20 +666,31 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
   }
 
   return (
-    <div className="flex flex-col h-full md:flex-row overflow-hidden relative bg-mex-cream">
+    <div className={cn(
+      "flex flex-col h-full md:flex-row overflow-hidden relative bg-mex-cream",
+      isPC && "border-none"
+    )}>
       {/* Products Section */}
-      <div className="flex-1 flex flex-col p-3 md:p-6 min-h-0 overflow-hidden">
-        <div className="flex flex-col gap-3 mb-4 md:mb-6 shrink-0">
+      <div className={cn(
+        "flex-1 flex flex-col min-h-0 overflow-hidden",
+        isPC ? "p-3 md:p-5 lg:p-6" : "p-2.5 sm:p-4"
+      )}>
+        <div className="flex flex-col gap-2.5 mb-3 md:mb-5 shrink-0">
           <div className="flex gap-2 w-full">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" size={18} />
               <input 
                 type="text" 
-                placeholder="Buscar antojito..." 
+                placeholder={isPC ? "Buscar antojito... (Presiona / para buscar)" : "Buscar antojito..."} 
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-3 rounded-xl border border-stone-200 focus:outline-none focus:ring-2 focus:ring-mex-green/20 text-sm md:text-base shadow-sm bg-white font-medium"
+                className="w-full pl-10 pr-12 py-2.5 md:py-3 rounded-xl border border-stone-200 focus:outline-none focus:ring-2 focus:ring-mex-green/20 text-sm md:text-base shadow-sm bg-white font-medium"
               />
+              {isPC && !searchQuery && (
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-mono font-bold text-stone-400 bg-stone-100 px-1.5 py-0.5 rounded border border-stone-200 pointer-events-none">
+                  /
+                </span>
+              )}
             </div>
             {/* View Mode Switcher (Grid/List) */}
             <div className="flex bg-white rounded-xl border border-stone-200 p-1 shadow-sm shrink-0">
@@ -902,7 +915,12 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
 
               if (viewMode === 'grid') {
                 return (
-                  <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-4 pb-12">
+                  <div className={cn(
+                    "grid gap-2.5 sm:gap-3 md:gap-3.5 pb-12",
+                    isPC 
+                      ? "grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6" 
+                      : "grid-cols-2 sm:grid-cols-3 md:grid-cols-3"
+                  )}>
                     {currentProducts.map(product => {
                       const qty = getProductCartCount(product.id);
                       const requiresCustomization = isCustomizableProduct(product);
@@ -1174,7 +1192,10 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
 
       {/* Cart Section */}
       <div className={cn(
-        "fixed inset-0 z-[60] bg-white flex flex-col transition-transform duration-300 md:relative md:inset-auto md:translate-x-0 md:w-80 lg:w-96 md:border-l md:border-stone-200 md:shadow-xl",
+        "fixed inset-0 z-[60] bg-white flex flex-col transition-transform duration-300 md:relative md:inset-auto md:translate-x-0 md:border-l md:border-stone-200 md:shadow-xl",
+        isPC 
+          ? "md:w-88 lg:w-96 xl:w-[410px] 2xl:w-[440px]" 
+          : "md:w-80 lg:w-96",
         showCartMobile ? "translate-x-0" : "translate-x-full md:translate-x-0"
       )}>
         <div className="p-4 border-b border-stone-100 flex flex-col gap-3 bg-stone-50 shrink-0">

@@ -20,6 +20,7 @@ import {
   deleteOfflineDoc,
   onOfflineSnapshot 
 } from "../lib/offlineService";
+import { useDeviceMode } from "../lib/useDeviceMode";
 
 import html2pdf from "html2pdf.js";
 import { jsPDF } from "jspdf";
@@ -64,6 +65,7 @@ interface CashierViewProps {
 }
 
 export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewProps) => {
+  const { isPC, isTouch } = useDeviceMode();
   const getLoggedUserName = () => {
     let name = "Usuario";
     try {
@@ -2878,14 +2880,19 @@ const safeParseDate = (timestamp: any): Date => {
   }
 
   return (
-    <div className="p-4 md:p-8 h-full overflow-hidden flex flex-col bg-mex-cream">
-      <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 mb-6 md:mb-8 shrink-0">
-        <div className="flex flex-col sm:flex-row sm:items-center gap-4 md:gap-6">
+    <div className={cn(
+      "h-full overflow-hidden flex flex-col bg-mex-cream",
+      isPC ? "p-3 sm:p-5 lg:p-6" : "p-2.5 sm:p-4"
+    )}>
+      <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-3 mb-4 md:mb-6 shrink-0">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3 md:gap-5">
           <div>
             <h1 className="text-2xl md:text-3xl font-serif text-mex-brown">Caja y Cobros</h1>
-            <div className="flex items-center gap-2 mt-1">
+            <div className="flex items-center gap-2 mt-0.5">
               <div className="w-2 h-2 rounded-full bg-mex-green" />
-              <p className="text-[10px] text-stone-500 uppercase font-bold tracking-widest">Estado: Turno Abierto</p>
+              <p className="text-[10px] text-stone-500 uppercase font-bold tracking-widest">
+                Estado: Turno Abierto {isPC && <span className="text-stone-400 font-normal">· Modo PC</span>}
+              </p>
             </div>
           </div>
 
@@ -2896,84 +2903,90 @@ const safeParseDate = (timestamp: any): Date => {
               type="button"
               onClick={() => setCurrentMainTab('checkout')}
               className={cn(
-                "flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black tracking-wider uppercase transition-all cursor-pointer",
+                "flex items-center gap-2 px-3.5 py-2 rounded-xl text-[10px] font-black tracking-wider uppercase transition-all cursor-pointer",
                 currentMainTab === 'checkout'
                   ? "bg-stone-900 text-white shadow-md shadow-black/10 animate-in fade-in duration-200"
                   : "text-stone-500 hover:text-stone-700 hover:bg-stone-100/30"
               )}
             >
               <CreditCard size={14} />
-              COBROS Y MESAS
+              <span>COBROS Y MESAS</span>
             </button>
             <button
               id="tab-reportes"
               type="button"
               onClick={() => setCurrentMainTab('reports')}
               className={cn(
-                "flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black tracking-wider uppercase transition-all cursor-pointer",
+                "flex items-center gap-2 px-3.5 py-2 rounded-xl text-[10px] font-black tracking-wider uppercase transition-all cursor-pointer",
                 currentMainTab === 'reports'
                   ? "bg-mex-brown text-white shadow-md shadow-mex-brown/10 animate-in fade-in duration-200"
                   : "text-stone-500 hover:text-stone-750 hover:bg-stone-100/30"
               )}
             >
               <BarChart3 size={14} />
-              REPORTES Y FLUJO
+              <span>REPORTES Y FLUJO</span>
             </button>
           </div>
         </div>
         <div className="flex gap-2 w-full sm:w-auto overflow-x-auto no-scrollbar pb-1">
           <Button 
             variant="outline" 
-            className="flex-1 sm:flex-none gap-2 h-11 text-xs bg-white text-purple-700 hover:bg-purple-50 hover:text-purple-805 border-purple-100 shadow-sm whitespace-nowrap cursor-pointer font-bold"
+            className="flex-1 sm:flex-none gap-2 h-10 md:h-11 text-xs bg-white text-purple-700 hover:bg-purple-50 hover:text-purple-805 border-purple-100 shadow-sm whitespace-nowrap cursor-pointer font-bold"
             onClick={() => {
               // Default to 'opening' if opening cash is 0, otherwise 'partial'
               setAuditType(sessionOpeningCash === 0 ? 'opening' : 'partial');
               setShowAuditModal(true);
             }}
           >
-            <Calculator size={18} />
-            Arqueo
+            <Calculator size={17} />
+            <span>Arqueo</span>
+            {isPC && <span className="hidden xl:inline text-[9px] font-mono text-purple-500 bg-purple-50 px-1 py-0.5 rounded border border-purple-100">Alt+A</span>}
           </Button>
           <Button 
             variant="outline" 
-            className="flex-1 sm:flex-none gap-2 h-11 text-xs bg-white text-stone-600 hover:bg-stone-50 border-stone-100 shadow-sm whitespace-nowrap cursor-pointer font-bold"
+            className="flex-1 sm:flex-none gap-2 h-10 md:h-11 text-xs bg-white text-stone-600 hover:bg-stone-50 border-stone-100 shadow-sm whitespace-nowrap cursor-pointer font-bold"
             onClick={() => setShowAuditHistory(true)}
           >
-            <History size={18} />
-            Historial
+            <History size={17} />
+            <span>Historial</span>
           </Button>
           <Button 
             variant="outline" 
-            className="flex-1 sm:flex-none gap-2 h-11 text-xs bg-white text-purple-700 hover:bg-purple-50 border-purple-100 shadow-sm whitespace-nowrap cursor-pointer font-bold"
+            className="flex-1 sm:flex-none gap-2 h-10 md:h-11 text-xs bg-white text-purple-700 hover:bg-purple-50 border-purple-100 shadow-sm whitespace-nowrap cursor-pointer font-bold"
             onClick={() => setShowManualModal(true)}
           >
-            <BookOpen size={18} />
-            Manual
+            <BookOpen size={17} />
+            <span>Manual</span>
           </Button>
           <Button 
             variant="outline" 
-            className="flex-1 sm:flex-none gap-2 h-11 text-xs bg-white border-stone-100 shadow-sm whitespace-nowrap cursor-pointer font-bold"
+            className="flex-1 sm:flex-none gap-2 h-10 md:h-11 text-xs bg-white border-stone-100 shadow-sm whitespace-nowrap cursor-pointer font-bold"
             onClick={() => {
               setLogForm({ type: 'expense', amount: '', reason: '', paymentMethod: 'cash', transferReceiptUrl: '' });
               setLogTransferReceipt(null);
               setShowLogModal(true);
             }}
           >
-            <TrendingDown size={18} />
-            Movimiento
+            <TrendingDown size={17} />
+            <span>Movimiento</span>
           </Button>
           <Button 
             variant="primary" 
-            className="flex-1 sm:flex-none gap-2 h-11 text-xs bg-mex-brown hover:bg-stone-800 shadow-md whitespace-nowrap cursor-pointer font-bold"
+            className="flex-1 sm:flex-none gap-2 h-10 md:h-11 text-xs bg-mex-brown hover:bg-stone-800 shadow-md whitespace-nowrap cursor-pointer font-bold"
             onClick={() => setShowClosingModal(true)}
           >
-            <ClipboardCheck size={18} />
-            Cierre
+            <ClipboardCheck size={17} />
+            <span>Cierre</span>
           </Button>
         </div>
       </div>
 
-      <div className="flex lg:grid lg:grid-cols-4 gap-4 md:gap-6 mb-6 md:mb-8 shrink-0 overflow-x-auto no-scrollbar -mx-4 px-4 lg:mx-0 lg:px-0">
+      <div className={cn(
+        "gap-3 md:gap-4 mb-4 md:mb-6 shrink-0",
+        isPC 
+          ? "grid grid-cols-2 lg:grid-cols-4" 
+          : "flex overflow-x-auto no-scrollbar -mx-2.5 px-2.5 sm:-mx-4 sm:px-4 lg:mx-0 lg:px-0"
+      )}>
         {/* Card 1: Efectivo en Caja */}
         <Card className="bg-[#2D5A47] text-white border-none shadow-lg w-[260px] lg:w-auto shrink-0">
           <CardContent className="p-5 flex items-center justify-between">

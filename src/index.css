@@ -166,8 +166,55 @@
     -0.5px -0.5px 0px rgba(0, 0, 0, 0.7), 
      0.5px -0.5px 0px rgba(0, 0, 0, 0.7), 
     -0.5px  0.5px 0px rgba(0, 0, 0, 0.7), 
-     0.5px  0.5px 0px rgba(0, 0, 0, 0.7),
+     0.5px  0.5px 0px rgba(0, 0, 0, 0.7), 
      0px    1px   2px rgba(0, 0, 0, 0.6);
 }
+
+/* PC (Mouse & Keyboard) Optimizations */
+.mode-pc {
+  --scrollbar-thumb: #d6d3d1;
+  --scrollbar-thumb-hover: #78716c;
+}
+
+.mode-pc *::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+
+.mode-pc *::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.02);
+}
+
+.mode-pc *::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: 9999px;
+  border: 1px solid transparent;
+  background-clip: content-box;
+}
+
+.mode-pc *::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover);
+  background-clip: content-box;
+}
+
+.mode-pc *:focus-visible {
+  outline: 2px solid #006847;
+  outline-offset: 1.5px;
+}
+
+/* Touchscreen / Mobile Optimizations */
+.mode-touch {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+.mode-touch button, 
+.mode-touch a, 
+.mode-touch [role="button"] {
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
 
 

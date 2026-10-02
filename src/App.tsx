@@ -32,9 +32,11 @@ import {
   clearUserSessionPersistence, 
   safePurgeCacheAndMaintain 
 } from './lib/userSessionPersistence';
+import { useDeviceMode } from './lib/useDeviceMode';
 
 export default function App() {
   const dragExitPortal = useDraggable();
+  const { isPC, isTouch } = useDeviceMode();
   const [activeTab, setActiveTab] = useState('orders');
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
   const [posUser, setPosUser] = useState<POSUser | null>(null);
@@ -48,6 +50,47 @@ export default function App() {
   const [isSimulatedFullscreen, setIsSimulatedFullscreen] = useState(false);
   const [isSystemShutdown, setIsSystemShutdown] = useState(false);
   const [isDuplicateTab, setIsDuplicateTab] = useState(false);
+
+  // PC Keyboard Shortcuts (Mouse & Keyboard Workflow)
+  useEffect(() => {
+    if (!isPC) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      const isInput = target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable);
+
+      // Global shortcut: Esc to unfocus or dismiss
+      if (e.key === 'Escape') {
+        if (target && isInput) {
+          target.blur();
+        }
+        return;
+      }
+
+      // Quick tab switching: Alt+1 to Alt+6
+      if (e.altKey && !e.ctrlKey && !e.shiftKey) {
+        if (e.key === '1') { e.preventDefault(); setActiveTab('orders'); }
+        else if (e.key === '2') { e.preventDefault(); setActiveTab('kitchen'); }
+        else if (e.key === '3') { e.preventDefault(); setActiveTab('cash'); }
+        else if (e.key === '4') { e.preventDefault(); setActiveTab('inventory'); }
+        else if (e.key === '5') { e.preventDefault(); setActiveTab('whatsapp'); }
+        else if (e.key === '6') { e.preventDefault(); setActiveTab('admin'); }
+      }
+
+      // Quick Search Focus: '/' or Ctrl+K / Cmd+K (when not already typing)
+      if ((e.key === '/' && !isInput) || ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k')) {
+        e.preventDefault();
+        const searchInput = document.querySelector('input[placeholder*="Buscar"], input[type="search"]') as HTMLInputElement | null;
+        if (searchInput) {
+          searchInput.focus();
+          searchInput.select();
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isPC]);
 
   // Single Window / Tab enforcement per device
   useEffect(() => {
@@ -612,13 +655,15 @@ export default function App() {
   const isFull = isFullscreen || isSimulatedFullscreen;
 
   return (
-    <div className={`flex items-center justify-center min-h-[100dvh] w-screen bg-stone-900 transition-all duration-300 ${
-      isFull ? 'fixed inset-0 z-[999] p-0 bg-stone-950 overflow-hidden' : 'p-2 md:p-4 bg-stone-900 overflow-y-auto'
+    <div className={`flex items-center justify-center min-h-[100dvh] w-screen transition-all duration-300 ${
+      isFull || isPC 
+        ? 'fixed inset-0 z-[999] p-0 bg-stone-950 overflow-hidden' 
+        : 'p-0 sm:p-2 md:p-3 bg-stone-900 overflow-y-auto'
     }`}>
       <div className={`flex flex-col md:flex-row bg-mex-cream overflow-hidden relative transition-all duration-300 ${
-        isFull 
-          ? "w-screen h-[100dvh] !max-w-none rounded-none shadow-none" 
-          : "w-full max-w-[1400px] h-[92vh] rounded-2xl shadow-2xl border border-stone-700/50"
+        isFull || isPC
+          ? "w-screen h-[100dvh] !max-w-none rounded-none shadow-none border-none" 
+          : "w-full max-w-[1440px] h-[96vh] rounded-2xl shadow-2xl border border-stone-700/50"
       }`}>
         <Navbar 
           activeTab={activeTab} 
