@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from "react";
-import { Search, Plus, Minus, ShoppingCart, Utensils as UtensilsIcon, History, X, Trash2, Loader2, CheckCircle2, User, Send, RotateCcw } from "lucide-react";
+import React, { useState, useEffect, useRef } from "react";
+import { Search, Plus, Minus, ShoppingCart, Utensils as UtensilsIcon, History, X, Trash2, Loader2, CheckCircle2, User, Send, RotateCcw, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "./Button";
 import { Card, CardContent, CardHeader, CardFooter } from "./Card";
 import { formatCurrency, cn, customRound } from "@/src/lib/utils";
@@ -31,6 +31,7 @@ interface OrderViewProps {
 
 export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }: OrderViewProps) => {
   const { isPC, isTouch } = useDeviceMode();
+  const categoryTrackRef = useRef<HTMLDivElement>(null);
   const getLoggedUserForLog = () => {
     let waiterName = "Mesero";
     try {
@@ -675,41 +676,35 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
         "flex-1 flex flex-col min-h-0 overflow-hidden",
         isPC ? "p-3 md:p-5 lg:p-6" : "p-2.5 sm:p-4"
       )}>
-        <div className="flex flex-col gap-2.5 mb-3 md:mb-5 shrink-0">
-          <div className="flex gap-2 w-full">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" size={18} />
+        <div className="flex flex-col gap-2.5 mb-3 md:mb-4 shrink-0">
+          {/* Search bar and view switcher */}
+          <div className="flex items-center gap-2 w-full">
+            <div className="relative flex-1 bg-white rounded-2xl border border-stone-200 shadow-xs hover:border-stone-300 focus-within:border-mex-green focus-within:ring-2 focus-within:ring-mex-green/20 transition-all flex items-center px-3.5 py-1.5 md:py-2">
+              <Search className="text-stone-400 shrink-0 mr-2.5" size={18} />
               <input 
                 type="text" 
-                placeholder={isPC ? "Buscar antojito... (Presiona / para buscar)" : "Buscar antojito..."} 
+                placeholder={isPC ? "Buscar platillo por nombre o ingrediente... (Presiona /)" : "Buscar platillo..."} 
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-12 py-2.5 md:py-3 rounded-xl border border-stone-200 focus:outline-none focus:ring-2 focus:ring-mex-green/20 text-sm md:text-base shadow-sm bg-white font-medium"
+                className="w-full bg-transparent text-sm md:text-base font-semibold text-stone-800 placeholder:text-stone-400 placeholder:font-normal focus:outline-none"
               />
-              {isPC && !searchQuery && (
-                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-mono font-bold text-stone-400 bg-stone-100 px-1.5 py-0.5 rounded border border-stone-200 pointer-events-none">
+              {searchQuery ? (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  className="p-1 text-stone-400 hover:text-stone-700 rounded-full hover:bg-stone-100 transition-all border-none bg-transparent cursor-pointer"
+                >
+                  <X size={15} />
+                </button>
+              ) : isPC ? (
+                <span className="text-[10px] font-mono font-bold text-stone-400 bg-stone-100 px-1.5 py-0.5 rounded border border-stone-200 pointer-events-none shrink-0 ml-1">
                   /
                 </span>
-              )}
+              ) : null}
             </div>
+
             {/* View Mode Switcher (Grid/List) */}
-            <div className="flex bg-white rounded-xl border border-stone-200 p-1 shadow-sm shrink-0">
-              <button
-                type="button"
-                onClick={() => {
-                  setViewMode('list');
-                  localStorage.setItem('orderViewMode', 'list');
-                }}
-                className={cn(
-                  "p-2 rounded-lg transition-all border-none cursor-pointer flex items-center justify-center",
-                  viewMode === 'list' ? "bg-stone-100 text-mex-green font-black" : "text-stone-400 hover:text-stone-600"
-                )}
-                title="Vista de Lista"
-              >
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.6} d="M4 6h16M4 12h16M4 18h16" />
-                </svg>
-              </button>
+            <div className="flex items-center bg-white rounded-2xl border border-stone-200 p-1 shadow-xs shrink-0 gap-0.5">
               <button
                 type="button"
                 onClick={() => {
@@ -717,57 +712,165 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
                   localStorage.setItem('orderViewMode', 'grid');
                 }}
                 className={cn(
-                  "p-2 rounded-lg transition-all border-none cursor-pointer flex items-center justify-center",
-                  viewMode === 'grid' ? "bg-stone-100 text-mex-green font-black" : "text-stone-400 hover:text-stone-600"
+                  "p-2 rounded-xl transition-all border-none cursor-pointer flex items-center justify-center",
+                  viewMode === 'grid' 
+                    ? "bg-stone-900 text-white shadow-xs font-bold" 
+                    : "text-stone-400 hover:text-stone-700 hover:bg-stone-100"
                 )}
                 title="Vista de Cuadrícula"
               >
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.6} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+                </svg>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setViewMode('list');
+                  localStorage.setItem('orderViewMode', 'list');
+                }}
+                className={cn(
+                  "p-2 rounded-xl transition-all border-none cursor-pointer flex items-center justify-center",
+                  viewMode === 'list' 
+                    ? "bg-stone-900 text-white shadow-xs font-bold" 
+                    : "text-stone-400 hover:text-stone-700 hover:bg-stone-100"
+                )}
+                title="Vista de Lista"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 6h16M4 12h16M4 18h16" />
                 </svg>
               </button>
             </div>
           </div>
-          <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar -mx-3 px-3 sm:mx-0 sm:px-0 scroll-smooth">
-            {categories.map(cat => (
-              <Button
-                key={cat.id}
-                variant={selectedCategory === cat.id ? 'primary' : 'ghost'}
-                size="sm"
+
+          {/* Unified, Premium Category Navigation Bar */}
+          <div className="relative flex items-center bg-white/90 backdrop-blur-md rounded-2xl p-1.5 border border-stone-200 shadow-xs">
+            {/* Scroll Left Button on PC */}
+            {isPC && (
+              <button
+                type="button"
                 onClick={() => {
-                  setSelectedCategory(cat.id);
-                  setSearchQuery(''); // Clear search when selecting category
+                  if (categoryTrackRef.current) {
+                    categoryTrackRef.current.scrollBy({ left: -240, behavior: 'smooth' });
+                  }
+                }}
+                className="hidden lg:flex items-center justify-center w-7 h-7 rounded-xl text-stone-400 hover:text-stone-800 hover:bg-stone-100 transition-all border-none bg-transparent cursor-pointer shrink-0 mr-1"
+                title="Desplazar a la izquierda"
+              >
+                <ChevronLeft size={16} />
+              </button>
+            )}
+
+            <div
+              ref={categoryTrackRef}
+              onWheel={(e) => {
+                if (categoryTrackRef.current && e.deltaY !== 0) {
+                  categoryTrackRef.current.scrollLeft += e.deltaY;
+                }
+              }}
+              className="flex items-center gap-1.5 overflow-x-auto no-scrollbar scroll-smooth flex-1 py-0.5"
+            >
+              {/* "Todos" button */}
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedCategory('all');
+                  setSearchQuery('');
                 }}
                 className={cn(
-                  "whitespace-nowrap px-4 py-2.5 h-10 rounded-full shadow-sm text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 transition-all active:scale-95",
-                  selectedCategory === cat.id ? "bg-mex-green text-white" : "bg-white text-stone-600 border border-stone-200"
+                  "h-9 px-3.5 rounded-xl text-xs font-bold whitespace-nowrap flex items-center gap-2 transition-all cursor-pointer border select-none shrink-0",
+                  (selectedCategory === 'all' || selectedCategory === '')
+                    ? "bg-stone-900 text-white border-stone-900 shadow-xs"
+                    : "bg-transparent text-stone-600 border-transparent hover:bg-stone-100 hover:text-stone-900"
                 )}
               >
-                <span className="text-sm shrink-0">{getCategoryEmoji(cat.name)}</span>
-                <span>{cat.name}</span>
-              </Button>
-            ))}
-            <Button
-              key="otros"
-              variant={selectedCategory === 'otros' ? 'primary' : 'ghost'}
-              size="sm"
-              onClick={() => {
-                setSelectedCategory('otros');
-                setSearchQuery(''); // Clear search when selecting category
-              }}
-              className={cn(
-                "whitespace-nowrap px-4 py-2.5 h-10 rounded-full shadow-sm text-xs font-bold uppercase tracking-wider border border-stone-200 flex items-center gap-1.5 transition-all active:scale-95",
-                selectedCategory === 'otros' ? "bg-mex-brown text-white" : "bg-white text-stone-600 hover:bg-stone-50"
-              )}
-            >
-              <span className="text-sm shrink-0">🍽️</span>
-              <span>Otros</span>
-            </Button>
+                <span>✨</span>
+                <span>Todos</span>
+                <span className={cn(
+                  "text-[10px] font-mono px-1.5 py-0.5 rounded-md",
+                  (selectedCategory === 'all' || selectedCategory === '')
+                    ? "bg-white/20 text-white"
+                    : "bg-stone-100 text-stone-500"
+                )}>
+                  {products.filter(p => p.available).length}
+                </span>
+              </button>
+
+              {categories.map(cat => {
+                const count = products.filter(p => p.available && p.categoryId === cat.id).length;
+                const isSelected = selectedCategory === cat.id;
+                return (
+                  <button
+                    key={cat.id}
+                    type="button"
+                    onClick={() => {
+                      setSelectedCategory(cat.id);
+                      setSearchQuery('');
+                    }}
+                    className={cn(
+                      "h-9 px-3.5 rounded-xl text-xs font-bold whitespace-nowrap flex items-center gap-2 transition-all cursor-pointer border select-none shrink-0",
+                      isSelected
+                        ? "bg-mex-green text-white border-mex-green shadow-xs"
+                        : "bg-transparent text-stone-600 border-transparent hover:bg-stone-100 hover:text-stone-900"
+                    )}
+                  >
+                    <span>{getCategoryEmoji(cat.name)}</span>
+                    <span>{cat.name}</span>
+                    {count > 0 && (
+                      <span className={cn(
+                        "text-[10px] font-mono px-1.5 py-0.5 rounded-md",
+                        isSelected ? "bg-white/20 text-white" : "bg-stone-100 text-stone-400"
+                      )}>
+                        {count}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+
+              <button
+                key="otros"
+                type="button"
+                onClick={() => {
+                  setSelectedCategory('otros');
+                  setSearchQuery('');
+                }}
+                className={cn(
+                  "h-9 px-3.5 rounded-xl text-xs font-bold whitespace-nowrap flex items-center gap-2 transition-all cursor-pointer border select-none shrink-0",
+                  selectedCategory === 'otros'
+                    ? "bg-mex-brown text-white border-mex-brown shadow-xs"
+                    : "bg-transparent text-stone-600 border-transparent hover:bg-stone-100 hover:text-stone-900"
+                )}
+              >
+                <span>🍽️</span>
+                <span>Otros / Especial</span>
+              </button>
+            </div>
+
+            {/* Scroll Right Button on PC */}
+            {isPC && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (categoryTrackRef.current) {
+                    categoryTrackRef.current.scrollBy({ left: 240, behavior: 'smooth' });
+                  }
+                }}
+                className="hidden lg:flex items-center justify-center w-7 h-7 rounded-xl text-stone-400 hover:text-stone-800 hover:bg-stone-100 transition-all border-none bg-transparent cursor-pointer shrink-0 ml-1"
+                title="Desplazar a la derecha"
+              >
+                <ChevronRight size={16} />
+              </button>
+            )}
           </div>
         </div>
 
         <div className="flex-1 min-h-0 relative">
-          <div className="absolute inset-0 overflow-y-auto pr-1 pb-24 md:pb-6 no-scrollbar">
+          <div className={cn(
+            "absolute inset-0 overflow-y-auto pr-1 pb-24 md:pb-6",
+            isPC ? "custom-scrollbar" : "no-scrollbar"
+          )}>
             {(() => {
               if (selectedCategory === 'otros') {
                 return (
@@ -898,6 +1001,7 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
                   return (p.name && p.name.toLowerCase().includes(query)) || 
                          (p.description && p.description.toLowerCase().includes(query));
                 }
+                if (!selectedCategory || selectedCategory === 'all') return true;
                 return p.categoryId === selectedCategory;
               });
               
@@ -929,40 +1033,42 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
                           key={product.id}
                           onClick={() => handleProductClick(product)}
                           className={cn(
-                            "bg-white rounded-2xl border overflow-hidden shadow-xs hover:shadow-md transition-all duration-200 cursor-pointer flex flex-col relative select-none active:scale-[0.98]",
-                            qty > 0 ? "border-mex-green/40 ring-1 ring-mex-green/20 bg-emerald-50/5" : "border-stone-200"
+                            "bg-white rounded-2xl border overflow-hidden shadow-xs hover:shadow-lg hover:border-mex-green/50 hover:-translate-y-0.5 transition-all duration-200 cursor-pointer flex flex-col relative select-none group",
+                            qty > 0 ? "border-mex-green ring-2 ring-mex-green/20 bg-emerald-50/10" : "border-stone-200/90"
                           )}
                         >
                           {/* Quantity Badge */}
                           {qty > 0 && (
-                            <div className="absolute top-2 right-2 bg-mex-green text-white text-xs font-black w-6 h-6 rounded-full flex items-center justify-center shadow-md animate-scaleIn z-10">
-                              {qty}
+                            <div className="absolute top-2 right-2 bg-mex-green text-white text-xs font-black px-2 py-0.5 rounded-full shadow-md z-10 flex items-center gap-1 border border-white/40">
+                              <span>✓</span>
+                              <span>{qty}</span>
                             </div>
                           )}
 
                           {/* Image Banner */}
-                          <div className="h-24 sm:h-28 bg-stone-100 flex items-center justify-center overflow-hidden relative shrink-0 border-b border-stone-100">
+                          <div className="h-28 sm:h-32 bg-stone-100 flex items-center justify-center overflow-hidden relative shrink-0">
                             <img 
                               src={product.imageUrl || getFallbackProductImage(product.name)} 
                               alt={product.name} 
-                              className="w-full h-full object-cover transition-transform duration-300 hover:scale-105" 
+                              className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" 
                               referrerPolicy="no-referrer" 
                             />
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent pointer-events-none" />
                           </div>
 
                           {/* Card Content */}
                           <div className="p-3 flex-1 flex flex-col justify-between">
                             <div>
-                              <h4 className="font-extrabold text-stone-800 text-xs sm:text-sm line-clamp-2 leading-snug tracking-tight mb-1" title={product.name}>
+                              <h4 className="font-serif font-bold text-stone-900 text-xs sm:text-sm line-clamp-1 leading-snug tracking-tight mb-0.5 group-hover:text-mex-green transition-colors" title={product.name}>
                                 {product.name}
                               </h4>
-                              <p className="text-[10px] text-stone-400 line-clamp-2 leading-tight mb-2">
-                                {product.description || 'Delicioso platillo tradicional mexicano hecho al momento.'}
+                              <p className="text-[10px] sm:text-[11px] text-stone-400 line-clamp-1 leading-tight mb-2">
+                                {product.description || 'Delicioso platillo tradicional mexicano.'}
                               </p>
                             </div>
 
-                            <div className="flex items-center justify-between gap-1 mt-auto pt-2 border-t border-stone-50">
-                              <span className="font-black text-mex-terracotta text-sm sm:text-base">
+                            <div className="flex items-center justify-between gap-1 mt-auto pt-2 border-t border-stone-100">
+                              <span className="font-serif font-black text-mex-terracotta text-sm sm:text-base">
                                 {formatCurrency(product.price)}
                               </span>
 
@@ -1198,67 +1304,86 @@ export const OrderView = ({ orderToEdit, clearOrderToEdit, userRole = 'waiter' }
           : "md:w-80 lg:w-96",
         showCartMobile ? "translate-x-0" : "translate-x-full md:translate-x-0"
       )}>
-        <div className="p-4 border-b border-stone-100 flex flex-col gap-3 bg-stone-50 shrink-0">
+        <div className="p-3.5 sm:p-4 border-b border-stone-800 bg-stone-900 text-white flex flex-col gap-3 shrink-0 shadow-sm">
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-bold flex items-center gap-2">
-              <ShoppingCart size={20} className="text-mex-green" />
-              {editingOrderId ? 'Editar Pedido' : 'Nueva Comanda'}
-            </h2>
-            <div className="flex items-center gap-2">
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                className="text-mex-brown gap-1 h-9 px-3 bg-white border border-stone-200 shadow-sm"
-                onClick={() => setShowActiveOrders(!showActiveOrders)}
-              >
-                <History size={16} />
-                Activos
-              </Button>
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-mex-green/20 border border-mex-green/40 flex items-center justify-center text-emerald-400">
+                <ShoppingCart size={18} />
+              </div>
+              <div>
+                <h2 className="text-base font-serif font-bold text-white tracking-tight">
+                  {editingOrderId ? 'Editar Comanda' : 'Nueva Comanda'}
+                </h2>
+                <p className="text-[10px] text-stone-400 font-medium">
+                  {cart.reduce((acc, item) => acc + item.quantity, 0)} {cart.reduce((acc, item) => acc + item.quantity, 0) === 1 ? 'platillo' : 'platillos'}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-1.5">
               <button 
-                className="md:hidden p-2 text-stone-400 hover:text-stone-600 bg-white rounded-full border border-stone-200 shadow-sm"
+                type="button" 
+                className="text-stone-300 hover:text-white bg-white/10 hover:bg-white/20 px-2.5 py-1.5 rounded-xl border border-white/10 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
+                onClick={() => setShowActiveOrders(!showActiveOrders)}
+                title="Ver pedidos activos"
+              >
+                <History size={14} className="text-mex-gold" />
+                <span>Activas ({activeOrders.length})</span>
+              </button>
+              <button 
+                className="md:hidden p-1.5 text-stone-400 hover:text-white bg-white/10 rounded-xl transition-all cursor-pointer border-none"
                 onClick={() => setShowCartMobile(false)}
               >
-                <X size={20} />
+                <X size={18} />
               </button>
             </div>
           </div>
           
-          <div className="flex items-center gap-3">
-            <label className="flex items-center gap-2 cursor-pointer bg-white px-3 py-2 rounded-xl border border-stone-200 text-xs font-bold text-stone-600 shadow-sm">
-              <input 
-                type="checkbox" 
-                checked={isTakeaway}
-                onChange={(e) => setIsTakeaway(e.target.checked)}
-                className="w-5 h-5 rounded border-stone-300 text-mex-green focus:ring-mex-green"
-              />
-              Para Llevar
-            </label>
+          {/* Segmented Table / Takeout Selector */}
+          <div className="flex items-center gap-2 pt-1 border-t border-stone-800">
+            <div className="flex bg-stone-800 p-0.5 rounded-xl border border-stone-700/60 shrink-0">
+              <button
+                type="button"
+                onClick={() => setIsTakeaway(false)}
+                className={cn(
+                  "px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer border-none",
+                  !isTakeaway ? "bg-mex-green text-white shadow-xs" : "text-stone-400 hover:text-white bg-transparent"
+                )}
+              >
+                🍽️ Mesa
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsTakeaway(true)}
+                className={cn(
+                  "px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer border-none",
+                  isTakeaway ? "bg-mex-brown text-white shadow-xs" : "text-stone-400 hover:text-white bg-transparent"
+                )}
+              >
+                🥡 Para Llevar
+              </button>
+            </div>
+
             {isTakeaway ? (
-              <div className="flex flex-wrap items-center gap-2 bg-white px-3 py-1.5 rounded-xl border border-stone-200 shadow-sm">
-                <div className="flex items-center gap-1.5">
-                  <User size={14} className="text-mex-terracotta shrink-0" />
-                  <span className="text-[10px] font-bold text-stone-400 uppercase">A nombre de:</span>
-                  <input 
-                    type="text" 
-                    placeholder="Nombre del cliente" 
-                    value={takeoutCustomerName}
-                    onChange={(e) => setTakeoutCustomerName(e.target.value)}
-                    className="w-32 sm:w-44 text-xs focus:outline-none font-bold text-stone-800"
-                  />
-                </div>
+              <div className="flex-1 min-w-0 bg-stone-800/90 rounded-xl px-2.5 py-1.5 border border-stone-700/60 flex items-center gap-1.5">
+                <User size={13} className="text-mex-terracotta shrink-0" />
+                <input 
+                  type="text" 
+                  placeholder="Nombre del cliente..." 
+                  value={takeoutCustomerName}
+                  onChange={(e) => setTakeoutCustomerName(e.target.value)}
+                  className="w-full bg-transparent text-xs font-bold text-white placeholder:text-stone-500 focus:outline-none"
+                />
               </div>
             ) : (
-              <div className="flex flex-wrap items-center gap-2 bg-white px-3 py-2 rounded-xl border border-stone-200 shadow-sm">
-                <div className="flex items-center gap-1.5">
-                  <span className="text-[10px] font-bold text-stone-400 uppercase">Mesa</span>
-                  <input 
-                    type="text" 
-                    placeholder="#" 
-                    value={tableNumber}
-                    onChange={(e) => setTableNumber(e.target.value)}
-                    className="w-10 text-center focus:outline-none font-bold text-mex-green"
-                  />
-                </div>
+              <div className="flex-1 min-w-0 bg-stone-800/90 rounded-xl px-2.5 py-1.5 border border-stone-700/60 flex items-center justify-between">
+                <span className="text-[10px] uppercase font-bold text-stone-400 tracking-wider">Mesa #</span>
+                <input 
+                  type="text" 
+                  placeholder="1, 2..." 
+                  value={tableNumber}
+                  onChange={(e) => setTableNumber(e.target.value)}
+                  className="w-16 text-center bg-transparent text-sm font-black text-emerald-400 placeholder:text-stone-600 focus:outline-none"
+                />
               </div>
             )}
           </div>
