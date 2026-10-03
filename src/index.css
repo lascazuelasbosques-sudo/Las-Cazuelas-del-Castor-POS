@@ -99,6 +99,14 @@
     print-color-adjust: exact !important;
   }
 
+  body.printing-ticket #print-ticket-active img {
+    display: block !important;
+    visibility: visible !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+    max-width: 100% !important;
+  }
+
   /* Full Report printing styles */
   #print-report {
     display: block !important;

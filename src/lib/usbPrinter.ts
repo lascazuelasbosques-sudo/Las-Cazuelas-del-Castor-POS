@@ -1,6 +1,8 @@
 // USB Cable Thermal Printer Service (Optimized for 50mm x 60mm Tickets)
 // Supports Direct WebUSB, Web Serial, and System Driver Print (50x60mm)
 
+import { getTicketLogoUrl, getCachedRasterLogo, getCachedRasterLogoSync } from "./logoBase64";
+
 export interface UsbPrinterDiagnostic {
   connected: boolean;
   deviceName: string;
@@ -413,7 +415,7 @@ export function build52x90TicketBytes(order: {
   paymentMethod?: string;
   createdAt?: any;
   isPreAccount?: boolean;
-}): Uint8Array {
+}, logoRasterBytes?: Uint8Array): Uint8Array {
   const ESC = '\x1B';
   const GS = '\x1D';
 
@@ -488,19 +490,64 @@ export function build52x90TicketBytes(order: {
     ESC + '\x45\x00' +
     "\n\n";                            // 2 line feeds
 
-  return new TextEncoder().encode(commands);
+  const textBytes = new TextEncoder().encode(commands);
+
+  const effectiveLogoRaster = (logoRasterBytes && logoRasterBytes.length > 0)
+    ? logoRasterBytes
+    : getCachedRasterLogoSync();
+
+  if (effectiveLogoRaster && effectiveLogoRaster.length > 0) {
+    const initCmd = new TextEncoder().encode(ESC + '\x40' + ESC + '\x61\x01');
+    const afterCommands =
+      ESC + '\x33\x14' +
+      ESC + '\x61\x01' +
+      ESC + '\x45\x01' +
+      GS + '\x21\x01' +
+      "LAS CAZUELAS DEL CASTOR\n" +
+      GS + '\x21\x00' +
+      headerTitle +
+      `Folio:#${order.folio || '0'} | ${typeLabel}\n` +
+      `Fecha: ${dateStr} ${timeStr}\n` +
+      "------------------------------\n" +
+      ESC + '\x61\x00' +
+      itemsBody +
+      ESC + '\x45\x00' +
+      "------------------------------\n" +
+      totalsBlock +
+      ESC + '\x61\x01' +
+      ESC + '\x45\x01' +
+      footerText +
+      ESC + '\x45\x00' +
+      "\n\n";
+    const afterBytes = new TextEncoder().encode(afterCommands);
+
+    const merged = new Uint8Array(initCmd.length + effectiveLogoRaster.length + afterBytes.length);
+    merged.set(initCmd, 0);
+    merged.set(effectiveLogoRaster, initCmd.length);
+    merged.set(afterBytes, initCmd.length + effectiveLogoRaster.length);
+    return merged;
+  }
+
+  return textBytes;
 }
 
 // Keep alias for compatibility
 export const build50x60TicketBytes = build52x90TicketBytes;
+
+// Async version that automatically includes the Cazuelas raster logo
+export async function build52x90TicketBytesAsync(order: any): Promise<Uint8Array> {
+  const raster = await getCachedRasterLogo();
+  return build52x90TicketBytes(order, raster || undefined);
+}
+export const build50x60TicketBytesAsync = build52x90TicketBytesAsync;
 
 // Send 52x90mm Test Ticket over USB Cable
 export async function printUsbTestTicket(): Promise<void> {
   if (currentDiagnostic.connectionType === 'webusb' || currentDiagnostic.connectionType === 'webserial') {
     const ESC = '\x1B';
     const GS = '\x1D';
-    const commands =
-      ESC + '\x40' +                      // Init
+    const raster = await getCachedRasterLogo();
+    const afterCommands =
       ESC + '\x33\x14' +                  // Clean line spacing
       ESC + '\x61\x01' +                  // Center
       ESC + '\x45\x01' +                  // Bold ON
@@ -523,8 +570,18 @@ export async function printUsbTestTicket(): Promise<void> {
       "Vuelva pronto\n" +
       "\n\n";
 
-    const bytes = new TextEncoder().encode(commands);
-    await sendUsbRawData(bytes);
+    if (raster && raster.length > 0) {
+      const initCmd = new TextEncoder().encode(ESC + '\x40' + ESC + '\x61\x01');
+      const afterBytes = new TextEncoder().encode(afterCommands);
+      const merged = new Uint8Array(initCmd.length + raster.length + afterBytes.length);
+      merged.set(initCmd, 0);
+      merged.set(raster, initCmd.length);
+      merged.set(afterBytes, initCmd.length + raster.length);
+      await sendUsbRawData(merged);
+    } else {
+      const bytes = new TextEncoder().encode(ESC + '\x40' + afterCommands);
+      await sendUsbRawData(bytes);
+    }
     return;
   }
 
@@ -568,12 +625,15 @@ export function printReceiptHtml(htmlContent: string): Promise<boolean> {
         throw new Error("No frame doc");
       }
 
+      const origin = typeof window !== 'undefined' ? window.location.origin : '';
+
       frameDoc.open();
       frameDoc.write(`
         <!DOCTYPE html>
         <html>
         <head>
           <meta charset="utf-8">
+          ${origin ? `<base href="${origin}/">` : ''}
           <title>Recibo Las Cazuelas del Castor</title>
           <style>
             @page {
@@ -585,6 +645,10 @@ export function printReceiptHtml(htmlContent: string): Promise<boolean> {
               padding: 0 !important;
               top: 0 !important;
               left: 0 !important;
+              background: #ffffff !important;
+              color: #000000 !important;
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
             }
             @media print {
               html, body {
@@ -593,10 +657,17 @@ export function printReceiptHtml(htmlContent: string): Promise<boolean> {
                 height: auto;
                 margin: 0 !important;
                 padding: 0 !important;
-                background: #fff;
-                color: #000;
-                -webkit-print-color-adjust: exact;
-                print-color-adjust: exact;
+                background: #ffffff !important;
+                color: #000000 !important;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+              }
+              img {
+                display: block !important;
+                visibility: visible !important;
+                max-width: 100% !important;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
               }
             }
             body {
@@ -610,8 +681,13 @@ export function printReceiptHtml(htmlContent: string): Promise<boolean> {
               background: #ffffff;
               box-sizing: border-box;
             }
+            img {
+              display: block;
+              visibility: visible !important;
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
+            }
             * {
-              color: #000000 !important;
               box-sizing: border-box;
             }
           </style>
@@ -643,38 +719,25 @@ export function printReceiptHtml(htmlContent: string): Promise<boolean> {
         }
       };
 
-      // Ensure images are fully decoded before triggering print
+      // Ensure images are fully loaded before triggering print dialog
       const images = frameDoc.images;
       if (images && images.length > 0) {
-        let loaded = 0;
-        const total = images.length;
-        let isDone = false;
-        const onDone = () => {
-          if (isDone) return;
-          loaded++;
-          if (loaded >= total) {
-            isDone = true;
-            triggerPrint();
+        const promises = Array.from(images).map((img: HTMLImageElement) => {
+          if (img.complete && img.naturalWidth > 0) return Promise.resolve();
+          if ('decode' in img) {
+            return img.decode().catch(() => Promise.resolve());
           }
-        };
-
-        for (let i = 0; i < total; i++) {
-          if (images[i].complete) {
-            onDone();
-          } else {
-            images[i].onload = onDone;
-            images[i].onerror = onDone;
-          }
-        }
-        // Safety timeout in case an image hangs
-        setTimeout(() => {
-          if (!isDone) {
-            isDone = true;
-            triggerPrint();
-          }
-        }, 300);
+          return new Promise<void>(res => {
+            (img as any).onload = () => res();
+            (img as any).onerror = () => res();
+            setTimeout(res, 400);
+          });
+        });
+        Promise.all(promises).then(() => {
+          setTimeout(triggerPrint, 60);
+        });
       } else {
-        setTimeout(triggerPrint, 120);
+        setTimeout(triggerPrint, 80);
       }
     } catch (err) {
       console.warn("[Printer] Could not print via iframe:", err);
@@ -801,10 +864,11 @@ export function print52x90ViaSystem(ticketData: {
   const dateStr = now.toLocaleDateString('es-MX', { day: '2-digit', month: '2-digit', year: 'numeric' });
   const timeStr = now.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
 
+  const logoUrl = getTicketLogoUrl();
   const ticketHtml = `
     <div style="width: 52mm; max-width: 52mm; height: auto; margin: 0; padding: 0 0.5mm; box-sizing: border-box; font-family: Arial, sans-serif;">
       <div style="text-align: center; margin-top: 0; margin-bottom: 2px; padding-top: 0;">
-        <img src="/logo_las_cazuelas_del_castor.jpg" alt="Logo Las Cazuelas del Castor" style="width: 18mm; height: 18mm; border-radius: 50%; object-fit: cover; margin: 0 auto 2px auto; display: block; filter: contrast(180%) brightness(90%); -webkit-filter: contrast(180%) brightness(90%);" />
+        <img src="${logoUrl}" alt="Logo Las Cazuelas del Castor" style="width: 20mm; height: 20mm; border-radius: 50%; object-fit: cover; margin: 0 auto 3px auto; display: block; filter: contrast(180%) brightness(90%); -webkit-filter: contrast(180%) brightness(90%);" />
         <div style="font-weight: 900; font-size: 13.5px; line-height: 1.15; color: #000000; letter-spacing: -0.3px; font-family: Arial, sans-serif;">LAS CAZUELAS DEL CASTOR</div>
         ${preAccountHeader}
       </div>
@@ -905,9 +969,10 @@ export function print54mmSalesReportViaSystem(report: {
     `;
   }
 
+  const logoUrl = getTicketLogoUrl();
   const reportHtml = `
     <div style="text-align: center; margin-bottom: 2px;">
-      <img src="/logo_las_cazuelas_del_castor.jpg" alt="Logo" style="width: 20mm; height: 20mm; border-radius: 50%; object-fit: cover; margin: 0 auto 2px auto; display: block; filter: contrast(180%) brightness(90%);" />
+      <img src="${logoUrl}" alt="Logo" style="width: 20mm; height: 20mm; border-radius: 50%; object-fit: cover; margin: 0 auto 3px auto; display: block; filter: contrast(180%) brightness(90%);" />
       <div style="font-weight: 900; font-size: 14px; line-height: 1.2; color: #000000; font-family: Arial, sans-serif;">LAS CAZUELAS DEL CASTOR</div>
       <div style="font-weight: 900; font-size: 12px; margin-top: 2px; color: #000000;">REPORTE GENERAL DE VENTAS</div>
       <div style="font-size: 11.5px; font-weight: 900; color: #000000;">${report.periodLabel}</div>

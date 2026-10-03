@@ -10,7 +10,8 @@ import { db, auth } from "../firebase";
 import { collection, onSnapshot, query, where, orderBy, doc, updateDoc, addDoc, deleteDoc, writeBatch, getDocs, getDocsFromServer, arrayUnion } from "firebase/firestore";
 import { handleFirestoreError, OperationType } from "../lib/firestoreErrorHandler";
 import { isDrinkItem } from "../lib/drinkUtils";
-import { getUsbPrinterDiagnostic, autoConnectUsbPrinter, sendUsbRawData, build50x60TicketBytes, print50x60ViaSystem, build54mmSalesReportBytes, print54mmSalesReportViaSystem, UsbPrinterDiagnostic } from "../lib/usbPrinter";
+import { getUsbPrinterDiagnostic, autoConnectUsbPrinter, sendUsbRawData, build50x60TicketBytes, build50x60TicketBytesAsync, print50x60ViaSystem, build54mmSalesReportBytes, print54mmSalesReportViaSystem, UsbPrinterDiagnostic } from "../lib/usbPrinter";
+import { getTicketLogoUrl } from "../lib/logoBase64";
 import { sendMovementNotification } from "../lib/emailService";
 import toast from "react-hot-toast";
 import { 
@@ -1915,7 +1916,7 @@ const safeParseDate = (timestamp: any): Date => {
     if (!element) return null;
 
     try {
-      const canvas = await html2canvas(element, { scale: 2 });
+      const canvas = await html2canvas(element, { scale: 2, useCORS: true, allowTaint: true });
       const imgData = canvas.toDataURL("image/png");
       const pdf = new jsPDF({
         orientation: "portrait",
@@ -1944,7 +1945,7 @@ const safeParseDate = (timestamp: any): Date => {
     if (!element) return null;
 
     try {
-      const canvas = await html2canvas(element, { scale: 2 });
+      const canvas = await html2canvas(element, { scale: 2, useCORS: true, allowTaint: true });
       const imgData = canvas.toDataURL("image/png");
       const pdf = new jsPDF({
         orientation: "portrait",
@@ -2001,7 +2002,7 @@ const safeParseDate = (timestamp: any): Date => {
       }
 
       if (usbDiag.connected && (usbDiag.connectionType === 'webusb' || usbDiag.connectionType === 'webserial')) {
-        const bytes = build50x60TicketBytes({
+        const bytes = await build50x60TicketBytesAsync({
           folio: g.folios?.[0] || '1',
           customerName: g.displayTitle || 'General',
           tableNumber: g.displayTitle || '',
@@ -5726,10 +5727,11 @@ const safeParseDate = (timestamp: any): Date => {
               <div id="preaccount-ticket-content" className="bg-white border-2 border-stone-800 p-5 rounded-xl font-sans text-sm space-y-3 shadow-sm text-black">
                 <div className="text-center space-y-1">
                   <img 
-                    src="/logo_las_cazuelas_del_castor.jpg" 
+                    src={getTicketLogoUrl()} 
                     alt="Logo Las Cazuelas del Castor" 
                     style={{ width: '20mm', height: '20mm' }}
                     className="rounded-full object-cover mx-auto mb-1.5 border-2 border-black" 
+                    crossOrigin="anonymous"
                   />
                   <p className="font-black text-lg tracking-tight text-black">LAS CAZUELAS DEL CASTOR</p>
                   <p className="font-black text-xs text-black uppercase tracking-wider bg-stone-100 py-1 rounded border-2 border-black">
@@ -5916,6 +5918,13 @@ const safeParseDate = (timestamp: any): Date => {
               <div className="fixed -left-[9999px] -top-[9999px] opacity-0 pointer-events-none">
                 <div id="ticket-content" className="bg-white p-6 rounded-xl font-sans text-sm w-[320px] text-black">
                   <div className="text-center space-y-1 mb-3">
+                    <img 
+                      src={getTicketLogoUrl()} 
+                      alt="Logo Las Cazuelas del Castor" 
+                      style={{ width: '20mm', height: '20mm' }}
+                      className="rounded-full object-cover mx-auto mb-1.5 border-2 border-black" 
+                      crossOrigin="anonymous"
+                    />
                     <p className="font-black text-base text-black">LAS CAZUELAS DEL CASTOR</p>
                     <p className="text-xs font-black uppercase text-black">Ticket de Venta</p>
                     <p className="text-xs font-black text-black">
