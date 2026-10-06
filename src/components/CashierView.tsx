@@ -122,6 +122,7 @@ export const CashierView = ({ onEditOrder, userRole = 'waiter' }: CashierViewPro
   const [clientName, setClientName] = useState('');
   const [products, setProducts] = useState<any[]>([]); // Added for disposable price
   const [loading, setLoading] = useState(true);
+  const [isClosingDay, setIsClosingDay] = useState(false);
 
   // Main navigation tab
   const [currentMainTab, setCurrentMainTab] = useState<'checkout' | 'reports'>('checkout');
@@ -552,19 +553,13 @@ const safeParseDate = (timestamp: any): Date => {
     return { daily, weekly, monthly };
   }, [cashLogs]);
 
-  // Find yesterday's duplicates with exact amounts, folios and timestamps
+  // Find any duplicates with exact amounts, folios and timestamps
   const yesterdayDuplicates = React.useMemo(() => {
-    const now = new Date();
-    const yesterday = new Date();
-    yesterday.setDate(now.getDate() - 1);
-    const yesterdayStr = yesterday.toDateString();
-
-    // Filter yesterday's income logs (non-cancelled)
+    // Filter active income logs (non-cancelled)
     const logs = cashLogs.filter(log => {
       if (log.cancelled) return false;
       if (log.type !== 'income') return false;
-      const d = log.timestamp ? new Date(log.timestamp) : new Date();
-      return d.toDateString() === yesterdayStr;
+      return true;
     });
 
     const duplicates: { key: string; logs: CashLog[] }[] = [];
@@ -1225,8 +1220,10 @@ const safeParseDate = (timestamp: any): Date => {
         itemsSummary.push({ name: "Desechable", quantity: paymentDisposableQuantity, price: disposablePrice });
       }
 
-      // Add cash log entry
-      const logRef = doc(collection(db, "cashLogs"));
+      // Add cash log entry with deterministic ID to guarantee idempotency and avoid duplicates
+      const sortedOrderIds = selectedGroup.orders.map(order => order.id).sort().join('_');
+      const paymentLogId = `pay_${sortedOrderIds}`;
+      const logRef = doc(db, "cashLogs", paymentLogId);
       const displayMethod = paymentMethod === 'card' ? 'Tarjeta' : paymentMethod === 'transfer' ? 'Transferencia' : paymentMethod === 'credit' ? 'Crédito' : 'Efectivo';
       const reasonSuffix = paymentMethod === 'credit' ? `Crédito: ${clientName.trim()}` : displayMethod;
       const paymentLogData = {
@@ -1247,12 +1244,9 @@ const safeParseDate = (timestamp: any): Date => {
       batch.set(logRef, paymentLogData);
 
       try {
-        await Promise.race([
-          batch.commit(),
-          new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout en commit batch")), 3500))
-        ]);
+        await batch.commit();
       } catch (batchErr) {
-        console.warn("Batch commit timeout or network error, executing resilient offline updates:", batchErr);
+        console.warn("Batch commit network error, executing resilient offline updates:", batchErr);
         for (const order of selectedGroup.orders) {
           const orderCardFee = paymentMethod === 'card' ? customRound(order.total * CARD_FEE_PERCENTAGE) : 0;
           const orderTotal = customRound(order.total + orderCardFee);
@@ -1267,7 +1261,7 @@ const safeParseDate = (timestamp: any): Date => {
             updatedAt: new Date().toISOString()
           });
         }
-        await addOfflineDoc("cashLogs", paymentLogData);
+        await setOfflineDoc("cashLogs", paymentLogId, paymentLogData);
       }
 
       setLastPaymentData({ group: selectedGroup, method: paymentMethod, total: finalTotal });
@@ -1341,8 +1335,9 @@ const safeParseDate = (timestamp: any): Date => {
         movementLogs: arrayUnion(creditLog)
       });
 
-      // 2. Add cash log entry
-      const logRef = doc(collection(db, "cashLogs"));
+      // 2. Add cash log entry with deterministic ID to guarantee idempotency and avoid duplicates
+      const creditLogId = `credit_${selectedCreditOrder.id}_${selectedCreditOrder.folio || '0'}`;
+      const logRef = doc(db, "cashLogs", creditLogId);
       const methodDisplay = creditPaymentMethod === 'card' ? 'Tarjeta' : creditPaymentMethod === 'transfer' ? 'Transferencia' : 'Efectivo';
       let reason = `Cobro de Adeudo - ${selectedCreditOrder.clientName || 'Cliente'} (${methodDisplay}) - Folio: ${selectedCreditOrder.folio || selectedCreditOrder.id}`;
       if (creditTip > 0 || creditInterest > 0 || creditExtra > 0) {
@@ -1366,12 +1361,9 @@ const safeParseDate = (timestamp: any): Date => {
       batch.set(logRef, creditLogData);
 
       try {
-        await Promise.race([
-          batch.commit(),
-          new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout en commit batch de crédito")), 3500))
-        ]);
+        await batch.commit();
       } catch (batchErr) {
-        console.warn("Credit batch commit timeout or error, executing resilient offline updates:", batchErr);
+        console.warn("Credit batch commit network error, executing resilient offline updates:", batchErr);
         await updateOfflineDoc("orders", selectedCreditOrder.id, {
           creditStatus: 'paid',
           creditPaidAt: new Date().toISOString(),
@@ -1382,7 +1374,7 @@ const safeParseDate = (timestamp: any): Date => {
           totalPaid: totalPaid,
           updatedAt: new Date().toISOString()
         });
-        await addOfflineDoc("cashLogs", creditLogData);
+        await setOfflineDoc("cashLogs", creditLogId, creditLogData);
       }
 
       const creditGroup: GroupedOrder = {
@@ -2850,8 +2842,9 @@ const safeParseDate = (timestamp: any): Date => {
   };
 
   const handleCloseDay = async () => {
-    if (!auth.currentUser) return;
+    if (!auth.currentUser || isClosingDay) return;
     
+    setIsClosingDay(true);
     try {
       const closingLogData = {
         type: 'closing',
@@ -2869,6 +2862,8 @@ const safeParseDate = (timestamp: any): Date => {
     } catch (error) {
       console.error("Error closing cash:", error);
       toast.error("Error al cerrar la caja");
+    } finally {
+      setIsClosingDay(false);
     }
   };
 
@@ -4162,7 +4157,7 @@ const safeParseDate = (timestamp: any): Date => {
                     <div>
                       <h4 className="text-sm font-black font-serif text-amber-950 uppercase tracking-wide">🚨 ALERTA DE AUDITORÍA: DOBLES COBROS DETECTADOS</h4>
                       <p className="text-xs text-amber-900 mt-1">
-                        Se detectaron <strong>{yesterdayDuplicates.length} grupo(s) de cobros idénticos duplicados</strong> del día de ayer. Esto suele ocurrir cuando el cajero da múltiples clics rápidos en "Confirmar Pago".
+                        Se detectaron <strong>{yesterdayDuplicates.length} grupo(s) de cobros duplicados</strong>.
                       </p>
                       <p className="text-[10px] text-amber-700 mt-1.5 font-bold uppercase tracking-wider">
                         El sistema recalculará las ventas y todos los movimientos del día automáticamente al eliminar el duplicado.
@@ -6053,10 +6048,18 @@ const safeParseDate = (timestamp: any): Date => {
               </Button>
               <Button 
                 variant="primary" 
-                className="flex-1 h-12 text-xs font-black rounded-xl bg-mex-brown hover:bg-stone-800 shadow-lg shadow-mex-brown/20 tracking-widest uppercase" 
+                className="flex-1 h-12 text-xs font-black rounded-xl bg-mex-brown hover:bg-stone-800 shadow-lg shadow-mex-brown/20 tracking-widest uppercase flex items-center justify-center gap-2" 
                 onClick={handleCloseDay}
+                disabled={isClosingDay}
               >
-                Cerrar Caja
+                {isClosingDay ? (
+                  <>
+                    <Loader2 className="animate-spin text-white" size={16} />
+                    <span>Cerrando...</span>
+                  </>
+                ) : (
+                  <span>Cerrar Caja</span>
+                )}
               </Button>
             </CardFooter>
           </Card>
