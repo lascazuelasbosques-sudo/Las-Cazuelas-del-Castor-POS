@@ -10,7 +10,20 @@ import { db, auth } from "../firebase";
 import { collection, onSnapshot, query, where, orderBy, doc, updateDoc, addDoc, deleteDoc, writeBatch, getDocs, getDocsFromServer, arrayUnion } from "firebase/firestore";
 import { handleFirestoreError, OperationType } from "../lib/firestoreErrorHandler";
 import { isDrinkItem } from "../lib/drinkUtils";
-import { getUsbPrinterDiagnostic, autoConnectUsbPrinter, sendUsbRawData, build50x60TicketBytes, build50x60TicketBytesAsync, print50x60ViaSystem, build54mmSalesReportBytes, print54mmSalesReportViaSystem, UsbPrinterDiagnostic } from "../lib/usbPrinter";
+import { 
+  getUsbPrinterDiagnostic, 
+  autoConnectUsbPrinter, 
+  sendUsbRawData, 
+  build50x60TicketBytes, 
+  build50x60TicketBytesAsync, 
+  print50x60ViaSystem, 
+  build54mmSalesReportBytes, 
+  print54mmSalesReportViaSystem, 
+  build54mmAuditReceiptBytes,
+  print54mmAuditReceiptViaSystem,
+  CashAuditReceiptData,
+  UsbPrinterDiagnostic 
+} from "../lib/usbPrinter";
 import { getTicketLogoUrl } from "../lib/logoBase64";
 import { sendMovementNotification } from "../lib/emailService";
 import toast from "react-hot-toast";
@@ -2072,6 +2085,31 @@ const safeParseDate = (timestamp: any): Date => {
     }
   };
 
+  const triggerPrintCashAudit = async (audit: CashAuditReceiptData) => {
+    try {
+      let usbDiag = getUsbPrinterDiagnostic();
+      if (!usbDiag.connected || (usbDiag.connectionType !== 'webusb' && usbDiag.connectionType !== 'webserial')) {
+        try {
+          usbDiag = await autoConnectUsbPrinter();
+        } catch (e) {
+          console.warn("Auto-connect USB printer warning:", e);
+        }
+      }
+
+      if (usbDiag.connected && (usbDiag.connectionType === 'webusb' || usbDiag.connectionType === 'webserial')) {
+        const bytes = build54mmAuditReceiptBytes(audit);
+        await sendUsbRawData(bytes);
+        toast.success("¡Ticket de arqueo impreso en USB!");
+      } else {
+        print54mmAuditReceiptViaSystem(audit);
+        toast.success("¡Imprimiendo ticket de arqueo!");
+      }
+    } catch (err: any) {
+      console.error("Error al imprimir ticket de arqueo:", err);
+      print54mmAuditReceiptViaSystem(audit);
+    }
+  };
+
   const handlePrintPreAccount = async (group: GroupedOrder, printType: 'usb' | 'standard' = 'usb') => {
     const userInfo = getLoggedUserForLog();
     const printLog = {
@@ -2822,11 +2860,31 @@ const safeParseDate = (timestamp: any): Date => {
           toast.success("Arqueo de control guardado correctamente", { id: toastId });
         }
       }
+
+      // Imprimir automáticamente ticket físico de arqueo de caja (inicio, fin o control)
+      const auditReceiptPayload: CashAuditReceiptData = {
+        type: auditType,
+        timestamp: auditData.timestamp,
+        userName: auditData.userName,
+        counts: auditData.counts,
+        totalPhysical: physicalTotal,
+        totalSystem: expectedTotal,
+        difference: difference,
+        notes: auditNotes.trim(),
+        openingDifference: difference,
+        previousClosingAmount: lastClosingAudit ? lastClosingAudit.totalPhysical : null,
+        totalIncomeEntered: totalDirectIncome,
+        cashInRegisterExpected: totalCash,
+        cashOpeningIngress: sessionOpeningCash,
+        cashExpensesEgress: sessionExpenses,
+      };
+
+      triggerPrintCashAudit(auditReceiptPayload);
+
       setShowAuditModal(false);
       setEditingAuditId(null);
 
       // Reset states
-      setShowAuditModal(false);
       setAuditNotes('');
       setShowAdjustmentHelper(false);
       setCustomAdjustmentRaw('');
@@ -2856,9 +2914,25 @@ const safeParseDate = (timestamp: any): Date => {
       };
       const docRefClose = await addDoc(collection(db, "cashLogs"), closingLogData);
       sendMovementNotification({ id: docRefClose.id, ...closingLogData });
+
+      const totalSalesVal = sessionStats.cashSales + sessionStats.cardSales + sessionStats.transferSales + sessionStats.creditSales + (sessionStats.creditSettlementsCash || 0) + (sessionStats.creditSettlementsCard || 0) + (sessionStats.creditSettlementsTransfer || 0);
+      const incomeCount = currentSessionLogs.filter(l => l.type === 'income' && !l.cancelled).length;
+      const avgTicket = incomeCount > 0 ? (totalSalesVal / incomeCount) : 0;
+
+      // Imprimir reporte de cierre de caja en ticket térmico
+      triggerPrintSalesReport({
+        periodLabel: "CIERRE DE CAJA / TURNO",
+        totalSales: totalSalesVal,
+        totalExpenses: sessionStats.expenses,
+        totalTransactions: incomeCount,
+        averageTicket: avgTicket,
+        totalCash: sessionCashSales + (sessionStats.creditSettlementsCash || 0),
+        totalCard: sessionCardSales + (sessionStats.creditSettlementsCard || 0),
+        totalTransfer: sessionTransferSales + (sessionStats.creditSettlementsTransfer || 0)
+      });
       
       setShowClosingModal(false);
-      toast.success("Caja cerrada correctamente");
+      toast.success("Caja cerrada correctamente e impreso reporte");
     } catch (error) {
       console.error("Error closing cash:", error);
       toast.error("Error al cerrar la caja");
@@ -7222,12 +7296,22 @@ const safeParseDate = (timestamp: any): Date => {
                           >
                             {isSelected ? "Ocultar Desglose ▲" : "Ver Desglose de Monedas/Billetes ▼"}
                           </button>
-                          <div className="flex items-center gap-1">
-                             {!audit.cancelled && (
-                               <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-red-500 hover:text-red-700 font-bold" onClick={() => handleDeleteAudit(audit.id)}>
-                                 <Trash2 size={15} />
-                               </Button>
-                             )}
+                          <div className="flex items-center gap-1.5">
+                            <Button 
+                              size="sm" 
+                              variant="outline" 
+                              className="h-8 px-2.5 text-[11px] text-purple-700 hover:bg-purple-100 font-bold border-purple-300 flex items-center gap-1 cursor-pointer shadow-xs" 
+                              onClick={() => triggerPrintCashAudit(audit)}
+                              title="Imprimir ticket físico de arqueo"
+                            >
+                              <Printer size={13} />
+                              <span>Imprimir Ticket</span>
+                            </Button>
+                            {!audit.cancelled && (
+                              <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-red-500 hover:text-red-700 font-bold" onClick={() => handleDeleteAudit(audit.id)}>
+                                <Trash2 size={15} />
+                              </Button>
+                            )}
                           </div>
                         </div>
 

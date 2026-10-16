@@ -993,3 +993,279 @@ export function print54mmSalesReportViaSystem(report: {
 
   printReceiptHtml(reportHtml);
 }
+
+export interface CashAuditReceiptData {
+  type: 'opening' | 'closing' | 'partial';
+  timestamp: string;
+  userName: string;
+  counts: Record<string, number>;
+  totalPhysical: number;
+  totalSystem: number;
+  difference: number;
+  notes?: string;
+  openingDifference?: number;
+  previousClosingAmount?: number | null;
+  totalIncomeEntered?: number;
+  cashInRegisterExpected?: number;
+  cashOpeningIngress?: number;
+  cashExpensesEgress?: number;
+}
+
+const DENOM_INFO: Record<string, { label: string; val: number }> = {
+  "1000": { label: "$1,000", val: 1000 },
+  "500": { label: "$500", val: 500 },
+  "200": { label: "$200", val: 200 },
+  "100": { label: "$100", val: 100 },
+  "50": { label: "$50", val: 50 },
+  "20_bill": { label: "$20 Billete", val: 20 },
+  "20_coin": { label: "$20 Moneda", val: 20 },
+  "10": { label: "$10", val: 10 },
+  "5": { label: "$5", val: 5 },
+  "2": { label: "$2", val: 2 },
+  "1": { label: "$1", val: 1 },
+  "0.5": { label: "$0.50", val: 0.5 },
+};
+
+// Build ESC/POS bytes for 54mm Cash Audit receipt (Apertura / Cierre / Control)
+export function build54mmAuditReceiptBytes(audit: CashAuditReceiptData): Uint8Array {
+  const ESC = '\x1B';
+  const GS = '\x1D';
+  const d = new Date(audit.timestamp || Date.now());
+  const dateStr = d.toLocaleDateString('es-MX', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  const timeStr = d.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
+
+  const title = audit.type === 'opening' 
+    ? "ARQUEO DE APERTURA\n(INICIO DE JORNADA)" 
+    : audit.type === 'closing' 
+      ? "ARQUEO DE CIERRE\n(FIN DE JORNADA)" 
+      : "ARQUEO DE CONTROL PARCIAL";
+
+  let body = "";
+  body += "DESGLOSE DE EFECTIVO:\n";
+  let countItemsFound = false;
+
+  const sortedKeys = Object.keys(DENOM_INFO).sort((a, b) => DENOM_INFO[b].val - DENOM_INFO[a].val);
+  for (const key of sortedKeys) {
+    const qty = audit.counts?.[key] || 0;
+    if (qty > 0) {
+      countItemsFound = true;
+      const subtotal = qty * DENOM_INFO[key].val;
+      const left = `${DENOM_INFO[key].label} x ${qty}`;
+      const right = `$${subtotal.toFixed(2)}`;
+      body += format30Columns(left, right);
+    }
+  }
+
+  if (!countItemsFound) {
+    body += "Sin conteo unitario detallado\n";
+  }
+
+  body += "------------------------------\n";
+  body += format30Columns("TOTAL FISICO:", `$${audit.totalPhysical.toFixed(2)}`);
+
+  if (audit.type === 'opening') {
+    if (audit.previousClosingAmount !== null && audit.previousClosingAmount !== undefined) {
+      body += format30Columns("Cierre Anterior:", `$${audit.previousClosingAmount.toFixed(2)}`);
+      const opDiff = audit.openingDifference !== undefined ? audit.openingDifference : audit.difference;
+      body += format30Columns("Diferencia Inicio:", `${opDiff >= 0 ? '+' : ''}$${opDiff.toFixed(2)}`);
+      const isOk = Math.abs(opDiff) < 0.01;
+      body += isOk ? "ESTADO: APERTURA EXACTA OK\n" : (opDiff < 0 ? "ESTADO: FALTANTE DE INICIO\n" : "ESTADO: SOBRANTE DE INICIO\n");
+    } else {
+      body += "Apertura sin base previa\n";
+    }
+  } else if (audit.type === 'closing') {
+    const expected = audit.cashInRegisterExpected !== undefined ? audit.cashInRegisterExpected : audit.totalSystem;
+    body += format30Columns("Efectivo Esperado:", `$${expected.toFixed(2)}`);
+    body += format30Columns("Diferencia:", `${audit.difference >= 0 ? '+' : ''}$${audit.difference.toFixed(2)}`);
+    const isOk = Math.abs(audit.difference) < 0.01;
+    body += isOk ? "ESTADO: CUADRADO EXACTO OK\n" : (audit.difference < 0 ? `ESTADO: FALTANTE -$${Math.abs(audit.difference).toFixed(2)}\n` : `ESTADO: SOBRANTE +$${audit.difference.toFixed(2)}\n`);
+
+    if (audit.totalIncomeEntered !== undefined) {
+      body += "------------------------------\n";
+      body += format30Columns("Total Ingresado:", `$${audit.totalIncomeEntered.toFixed(2)}`);
+      body += format30Columns("Fondo Apertura:", `+$${(audit.cashOpeningIngress || 0).toFixed(2)}`);
+      body += format30Columns("Gastos / Egresos:", `-$${(audit.cashExpensesEgress || 0).toFixed(2)}`);
+    }
+  } else {
+    body += format30Columns("Efectivo Esperado:", `$${audit.totalSystem.toFixed(2)}`);
+    body += format30Columns("Diferencia:", `${audit.difference >= 0 ? '+' : ''}$${audit.difference.toFixed(2)}`);
+    const isOk = Math.abs(audit.difference) < 0.01;
+    body += isOk ? "ESTADO: EFECTIVO OK\n" : (audit.difference < 0 ? "ESTADO: FALTANTE\n" : "ESTADO: SOBRANTE\n");
+  }
+
+  if (audit.notes && audit.notes.trim()) {
+    body += "------------------------------\n";
+    body += `Notas: ${sanitizeText(audit.notes.trim())}\n`;
+  }
+
+  body += "\n";
+  body += "------------------------------\n";
+  body += "     FIRMA DE CONFORMIDAD     \n\n\n";
+  body += "______________________________\n";
+  body += `${sanitizeText(audit.userName || "Cajero")}\n`;
+  body += "Comprobante Oficial de Arqueo\n\n\n";
+
+  const cachedLogo = getCachedRasterLogoSync();
+  const textCommands =
+    ESC + '\x40' +                      // Init
+    ESC + '\x33\x12' +                  // Line spacing
+    ESC + '\x61\x01' +                  // Center
+    ESC + '\x45\x01' +                  // Bold
+    GS + '\x21\x01' +                   // Double height
+    "LAS CAZUELAS DEL CASTOR\n" +
+    GS + '\x21\x00' +                   // Normal height
+    ESC + '\x45\x00' +
+    `${title}\n` +
+    `Emision: ${dateStr} ${timeStr}\n` +
+    `Cajero: ${sanitizeText(audit.userName || "Usuario")}\n` +
+    "------------------------------\n" +
+    ESC + '\x61\x00' +                  // Left
+    body +
+    ESC + '\x61\x01';                   // Center
+
+  const textBytes = new TextEncoder().encode(textCommands);
+
+  if (cachedLogo && cachedLogo.length > 0) {
+    const initCmd = new TextEncoder().encode(ESC + '\x40' + ESC + '\x61\x01');
+    const combined = new Uint8Array(initCmd.length + cachedLogo.length + textBytes.length);
+    combined.set(initCmd, 0);
+    combined.set(cachedLogo, initCmd.length);
+    combined.set(textBytes, initCmd.length + cachedLogo.length);
+    return combined;
+  }
+
+  return textBytes;
+}
+
+// Print 54mm Cash Audit receipt via System Driver
+export function print54mmAuditReceiptViaSystem(audit: CashAuditReceiptData): void {
+  const d = new Date(audit.timestamp || Date.now());
+  const dateStr = d.toLocaleDateString('es-MX', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  const timeStr = d.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
+
+  const title = audit.type === 'opening' 
+    ? "ARQUEO DE APERTURA (INICIO)" 
+    : audit.type === 'closing' 
+      ? "ARQUEO DE CIERRE (FIN DE TURNO)" 
+      : "ARQUEO DE CONTROL PARCIAL";
+
+  const sortedKeys = Object.keys(DENOM_INFO).sort((a, b) => DENOM_INFO[b].val - DENOM_INFO[a].val);
+  const denominationRows = sortedKeys
+    .filter(k => (audit.counts?.[k] || 0) > 0)
+    .map(k => {
+      const qty = audit.counts[k];
+      const subtotal = qty * DENOM_INFO[k].val;
+      return `
+        <div style="display:flex; justify-content:space-between; font-size:11.5px; font-weight:800; color:#000000; line-height:1.35;">
+          <span>${DENOM_INFO[k].label} x ${qty}:</span>
+          <b>$${subtotal.toFixed(2)}</b>
+        </div>
+      `;
+    }).join("");
+
+  let comparisonHtml = "";
+  if (audit.type === 'opening') {
+    const opDiff = audit.openingDifference !== undefined ? audit.openingDifference : audit.difference;
+    const isOk = Math.abs(opDiff) < 0.01;
+    comparisonHtml = `
+      <div style="display:flex; justify-content:space-between; font-size:12px; font-weight:800; color:#000000;">
+        <span>Cierre Anterior:</span>
+        <b>${audit.previousClosingAmount !== null && audit.previousClosingAmount !== undefined ? `$${audit.previousClosingAmount.toFixed(2)}` : 'N/A'}</b>
+      </div>
+      <div style="display:flex; justify-content:space-between; font-size:12px; font-weight:800; color:#000000;">
+        <span>Diferencia Inicio:</span>
+        <b>${opDiff >= 0 ? '+' : ''}$${opDiff.toFixed(2)}</b>
+      </div>
+      <div style="text-align:center; margin-top:3px; padding:3px; border:1.5px solid #000; font-size:11px; font-weight:900;">
+        ${isOk ? 'APERTURA EXACTA OK ✓' : opDiff < 0 ? 'FALTANTE DE APERTURA ⚠' : 'SOBRANTE DE APERTURA ▲'}
+      </div>
+    `;
+  } else if (audit.type === 'closing') {
+    const expected = audit.cashInRegisterExpected !== undefined ? audit.cashInRegisterExpected : audit.totalSystem;
+    const isOk = Math.abs(audit.difference) < 0.01;
+    comparisonHtml = `
+      <div style="display:flex; justify-content:space-between; font-size:12px; font-weight:800; color:#000000;">
+        <span>Efectivo Esperado:</span>
+        <b>$${expected.toFixed(2)}</b>
+      </div>
+      <div style="display:flex; justify-content:space-between; font-size:12px; font-weight:800; color:#000000;">
+        <span>Diferencia:</span>
+        <b>${audit.difference >= 0 ? '+' : ''}$${audit.difference.toFixed(2)}</b>
+      </div>
+      <div style="text-align:center; margin-top:3px; padding:3px; border:1.5px solid #000; font-size:11px; font-weight:900;">
+        ${isOk ? 'CUADRADO EXACTO OK ✓' : audit.difference < 0 ? `FALTANTE EN CAJA: -$${Math.abs(audit.difference).toFixed(2)}` : `SOBRANTE EN CAJA: +$${audit.difference.toFixed(2)}`}
+      </div>
+      ${audit.totalIncomeEntered !== undefined ? `
+        <div style="border-top:1px dashed #000; margin:4px 0;"></div>
+        <div style="font-size:11px; font-weight:800; color:#000000;">
+          <div style="display:flex; justify-content:space-between;"><span>Total Ingresado:</span><b>$${audit.totalIncomeEntered.toFixed(2)}</b></div>
+          <div style="display:flex; justify-content:space-between;"><span>Fondo Apertura:</span><b>+$${(audit.cashOpeningIngress || 0).toFixed(2)}</b></div>
+          <div style="display:flex; justify-content:space-between;"><span>Gastos / Egresos:</span><b>-$${(audit.cashExpensesEgress || 0).toFixed(2)}</b></div>
+        </div>
+      ` : ''}
+    `;
+  } else {
+    const isOk = Math.abs(audit.difference) < 0.01;
+    comparisonHtml = `
+      <div style="display:flex; justify-content:space-between; font-size:12px; font-weight:800; color:#000000;">
+        <span>Efectivo Esperado:</span>
+        <b>$${audit.totalSystem.toFixed(2)}</b>
+      </div>
+      <div style="display:flex; justify-content:space-between; font-size:12px; font-weight:800; color:#000000;">
+        <span>Diferencia:</span>
+        <b>${audit.difference >= 0 ? '+' : ''}$${audit.difference.toFixed(2)}</b>
+      </div>
+      <div style="text-align:center; margin-top:3px; padding:3px; border:1.5px solid #000; font-size:11px; font-weight:900;">
+        ${isOk ? 'CONTROL FÍSICO OK ✓' : audit.difference < 0 ? 'FALTANTE ⚠' : 'SOBRANTE ▲'}
+      </div>
+    `;
+  }
+
+  const logoUrl = getTicketLogoUrl();
+  const receiptHtml = `
+    <div style="width: 52mm; max-width: 52mm; margin: 0; padding: 0 0.5mm; box-sizing: border-box; font-family: Arial, sans-serif; color: #000000;">
+      <div style="text-align: center; margin-bottom: 2px;">
+        <img src="${logoUrl}" alt="Logo" style="width: 20mm; height: 20mm; border-radius: 50%; object-fit: cover; margin: 0 auto 3px auto; display: block; filter: contrast(180%) brightness(90%);" />
+        <div style="font-weight: 900; font-size: 13.5px; line-height: 1.15; color: #000000;">LAS CAZUELAS DEL CASTOR</div>
+        <div style="font-weight: 900; font-size: 11px; margin-top: 2px; text-transform: uppercase; border: 1.5px solid #000000; padding: 2px 4px; display: inline-block;">
+          ${title}
+        </div>
+        <div style="font-size: 11px; color: #000000; font-weight: 800; margin-top: 3px;">Emisión: ${dateStr} ${timeStr}</div>
+        <div style="font-size: 11px; color: #000000; font-weight: 800;">Cajero: ${audit.userName || 'Usuario'}</div>
+      </div>
+
+      <div style="border-top: 2px dashed #000000; margin: 4px 0;"></div>
+
+      <div style="font-weight: 900; font-size: 11px; margin-bottom: 2px; text-transform: uppercase;">
+        DESGLOSE DE EFECTIVO:
+      </div>
+      ${denominationRows || '<div style="font-size:11px; font-style:italic;">Sin desglose de denominaciones</div>'}
+
+      <div style="border-top: 2px dashed #000000; margin: 4px 0;"></div>
+
+      <div style="display: flex; justify-content: space-between; font-weight: 900; font-size: 14px; border-bottom: 2px solid #000000; padding-bottom: 2px; margin-bottom: 3px;">
+        <span>TOTAL FÍSICO:</span>
+        <b>$${audit.totalPhysical.toFixed(2)}</b>
+      </div>
+
+      ${comparisonHtml}
+
+      ${audit.notes && audit.notes.trim() ? `
+        <div style="border-top: 1px dashed #000000; margin: 4px 0;"></div>
+        <div style="font-size: 10.5px; font-weight: 800; line-height: 1.25;">
+          <b>Notas:</b> ${audit.notes.trim()}
+        </div>
+      ` : ''}
+
+      <div style="border-top: 2px dashed #000000; margin: 8px 0 4px 0;"></div>
+      <div style="text-align: center; margin-top: 10px;">
+        <div style="font-size: 10px; font-weight: 900; letter-spacing: 1px;">FIRMA DE CONFORMIDAD</div>
+        <div style="border-bottom: 1.5px solid #000000; width: 75%; margin: 25px auto 4px auto;"></div>
+        <div style="font-size: 10px; font-weight: 800;">${audit.userName || 'Cajero'}</div>
+        <div style="font-size: 9px; font-weight: 700; color: #555555; margin-top: 4px;">Comprobante Oficial de Arqueo</div>
+      </div>
+    </div>
+  `;
+
+  printReceiptHtml(receiptHtml);
+}
